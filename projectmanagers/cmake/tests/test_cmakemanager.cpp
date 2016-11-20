@@ -343,7 +343,7 @@ void TestCMakeManager::testParenthesesInTestArguments()
     Path sourceDir = project->path();
     Path buildDir(sourceDir, "build/");
 
-    CMakeImportJob* job = new CMakeImportJob(project, this);
+    auto job = new CMakeImportJsonJob(project, this);
     job->start();
 
 }

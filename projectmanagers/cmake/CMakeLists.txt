@@ -44,8 +44,10 @@ set( cmakemanager_SRCS
   testing/ctestsuite.cpp
   testing/qttestdelegate.cpp
   cmakeimportjsonjob.cpp
+  cmakeserverimportjob.cpp
   cmakenavigationwidget.cpp
   cmakemanager.cpp
+  cmakeprojectdata.cpp
   cmakemodelitems.cpp
   duchain/cmakeparsejob.cpp
   duchain/usebuilder.cpp
@@ -55,6 +57,7 @@ set( cmakemanager_SRCS
 #   cmakecommitchangesjob.cpp
 #   cmakeimportjob.cpp
 #   cmakeedit.cpp
+  cmakeserver.cpp
   debug.cpp
 )
 

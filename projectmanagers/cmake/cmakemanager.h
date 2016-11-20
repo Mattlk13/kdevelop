@@ -151,7 +151,8 @@ private slots:
 //
 //     void directoryChanged(const QString& dir);
 //     void filesystemBuffererTimeout();
-    void importFinished(KJob* job);
+
+    void integrateData(const CMakeProjectData &data, KDevelop::IProject* project);
 
 private:
     CMakeFile fileInformation(KDevelop::ProjectBaseItem* item) const;
