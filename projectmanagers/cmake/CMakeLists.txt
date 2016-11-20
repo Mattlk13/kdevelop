@@ -29,6 +29,7 @@ set( cmakecommon_SRCS
   cmakeutils.cpp
   cmakeextraargumentshistory.cpp
   cmakebuilddirchooser.cpp
+  cmakeserver.cpp
   debug.cpp
 
  )
@@ -57,7 +58,6 @@ set( cmakemanager_SRCS
 #   cmakecommitchangesjob.cpp
 #   cmakeimportjob.cpp
 #   cmakeedit.cpp
-  cmakeserver.cpp
   debug.cpp
 )
 

@@ -148,7 +148,7 @@ KJob* CMakeManager::createImportJob(ProjectFolderItem* item)
     QList<KJob*> jobs;
 
     if (s_serverSupported) {
-        auto job = new CMakeImportJsonJob(project, this);
+        auto job = new CMakeServerImportJob(project, this);
         connect(job, &CMakeImportJsonJob::result, this, [this, job](){
             if (job->error() != 0) {
                 qDebug() << "couldn't load successfully" << job->project()->name();

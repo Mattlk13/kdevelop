@@ -23,16 +23,19 @@
 
 #include <util/path.h>
 #include <QProcess>
+#include "cmakecommonexport.h"
 
-class CMakeServer : public QObject
+class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
 {
     Q_OBJECT
     public:
         CMakeServer(QObject* parent);
-        ~CMakeServer() override {}
+        ~CMakeServer() override;
 
         bool isServerAvailable();
         void command(const QJsonObject& object);
+
+        void hello();
         void handshake(const KDevelop::Path& source, const KDevelop::Path& build);
 
     Q_SIGNALS:

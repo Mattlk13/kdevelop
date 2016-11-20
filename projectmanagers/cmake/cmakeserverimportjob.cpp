@@ -30,6 +30,7 @@ static void processFileData(const QJsonObject &response, CMakeProjectData &data)
 
 CMakeServerImportJob::CMakeServerImportJob(KDevelop::IProject* project, QObject* parent)
     : KJob(parent)
+    , m_server(new CMakeServer(this))
     , m_project(project)
 {
 }

@@ -28,12 +28,18 @@
 CMakeServer::CMakeServer(QObject* parent)
     : QObject(parent)
 {
-    m_process.start(CMake::findExecutable(), {"-E", "server"});
-    connect(&m_process, &QProcess::waitForStarted, this, [this]() {
-        command({ {"supportedProtocolVersions", QJsonArray { QJsonObject { {"major", 1}, {"minor", 0}}}}, {"type", "hello"} });
-    });
-
     connect(&m_process, &QProcess::readyReadStandardOutput, this, &CMakeServer::processOutput);
+    connect(&m_process, &QProcess::readyReadStandardError, this, [this](){
+        qWarning() << "cmake server:" << m_process.readAllStandardError();
+    } );
+
+    m_process.start(CMake::findExecutable(), {"-E", "server", "--debug"});
+}
+
+CMakeServer::~CMakeServer()
+{
+    m_process.kill();
+    m_process.waitForFinished();
 }
 
 bool CMakeServer::isServerAvailable()
@@ -47,11 +53,12 @@ bool CMakeServer::isServerAvailable()
 
 void CMakeServer::command(const QJsonObject& object)
 {
-    m_process.write(
-        "[== \"CMake Server\" ==[\n"
+    const QByteArray data = "[== \"CMake Server\" ==[\n"
         + QJsonDocument(object).toJson() +
-        "]== \"CMake Server\" ==]\n"
-    );
+        "]== \"CMake Server\" ==]\n";
+    auto len = m_process.write(data);
+    Q_ASSERT(len>0);
+    qDebug() << "xxxx" << object;
 }
 
 void CMakeServer::processOutput()
@@ -59,7 +66,8 @@ void CMakeServer::processOutput()
     static const QByteArray openTag  = "[== \"CMake Server\" ==[";
     static const QByteArray closeTag = "]== \"CMake Server\" ==]";
 
-    m_buffer += m_process.readAll();
+    m_buffer += m_process.readAllStandardOutput();
+    qDebug() << "fuuuuuu" << m_buffer;
     for(; m_buffer.size() > openTag.size(); ) {
 
         Q_ASSERT(m_buffer.startsWith(openTag));
@@ -79,6 +87,14 @@ void CMakeServer::emitResponse(const QByteArray& data)
     Q_ASSERT(doc.isObject());
     Q_ASSERT(!error.error);
     Q_EMIT response(doc.object());
+}
+
+void CMakeServer::hello()
+{
+    command({
+        { "supportedProtocolVersions", QJsonArray { QJsonObject { {"major", 1}, {"minor", 0}}}},
+        { "type", "hello" }
+    });
 }
 
 void CMakeServer::handshake(const KDevelop::Path& source, const KDevelop::Path& build)
