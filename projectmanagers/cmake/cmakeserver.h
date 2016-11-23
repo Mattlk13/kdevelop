@@ -23,6 +23,7 @@
 
 #include <util/path.h>
 #include <QProcess>
+#include <QLocalSocket>
 #include "cmakecommonexport.h"
 
 class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
@@ -39,12 +40,15 @@ class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
         void handshake(const KDevelop::Path& source, const KDevelop::Path& build);
 
     Q_SIGNALS:
+        void connected();
         void response(const QJsonObject &value);
 
     private:
+        void createSocket();
         void processOutput();
         void emitResponse(const QByteArray &data);
 
+        QLocalSocket* m_localSocket;
         QByteArray m_buffer;
         QProcess m_process;
 };

@@ -30,17 +30,23 @@ private slots:
     void testRun()
     {
         CMakeServer server(this);
-        QJsonObject codeModel;
+        QSignalSpy spyConnected(&server, &CMakeServer::connected);
+        QVERIFY(server.isServerAvailable() || spyConnected.wait());
+
         QSignalSpy spy(&server, &CMakeServer::response);
+        server.hello();
         QVERIFY(spy.wait());
 
+        QJsonObject codeModel;
         connect(&server, &CMakeServer::response, this, [&codeModel, &server](const QJsonObject &response) {
+            qDebug() << "received..." << response;
             if (response.value("inReplyTo") == QLatin1String("handshake") && response.value("type") == QLatin1String("reply"))
                 server.command({{"type", "codemodel"}});
             else if(response.value("inReplyTo") == QLatin1String("codemodel"))
                 codeModel = response;
         });
 
+        QVERIFY(spy.wait());
         server.handshake({}, {});
         while(codeModel.isEmpty()) {
             spy.clear();

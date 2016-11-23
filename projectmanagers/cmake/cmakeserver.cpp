@@ -21,19 +21,26 @@
 #include "cmakeserver.h"
 #include "cmakeprojectdata.h"
 #include "cmakeutils.h"
+#include <KRandom>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
 
 CMakeServer::CMakeServer(QObject* parent)
     : QObject(parent)
+    , m_localSocket(new QLocalSocket(this))
 {
-    connect(&m_process, &QProcess::readyReadStandardOutput, this, &CMakeServer::processOutput);
-    connect(&m_process, &QProcess::readyReadStandardError, this, [this](){
-        qWarning() << "cmake server:" << m_process.readAllStandardError();
-    } );
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::TempLocation) + "/kdevelop-cmake-" + QString::number(KRandom::random());
 
-    m_process.start(CMake::findExecutable(), {"-E", "server", "--debug"});
+    m_process.setProcessChannelMode(QProcess::ForwardedChannels);
+    m_process.start(CMake::findExecutable(), {"-E", "server", "--experimental", "--pipe=" + path});
+
+    connect(&m_process, &QProcess::started, this, [this, path]() {
+        m_localSocket->connectToServer(path, QIODevice::ReadWrite);
+    });
+
+    connect(m_localSocket, &QIODevice::readyRead, this, &CMakeServer::processOutput);
+    connect(m_localSocket, &QLocalSocket::connected, this, &CMakeServer::connected);
 }
 
 CMakeServer::~CMakeServer()
@@ -44,39 +51,35 @@ CMakeServer::~CMakeServer()
 
 bool CMakeServer::isServerAvailable()
 {
-    if (m_process.state() == QProcess::Starting) {
-        m_process.waitForStarted();
-    }
-
-    return m_process.state() == QProcess::Running;
+    return m_localSocket->isOpen();
 }
+
+static const QByteArray openTag  = "\n[== \"CMake Server\" ==[\n";
+static const QByteArray closeTag = "\n]== \"CMake Server\" ==]\n";
 
 void CMakeServer::command(const QJsonObject& object)
 {
-    const QByteArray data = "[== \"CMake Server\" ==[\n"
-        + QJsonDocument(object).toJson() +
-        "]== \"CMake Server\" ==]\n";
-    auto len = m_process.write(data);
+    Q_ASSERT(m_localSocket->isOpen());
+
+    const QByteArray data = openTag + QJsonDocument(object).toJson(QJsonDocument::Compact) + closeTag;
+    auto len = m_localSocket->write(data);
+//     qDebug() << "writing..." << data;
     Q_ASSERT(len>0);
-    qDebug() << "xxxx" << object;
 }
 
 void CMakeServer::processOutput()
 {
-    static const QByteArray openTag  = "[== \"CMake Server\" ==[";
-    static const QByteArray closeTag = "]== \"CMake Server\" ==]";
+    Q_ASSERT(m_localSocket);
 
-    m_buffer += m_process.readAllStandardOutput();
-    qDebug() << "fuuuuuu" << m_buffer;
+    m_buffer += m_localSocket->readAll();
     for(; m_buffer.size() > openTag.size(); ) {
 
         Q_ASSERT(m_buffer.startsWith(openTag));
-        int idx = m_buffer.indexOf(closeTag);
+        const int idx = m_buffer.indexOf(closeTag, openTag.size());
         if (idx>=0) {
             emitResponse(m_buffer.mid(openTag.size(), idx - openTag.size()));
             m_buffer = m_buffer.mid(idx + closeTag.size());
         }
-        m_buffer += m_process.readAll();
     }
 }
 
@@ -84,8 +87,11 @@ void CMakeServer::emitResponse(const QByteArray& data)
 {
     QJsonParseError error;
     auto doc = QJsonDocument::fromJson(data, &error);
-    Q_ASSERT(doc.isObject());
+    if (error.error) {
+        qWarning() << "error processing" << error.errorString() << data;
+    }
     Q_ASSERT(!error.error);
+    Q_ASSERT(doc.isObject());
     Q_EMIT response(doc.object());
 }
 
@@ -99,10 +105,13 @@ void CMakeServer::hello()
 
 void CMakeServer::handshake(const KDevelop::Path& source, const KDevelop::Path& build)
 {
+    Q_ASSERT(!source.isEmpty());
+    Q_ASSERT(!build.isEmpty());
+
     command({
         {"cookie", ""},
         {"type", "handshake"},
-        {"protocolVersion", {{"major", 0}} },
+        {"protocolVersion", QJsonObject{{"major", 1}} },
         {"sourceDirectory", source.toLocalFile()},
         {"buildDirectory", build.toLocalFile()},
         {"generator", "Ninja"} //TODO: make it possible to keep whatever they have ATM
