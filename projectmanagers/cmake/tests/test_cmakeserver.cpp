@@ -19,6 +19,7 @@
  */
 
 #include <cmakeserver.h>
+#include "testhelpers.h"
 #include <QtTest>
 
 using namespace KDevelop;
@@ -38,20 +39,34 @@ private slots:
         QVERIFY(spy.wait());
 
         QJsonObject codeModel;
-        connect(&server, &CMakeServer::response, this, [&codeModel, &server](const QJsonObject &response) {
+        int errors = 0;
+        connect(&server, &CMakeServer::response, this, [&errors, &codeModel, &server](const QJsonObject &response) {
             qDebug() << "received..." << response;
-            if (response.value("inReplyTo") == QLatin1String("handshake") && response.value("type") == QLatin1String("reply"))
-                server.command({{"type", "codemodel"}});
-            else if(response.value("inReplyTo") == QLatin1String("codemodel"))
+            if (response.value("inReplyTo") == QLatin1String("configure") && response.value("type") == QLatin1String("reply"))
+                server.compute();
+            else if (response.value("inReplyTo") == QLatin1String("compute") && response.value("type") == QLatin1String("reply"))
+                server.codemodel();
+            else if(response.value("inReplyTo") == QLatin1String("codemodel") && response.value("type") == QLatin1String("reply"))
                 codeModel = response;
+            else if(response.value("type") == QLatin1String("error"))
+                ++errors;
         });
 
+        const QString name = "single_subdirectory";
+        const auto paths = projectPaths(name);
+        const QString builddir = QStringLiteral(CMAKE_TESTS_BINARY_DIR "/cmake-server-test-builddir/") + name;
+        QVERIFY(QDir(builddir).removeRecursively());
+        QVERIFY(QDir(builddir).mkpath(builddir));
+
         QVERIFY(spy.wait());
-        server.handshake({}, {});
-        while(codeModel.isEmpty()) {
-            spy.clear();
+        server.handshake(paths.sourceDir, Path(builddir));
+        QVERIFY(spy.wait());
+        server.configure({});
+        while(codeModel.isEmpty())
             QVERIFY(spy.wait());
-        }
+        QCOMPARE(errors, 1);
+        QVERIFY(!codeModel.isEmpty());
+        qDebug() << "codemodel" << codeModel;
     }
 };
 

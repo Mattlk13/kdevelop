@@ -118,3 +118,20 @@ void CMakeServer::handshake(const KDevelop::Path& source, const KDevelop::Path& 
     });
 }
 
+void CMakeServer::configure(const QStringList& args)
+{
+    command({
+        {"type", "configure"},
+        {"cacheArguments", QJsonArray::fromStringList(args)}
+    });
+}
+
+void CMakeServer::compute()
+{
+    command({ {"type", "compute"} });
+}
+
+void CMakeServer::codemodel()
+{
+    command({ {"type", "codemodel"} });
+}

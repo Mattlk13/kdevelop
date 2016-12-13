@@ -38,13 +38,15 @@ class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
 
         void hello();
         void handshake(const KDevelop::Path& source, const KDevelop::Path& build);
+        void configure(const QStringList &args);
+        void compute();
+        void codemodel();
 
     Q_SIGNALS:
         void connected();
         void response(const QJsonObject &value);
 
     private:
-        void createSocket();
         void processOutput();
         void emitResponse(const QByteArray &data);
 
