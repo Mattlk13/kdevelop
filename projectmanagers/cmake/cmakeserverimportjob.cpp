@@ -33,16 +33,31 @@ CMakeServerImportJob::CMakeServerImportJob(KDevelop::IProject* project, QObject*
     , m_server(new CMakeServer(this))
     , m_project(project)
 {
+    connect(m_server, &CMakeServer::disconnected, this, [this]() {
+        setError(1);
+        emitResult();
+    });
 }
 
 void CMakeServerImportJob::start()
 {
-    m_server->handshake(m_project->path(), CMake::currentBuildDir(m_project));
+    if (m_server->isServerAvailable())
+        doStart();
+    else
+        connect(m_server, &CMakeServer::connected, this, &CMakeServerImportJob::doStart);
+}
 
+void CMakeServerImportJob::doStart()
+{
     connect(m_server, &CMakeServer::response, this, [this](const QJsonObject &response){
+        qDebug() << "xxxxxxxx" << response;
         if (response.value("inReplyTo") == QLatin1String("handshake") && response.value("type") == QLatin1String("reply"))
             m_server->command({{"type", "codemodel"}});
-        else if(response.value("inReplyTo") == QLatin1String("codemodel"))
+        else if(response.value("inReplyTo") == QLatin1String("codemodel")) {
             processFileData(response, m_data);
+            emitResult();
+        }
     });
+
+    m_server->handshake(m_project->path(), CMake::currentBuildDir(m_project));
 }

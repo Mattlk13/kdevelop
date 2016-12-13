@@ -41,6 +41,8 @@ class CMakeServerImportJob : public KJob
         CMakeProjectData projectData() const { return m_data; }
 
     private:
+        void doStart();
+
         QPointer<CMakeServer> m_server;
         KDevelop::IProject* m_project;
 

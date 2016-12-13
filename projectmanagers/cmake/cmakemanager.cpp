@@ -149,7 +149,7 @@ KJob* CMakeManager::createImportJob(ProjectFolderItem* item)
 
     if (s_serverSupported) {
         auto job = new CMakeServerImportJob(project, this);
-        connect(job, &CMakeImportJsonJob::result, this, [this, job](){
+        connect(job, &CMakeServerImportJob::result, this, [this, job](){
             if (job->error() != 0) {
                 qDebug() << "couldn't load successfully" << job->project()->name();
                 m_projects.remove(job->project());

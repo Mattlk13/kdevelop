@@ -44,6 +44,7 @@ class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
 
     Q_SIGNALS:
         void connected();
+        void disconnected();
         void response(const QJsonObject &value);
 
     private:

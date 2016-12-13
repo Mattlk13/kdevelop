@@ -37,10 +37,21 @@ CMakeServer::CMakeServer(QObject* parent)
 
     connect(&m_process, &QProcess::started, this, [this, path]() {
         m_localSocket->connectToServer(path, QIODevice::ReadWrite);
+        m_localSocket->waitForConnected();
+    });
+    connect(&m_process, &QProcess::errorOccurred, this, [this, path](QProcess::ProcessError error) {
+        qWarning() << "cmake server error:" << error << path << m_process.readAllStandardError() << m_process.readAllStandardOutput();
     });
 
     connect(m_localSocket, &QIODevice::readyRead, this, &CMakeServer::processOutput);
+    connect(m_localSocket, static_cast<void(QLocalSocket::*)(QLocalSocket::LocalSocketError)>(&QLocalSocket::error), this, [this, path](QLocalSocket::LocalSocketError socketError) {
+        qDebug() << "cmake server socket error:" << socketError << path;
+        Q_EMIT disconnected();
+    });
     connect(m_localSocket, &QLocalSocket::connected, this, &CMakeServer::connected);
+    connect(m_localSocket, &QLocalSocket::connected, this, [](){
+        qDebug() << "lalala";
+    });
 }
 
 CMakeServer::~CMakeServer()
@@ -59,7 +70,7 @@ static const QByteArray closeTag = "\n]== \"CMake Server\" ==]\n";
 
 void CMakeServer::command(const QJsonObject& object)
 {
-    Q_ASSERT(m_localSocket->isOpen());
+    Q_ASSERT(isServerAvailable());
 
     const QByteArray data = openTag + QJsonDocument(object).toJson(QJsonDocument::Compact) + closeTag;
     auto len = m_localSocket->write(data);
