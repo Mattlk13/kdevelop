@@ -25,6 +25,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QTimer>
 
 CMakeServer::CMakeServer(QObject* parent)
     : QObject(parent)
@@ -35,10 +36,6 @@ CMakeServer::CMakeServer(QObject* parent)
     m_process.setProcessChannelMode(QProcess::ForwardedChannels);
     m_process.start(CMake::findExecutable(), {"-E", "server", "--experimental", "--pipe=" + path});
 
-    connect(&m_process, &QProcess::started, this, [this, path]() {
-        m_localSocket->connectToServer(path, QIODevice::ReadWrite);
-        m_localSocket->waitForConnected();
-    });
     connect(&m_process, &QProcess::errorOccurred, this, [this, path](QProcess::ProcessError error) {
         qWarning() << "cmake server error:" << error << path << m_process.readAllStandardError() << m_process.readAllStandardOutput();
     });
@@ -49,9 +46,14 @@ CMakeServer::CMakeServer(QObject* parent)
         Q_EMIT disconnected();
     });
     connect(m_localSocket, &QLocalSocket::connected, this, &CMakeServer::connected);
-    connect(m_localSocket, &QLocalSocket::connected, this, [](){
-        qDebug() << "lalala";
+
+    QTimer* connectTimer = new QTimer(this);
+    connectTimer->setInterval(100);
+    connectTimer->setSingleShot(true);
+    connect(connectTimer, &QTimer::timeout, this, [this, path]() {
+        m_localSocket->connectToServer(path, QIODevice::ReadWrite);
     });
+    connect(&m_process, &QProcess::started, connectTimer, static_cast<void(QTimer::*)()>(&QTimer::start));
 }
 
 CMakeServer::~CMakeServer()
@@ -74,7 +76,7 @@ void CMakeServer::command(const QJsonObject& object)
 
     const QByteArray data = openTag + QJsonDocument(object).toJson(QJsonDocument::Compact) + closeTag;
     auto len = m_localSocket->write(data);
-//     qDebug() << "writing..." << data;
+    qDebug() << "writing..." << object;
     Q_ASSERT(len>0);
 }
 

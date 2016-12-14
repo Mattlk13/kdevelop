@@ -41,15 +41,18 @@ private slots:
         QJsonObject codeModel;
         int errors = 0;
         connect(&server, &CMakeServer::response, this, [&errors, &codeModel, &server](const QJsonObject &response) {
-            qDebug() << "received..." << response;
-            if (response.value("inReplyTo") == QLatin1String("configure") && response.value("type") == QLatin1String("reply"))
-                server.compute();
-            else if (response.value("inReplyTo") == QLatin1String("compute") && response.value("type") == QLatin1String("reply"))
-                server.codemodel();
-            else if(response.value("inReplyTo") == QLatin1String("codemodel") && response.value("type") == QLatin1String("reply"))
-                codeModel = response;
-            else if(response.value("type") == QLatin1String("error"))
+            if (response.value("type") != QLatin1String("message") and response.value("type") != QLatin1String("progress"))
+                qDebug() << "received..." << response;
+            if (response.value("type") == QLatin1String("reply")) {
+                if (response.value("inReplyTo") == QLatin1String("configure"))
+                    server.compute();
+                else if (response.value("inReplyTo") == QLatin1String("compute"))
+                    server.codemodel();
+                else if(response.value("inReplyTo") == QLatin1String("codemodel"))
+                    codeModel = response;
+            } else if(response.value("type") == QLatin1String("error")) {
                 ++errors;
+            }
         });
 
         const QString name = "single_subdirectory";
