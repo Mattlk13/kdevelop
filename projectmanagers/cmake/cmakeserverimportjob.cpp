@@ -62,11 +62,11 @@ static QString unescape(const QStringRef& input)
   return output;
 }
 
-static QHash<QString, QString> processDefines(const QString &defines)
+static QHash<QString, QString> processDefines(const QString &compileFlags, const QJsonArray &defines)
 {
     QHash<QString, QString> ret;
     const auto& defineRx = defineRegularExpression();
-    auto it = defineRx.globalMatch(defines);
+    auto it = defineRx.globalMatch(compileFlags);
     while (it.hasNext()) {
       const auto match = it.next();
       QString value;
@@ -75,12 +75,22 @@ static QHash<QString, QString> processDefines(const QString &defines)
       }
       ret[match.captured(1)] = value;
     }
+
+    for(const QJsonValue& defineValue: defines) {
+        const QString define = defineValue.toString();
+        const int eqIdx = define.indexOf(QLatin1Char('='));
+        if (eqIdx<0)
+            ret[define] = QString();
+        else
+            ret[define.left(eqIdx)] = define.mid(eqIdx+1);
+    }
     return ret;
 }
 
 static void processFileData(const QJsonObject &response, CMakeProjectData &data)
 {
     const auto configs = response.value("configurations").toArray();
+    qDebug() << "fuuuuuu" << response;
     for (const auto &config: configs) {
         const auto projects = config.toObject().value("projects").toArray();
         for (const auto &project: projects) {
@@ -96,7 +106,7 @@ static void processFileData(const QJsonObject &response, CMakeProjectData &data)
                     const auto fileGroup = fileGroupValue.toObject();
                     CMakeFile file;
                     file.includes = kTransform<KDevelop::Path::List>(fileGroup.value("includePath").toArray(), [](const QJsonValue& val) { return KDevelop::Path(val.toObject().value("path").toString()); });
-                    file.defines = processDefines(fileGroup.value("compileFlags").toString());
+                    file.defines = processDefines(fileGroup.value("compileFlags").toString(), fileGroup.value("defines").toArray());
 
                     const auto sourcesArray = fileGroup.value("sources").toArray();
                     const KDevelop::Path::List sources = kTransform<KDevelop::Path::List>(sourcesArray, [targetDir](const QJsonValue& val) { return KDevelop::Path(targetDir, val.toString()); });
