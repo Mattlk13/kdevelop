@@ -26,8 +26,8 @@
 #include <QFileInfo>
 
 CMakeProjectData::CMakeProjectData(const QHash<KDevelop::Path, QStringList>& targets, const CMakeFilesCompilationData& data, const QVector<Test>& tests)
-    : targets(targets)
+    : compilationData(data)
+    , targets(targets)
     , watcher(new QFileSystemWatcher)
-    , compilationData(data)
     , m_testSuites(tests)
 {}
