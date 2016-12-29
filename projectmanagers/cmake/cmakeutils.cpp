@@ -296,7 +296,6 @@ QString currentBuildType( KDevelop::IProject* project )
 
 QString findExecutable()
 {
-    return "/home/apol/tmp/cmakeinstallprefix/bin/cmake";
     auto cmake = QStandardPaths::findExecutable("cmake");
 #ifdef Q_OS_WIN
     if (cmake.isEmpty())
