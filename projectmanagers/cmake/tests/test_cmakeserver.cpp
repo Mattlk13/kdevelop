@@ -35,8 +35,6 @@ private slots:
         QVERIFY(server.isServerAvailable() || spyConnected.wait());
 
         QSignalSpy spy(&server, &CMakeServer::response);
-        server.hello();
-        QVERIFY(spy.wait());
 
         QJsonObject codeModel;
         int errors = 0;
@@ -67,7 +65,7 @@ private slots:
         server.configure({});
         while(codeModel.isEmpty())
             QVERIFY(spy.wait());
-        QCOMPARE(errors, 1);
+        QCOMPARE(errors, 0);
         QVERIFY(!codeModel.isEmpty());
         qDebug() << "codemodel" << codeModel;
     }

@@ -108,14 +108,6 @@ void CMakeServer::emitResponse(const QByteArray& data)
     Q_EMIT response(doc.object());
 }
 
-void CMakeServer::hello()
-{
-    command({
-        { "supportedProtocolVersions", QJsonArray { QJsonObject { {"major", 1}, {"minor", 0}}}},
-        { "type", "hello" }
-    });
-}
-
 void CMakeServer::handshake(const KDevelop::Path& source, const KDevelop::Path& build)
 {
     Q_ASSERT(!source.isEmpty());
@@ -124,6 +116,7 @@ void CMakeServer::handshake(const KDevelop::Path& source, const KDevelop::Path& 
     command({
         {"cookie", ""},
         {"type", "handshake"},
+        {"major", 1},
         {"protocolVersion", QJsonObject{{"major", 1}} },
         {"sourceDirectory", source.toLocalFile()},
         {"buildDirectory", build.toLocalFile()},

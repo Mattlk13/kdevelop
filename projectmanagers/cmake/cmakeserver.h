@@ -36,7 +36,6 @@ class KDEVCMAKECOMMON_EXPORT CMakeServer : public QObject
         bool isServerAvailable();
         void command(const QJsonObject& object);
 
-        void hello();
         void handshake(const KDevelop::Path& source, const KDevelop::Path& build);
         void configure(const QStringList &args);
         void compute();
