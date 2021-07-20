@@ -86,17 +86,18 @@ void ScriptAppConfigPage::loadFromConfiguration(const KConfigGroup& cfg, KDevelo
     workingDirectory->setUrl( cfg.readEntry( ExecuteScriptPlugin::workingDirEntry, QUrl() ) );
     environment->setCurrentProfile(cfg.readEntry(ExecuteScriptPlugin::environmentProfileEntry, QString()));
     outputFilteringMode->setCurrentIndex( cfg.readEntry( ExecuteScriptPlugin::outputFilteringEntry, 2u ));
-    //runInTerminal->setChecked( cfg.readEntry( ExecuteScriptPlugin::useTerminalEntry, false ) );
 }
 
 ScriptAppConfigPage::ScriptAppConfigPage( QWidget* parent )
     : LaunchConfigurationPage( parent )
 {
     setupUi(this);
-    interpreter->lineEdit()->setPlaceholderText(i18n("Type or select an interpreter"));
+    interpreter->lineEdit()->setPlaceholderText(i18nc("@info:placeholder", "Type or select an interpreter..."));
 
     //Set workingdirectory widget to ask for directories rather than files
     workingDirectory->setMode(KFile::Directory | KFile::ExistingOnly | KFile::LocalOnly);
+
+    configureEnvironment->setSelectionWidget(environment);
 
     //connect signals to changed signal
     connect( interpreter->lineEdit(), &QLineEdit::textEdited, this, &ScriptAppConfigPage::changed );
@@ -106,7 +107,6 @@ ScriptAppConfigPage::ScriptAppConfigPage( QWidget* parent )
     connect( workingDirectory, &KUrlRequester::urlSelected, this, &ScriptAppConfigPage::changed );
     connect( workingDirectory->lineEdit(), &KLineEdit::textEdited, this, &ScriptAppConfigPage::changed );
     connect( environment, &EnvironmentSelectionWidget::currentProfileChanged, this, &ScriptAppConfigPage::changed );
-    //connect( runInTerminal, SIGNAL(toggled(bool)), SIGNAL(changed()) );
 }
 
 void ScriptAppConfigPage::saveToConfiguration( KConfigGroup cfg, KDevelop::IProject* project ) const
@@ -121,12 +121,11 @@ void ScriptAppConfigPage::saveToConfiguration( KConfigGroup cfg, KDevelop::IProj
     cfg.writeEntry( ExecuteScriptPlugin::workingDirEntry, workingDirectory->url() );
     cfg.writeEntry( ExecuteScriptPlugin::environmentProfileEntry, environment->currentProfile() );
     cfg.writeEntry( ExecuteScriptPlugin::outputFilteringEntry, outputFilteringMode->currentIndex() );
-    //cfg.writeEntry( ExecuteScriptPlugin::useTerminalEntry, runInTerminal->isChecked() );
 }
 
 QString ScriptAppConfigPage::title() const
 {
-    return i18n("Configure Script Application");
+    return i18nc("@title:tab", "Configure Script Application");
 }
 
 QList< KDevelop::LaunchConfigurationPageFactory* > ScriptAppLauncher::configPages() const
@@ -205,9 +204,14 @@ QList<KDevelop::LaunchConfigurationPageFactory*> ScriptAppConfigType::configPage
     return factoryList;
 }
 
+QString ScriptAppConfigType::sharedId()
+{
+    return QStringLiteral("Script Application");
+}
+
 QString ScriptAppConfigType::id() const
 {
-    return ExecuteScriptPlugin::_scriptAppConfigTypeId;
+    return sharedId();
 }
 
 QIcon ScriptAppConfigType::icon() const

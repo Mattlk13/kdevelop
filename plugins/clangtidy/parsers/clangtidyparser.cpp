@@ -52,7 +52,7 @@ QString verboseMessageToHtml(const QString& input)
 {
     QString output(QStringLiteral("<html>%1</html>").arg(input.toHtmlEscaped()));
 
-    output.replace(QStringLiteral("\\012"), QStringLiteral("\n"));
+    output.replace(QLatin1String("\\012"), QLatin1String("\n"));
 
     if (output.count(QLatin1Char('\n')) >= 2) {
         output.replace(output.indexOf(QLatin1Char('\n')), 1, QStringLiteral("<pre>"));
@@ -64,8 +64,8 @@ QString verboseMessageToHtml(const QString& input)
 
 ClangTidyParser::ClangTidyParser(QObject* parent)
     : QObject(parent)
-      //                          (1filename                 ) (2lin) (3col)  (4se)  (5d) (6explain)
-    , m_hitRegExp(QStringLiteral("(\\/.+\\.[ch]{1,2}[px]{0,2}):(\\d+):(\\d+): (.+?): (.+) (\\[.+\\])"))
+      //                            (1 filename                              ) (2ln) (3cl)  (4se)  (5d) (6expln)
+    , m_hitRegExp(QStringLiteral(R"(((?:[A-Za-z]:\\|\/).+\.[ch]{1,2}[px]{0,2}):(\d+):(\d+): (.+?): (.+) (\[.+\]))"))
 {
 }
 

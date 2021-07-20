@@ -1,5 +1,6 @@
 [KNewStuff3]
 Name=Application Templates (SDK)
+Name[az]=Tətbiq şablonları (SDK)
 Name[ca]=Plantilles d'aplicació (SDK)
 Name[ca@valencia]=Plantilles d'aplicació (SDK)
 Name[cs]=Šablony aplikací (SDK)
@@ -7,9 +8,12 @@ Name[de]=Anwendungsvorlagen (SDK)
 Name[el]=Εφαρμογές templates (SDK)
 Name[en_GB]=Application Templates (SDK)
 Name[es]=Plantillas de aplicaciones (SDK)
+Name[et]=Rakendusemallid (SDK)
+Name[eu]=Aplikazio txantiloiak (SDK)
 Name[fr]=Modèle d'application (SDK)
-Name[gl]=Modelos de aplicativos (SDK)
+Name[gl]=Modelos de aplicación (SDK)
 Name[it]=Modelli di applicazione (SDK)
+Name[ko]=프로그램 템플릿(SDK)
 Name[nl]=Toepassingsjablonen (SDK)
 Name[pl]=Szablony aplikacji (SDK)
 Name[pt]=Modelos de Aplicações (SDK)
@@ -22,7 +26,7 @@ Name[uk]=Шаблони програм (SDK)
 Name[x-test]=xxApplication Templates (SDK)xx
 Name[zh_CN]=应用程序模板 (SDK)
 
-ProvidersUrl=https://download.kde.org/ocs/providers.xml
+ProvidersUrl=https://autoconfig.kde.org/ocs/providers.xml
 Categories=KDE App Template
 TargetDir=kdevappwizard/templates
 Uncompress=never

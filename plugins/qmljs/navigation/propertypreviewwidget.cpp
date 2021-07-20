@@ -21,21 +21,23 @@
 
 #include <QQuickWidget>
 #include <QQuickItem>
+#include <QQmlContext>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QStandardPaths>
+
 #include <KLocalizedString>
+#include <KLocalizedContext>
 #include <KTextEditor/Document>
 #include <KTextEditor/View>
 #include <KDeclarative/KDeclarative>
-#include <kdeclarative_version.h>
 
 #include <language/duchain/ducontext.h>
 #include <language/duchain/duchainlock.h>
 
 // List of supported properties. The string must be the name of the property,
 // which can contain dots if necessary
-QHash<QString, SupportedProperty> PropertyPreviewWidget::supportedProperties;
+QMultiHash<QString, SupportedProperty> PropertyPreviewWidget::supportedProperties;
 
 QWidget* PropertyPreviewWidget::constructIfPossible(KTextEditor::Document* doc,
                                                     const KTextEditor::Range& keyRange,
@@ -45,7 +47,7 @@ QWidget* PropertyPreviewWidget::constructIfPossible(KTextEditor::Document* doc,
                                                     const QString& value)
 {
 #define PROP(key, filename, type, class) \
-    supportedProperties.insertMulti(key, SupportedProperty(QUrl(base + filename), type, class));
+    supportedProperties.insert(key, SupportedProperty(QUrl(base + filename), type, class));
 
     if ( supportedProperties.isEmpty() ) {
         QString base = QStandardPaths::locate(
@@ -153,14 +155,10 @@ PropertyPreviewWidget::PropertyPreviewWidget(KTextEditor::Document* doc,
     , property(property)
 {
     //setup kdeclarative library
-    KDeclarative::KDeclarative kdeclarative;
-    kdeclarative.setDeclarativeEngine(view->engine());
-#if KDECLARATIVE_VERSION >= QT_VERSION_CHECK(5, 45, 0)
-    kdeclarative.setupEngine(view->engine());
-    kdeclarative.setupContext();
-#else
-    kdeclarative.setupBindings();        //binds things like kconfig and icons
-#endif
+    KDeclarative::KDeclarative::setupEngine(view->engine());
+    KLocalizedContext *localizedContextObject = new KLocalizedContext(view->engine());
+    localizedContextObject->setTranslationDomain(QStringLiteral("kdevqmljs"));
+    view->engine()->rootContext()->setContextObject(localizedContextObject);
 
     // Configure layout
     auto l = new QHBoxLayout;

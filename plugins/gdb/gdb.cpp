@@ -26,9 +26,13 @@
 #include "dbgglobal.h"
 #include "debuglog.h"
 
+#include <interfaces/icore.h>
+#include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
+
 #include <KConfigGroup>
+#include <kcoreaddons_version.h>
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KShell>
 
 #include <QApplication>
@@ -75,10 +79,9 @@ bool GdbDebugger::start(KConfigGroup& config, const QStringList& extraArguments)
             info.setFile( shell_without_args );
         }*/
         if(!info.exists()) {
-            KMessageBox::information(
-                qApp->activeWindow(),
-                i18n("Could not locate the debugging shell '%1'.", shell_without_args ),
-                i18n("Debugging Shell Not Found") );
+            const QString messageText = i18n("Could not locate the debugging shell '%1'.", shell_without_args);
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            KDevelop::ICore::self()->uiController()->postMessage(message);
             return false;
         }
 
@@ -94,7 +97,11 @@ bool GdbDebugger::start(KConfigGroup& config, const QStringList& extraArguments)
     m_process->start();
 
     qCDebug(DEBUGGERGDB) << "Starting GDB with command" << fullCommand;
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 78, 0)
     qCDebug(DEBUGGERGDB) << "GDB process pid:" << m_process->pid();
+#else
+    qCDebug(DEBUGGERGDB) << "GDB process pid:" << m_process->processId();
+#endif
     emit userCommandOutput(fullCommand + QLatin1Char('\n'));
     return true;
 }

@@ -98,7 +98,13 @@ void FlatpakRuntime::setEnabled(bool /*enable*/)
 
 void FlatpakRuntime::startProcess(QProcess* process) const
 {
-    const QStringList args = m_finishArgs + QStringList{QStringLiteral("build"), QStringLiteral("--talk-name=org.freedesktop.DBus"), m_buildDirectory.toLocalFile(), process->program()} << process->arguments();
+    //Take any environment variables specified in process and pass through to flatpak.
+    QStringList env_args;
+    const QStringList env_vars = process->processEnvironment().toStringList();
+    for (const QString& env_var : env_vars) {
+        env_args << QLatin1String("--env=") + env_var;
+    }
+    const QStringList args = m_finishArgs + env_args + QStringList{QStringLiteral("build"), QStringLiteral("--talk-name=org.freedesktop.DBus"), m_buildDirectory.toLocalFile(), process->program()} << process->arguments();
     process->setProgram(QStringLiteral("flatpak"));
     process->setArguments(args);
 
@@ -108,7 +114,13 @@ void FlatpakRuntime::startProcess(QProcess* process) const
 
 void FlatpakRuntime::startProcess(KProcess* process) const
 {
-    process->setProgram(QStringList{QStringLiteral("flatpak")} << m_finishArgs << QStringList{QStringLiteral("build"), QStringLiteral("--talk-name=org.freedesktop.DBus"), m_buildDirectory.toLocalFile() } << process->program());
+    //Take any environment variables specified in process and pass through to flatpak.
+    QStringList env_args;
+    const QStringList env_vars = process->processEnvironment().toStringList();
+    for (const QString& env_var : env_vars) {
+        env_args << QLatin1String("--env=") + env_var;
+    }
+    process->setProgram(QStringList{QStringLiteral("flatpak")} << m_finishArgs << env_args << QStringList{QStringLiteral("build"), QStringLiteral("--talk-name=org.freedesktop.DBus"), m_buildDirectory.toLocalFile() } << process->program());
 
     qCDebug(FLATPAK) << "starting kprocess" << process->program().join(QLatin1Char(' '));
     process->start();
@@ -126,7 +138,7 @@ QList<KJob*> FlatpakRuntime::exportBundle(const QString &path) const
 {
     const auto doc = config();
 
-    QTemporaryDir* dir = new QTemporaryDir(QDir::tempPath()+QLatin1String("/flatpak-tmp-repo"));
+    auto* dir = new QTemporaryDir(QDir::tempPath()+QLatin1String("/flatpak-tmp-repo"));
     if (!dir->isValid() || doc.isEmpty()) {
         qCWarning(FLATPAK) << "Couldn't export:" << path << dir->isValid() << dir->path() << doc.isEmpty();
         return {};
@@ -228,6 +240,19 @@ Path FlatpakRuntime::pathInRuntime(const KDevelop::Path& localPath) const
 
     qCDebug(FLATPAK) << "path in runtime" << localPath << ret;
     return ret;
+}
+
+QString FlatpakRuntime::findExecutable(const QString& executableName) const
+{
+    QStringList rtPaths;
+
+    auto envPaths = getenv(QByteArrayLiteral("PATH")).split(':');
+    std::transform(envPaths.begin(), envPaths.end(), std::back_inserter(rtPaths),
+                    [this](QByteArray p) {
+                        return pathInHost(Path(QString::fromLocal8Bit(p))).toLocalFile();
+                    });
+
+    return QStandardPaths::findExecutable(executableName, rtPaths);
 }
 
 QByteArray FlatpakRuntime::getenv(const QByteArray& varname) const

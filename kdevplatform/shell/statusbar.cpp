@@ -71,6 +71,8 @@ StatusBar::StatusBar(QWidget* parent)
     addPermanentWidget(m_progressWidget, 0);
 }
 
+StatusBar::~StatusBar() = default;
+
 void StatusBar::removeError(QWidget* w)
 {
     removeWidget(w);
@@ -123,7 +125,7 @@ QWidget* errorMessage(QWidget* parent, const QString& text)
     auto* label = new KSqueezedTextLabel(parent);
     KStatefulBrush red(KColorScheme::Window, KColorScheme::NegativeText);
     QPalette pal = label->palette();
-    pal.setBrush(QPalette::WindowText, red.brush(label));
+    pal.setBrush(QPalette::WindowText, red.brush(label->palette()));
     label->setPalette(pal);
     label->setAlignment(Qt::AlignRight);
     label->setText(text);

@@ -21,6 +21,7 @@
 
 #include <QObject>
 #include <QTest>
+#include <QStandardPaths>
 
 #include <vector>
 #include <algorithm>
@@ -32,7 +33,11 @@ template <typename T>
 std::vector<T> generateData(std::size_t size)
 {
     auto ret = std::vector<T>(size);
-    std::iota(ret.begin(), ret.end(), T(0));
+    if constexpr (std::is_same_v<T, bool>) {
+        std::generate(ret.begin(), ret.end(), [i = 0]() mutable { return (i++ % 2) == 0; });
+    } else {
+        std::iota(ret.begin(), ret.end(), T(0));
+    }
     return ret;
 }
 
@@ -56,6 +61,8 @@ class TestKDevHash
     Q_OBJECT
 
 private Q_SLOTS:
+    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
+
     void benchHash_int()
     {
         runBench<int>();

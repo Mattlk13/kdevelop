@@ -1,5 +1,6 @@
 [KNewStuff3]
 Name=API Documentation (QtHelp)
+Name[az]=APİ sənədləşmə (QtHelp)
 Name[ca]=Documentació de l'API (QtHelp)
 Name[ca@valencia]=Documentació de l'API (QtHelp)
 Name[cs]=Dokumentace API (QtHelp)
@@ -7,9 +8,12 @@ Name[de]=API-Dokumentation (QtHelp)
 Name[el]=API τεκμηρίωση (QtHelp)
 Name[en_GB]=API Documentation (QtHelp)
 Name[es]=Documentación de la API (QtHelp)
+Name[et]=API dokumentatsioon (QtHelp)
+Name[eu]=API dokumentazioa (QtHelp)
 Name[fr]=Documentation de l'interface de programmation (QtHelp)
 Name[gl]=Documentación da API (axuda de Qt)
 Name[it]=Documentazione API (QtHelp)
+Name[ko]=API 문서(QtHelp)
 Name[nl]=API-documentatie (QtHelp)
 Name[pl]=Dokumentacja API (QtHelp)
 Name[pt]=Documentação da API (QtHelp)
@@ -22,7 +26,7 @@ Name[uk]=Документація з програмного інтерфейсу
 Name[x-test]=xxAPI Documentation (QtHelp)xx
 Name[zh_CN]=API 文档 (QtHelp)
 
-ProvidersUrl=https://collect.kde.org/kdevelop-qthelp/providers.xml
+ProvidersUrl=https://autoconfig.kde.org/ocs/providers.xml
+Categories=QCH Documentation Files
 TargetDir=kdevelop-qthelp
 Uncompress=archive
-Categories=Miscelaneous

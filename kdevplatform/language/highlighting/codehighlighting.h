@@ -135,8 +135,8 @@ public:
     mutable QHash<KDevelop::DUContext*, KDevelop::Declaration*> m_contextClasses;
 
     //Here the colors of function context are stored until they are merged into the function body
-    mutable QMap<KDevelop::IndexedDUContext, QHash<KDevelop::Declaration*, uint>> m_functionColorsForDeclarations;
-    mutable QMap<KDevelop::IndexedDUContext, ColorMap> m_functionDeclarationsForColors;
+    mutable QHash<KDevelop::IndexedDUContext, QHash<KDevelop::Declaration*, uint>> m_functionColorsForDeclarations;
+    mutable QHash<KDevelop::IndexedDUContext, ColorMap> m_functionDeclarationsForColors;
 
     mutable bool m_useClassCache;
     const CodeHighlighting* m_highlighting;
@@ -193,7 +193,7 @@ private:
         QVector<KTextEditor::MovingRange*> m_highlightedRanges;
     };
 
-    QMap<DocumentChangeTracker*, DocumentHighlighting*> m_highlights;
+    QHash<DocumentChangeTracker*, DocumentHighlighting*> m_highlights;
 
     friend class CodeHighlightingInstance;
 
@@ -211,8 +211,6 @@ private:
 private Q_SLOTS:
     void clearHighlightingForDocument(const KDevelop::IndexedString& document);
     void applyHighlighting(void* highlighting);
-
-    void trackerDestroyed(QObject* object);
 
     /// when the colors change we must invalidate our local caches
     void adaptToColorChanges();

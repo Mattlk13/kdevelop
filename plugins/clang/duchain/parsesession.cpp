@@ -72,6 +72,10 @@ void sanitizeArguments(QVector<QByteArray>& arguments)
     // Warning as error may cause problem to the clang parser.
     const auto asError = QByteArrayLiteral("-Werror=");
     const auto documentation = QByteArrayLiteral("-Wdocumentation");
+    // Silence common warning that arises when we parse as a GCC-lookalike.
+    // Note how clang warns us about emulating GCC, which is exactly what we want here.
+    const auto noGnuZeroVaridicMacroArguments = QByteArrayLiteral("-Wno-gnu-zero-variadic-macro-arguments");
+    bool noGnuZeroVaridicMacroArgumentsFound = false;
     for (auto& argument : arguments) {
         if (argument == "-Werror") {
             argument.clear();
@@ -80,18 +84,24 @@ void sanitizeArguments(QVector<QByteArray>& arguments)
             argument.remove(2, asError.length() - 2);
         }
 #if CINDEX_VERSION_MINOR < 100 // FIXME https://bugs.llvm.org/show_bug.cgi?id=35333
-        if (argument == documentation) {
+        else if (argument == documentation) {
             argument.clear();
         }
 #endif
+        else if (!noGnuZeroVaridicMacroArgumentsFound && argument == noGnuZeroVaridicMacroArguments) {
+            noGnuZeroVaridicMacroArgumentsFound = true;
+        }
     }
 
+    if (!noGnuZeroVaridicMacroArgumentsFound) {
+        arguments.append(noGnuZeroVaridicMacroArguments);
+    }
 }
 
 QVector<QByteArray> argsForSession(const QString& path, ParseSessionData::Options options, const ParserSettings& parserSettings)
 {
     QMimeDatabase db;
-    if(db.mimeTypeForFile(path).name() == QStringLiteral("text/x-objcsrc")) {
+    if (db.mimeTypeForFile(path).name() == QLatin1String("text/x-objcsrc")) {
         return {QByteArrayLiteral("-xobjective-c++")};
     }
 
@@ -218,15 +228,15 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
     }
     if (options.testFlag(PrecompiledHeader)) {
         flags |= CXTranslationUnit_ForSerialization;
-    } else {
+    } else if (environment.quality() == ClangParsingEnvironment::Unknown) {
+        flags |= CXTranslationUnit_Incomplete;
+    }
+    if (options.testFlag(OpenedInEditor)) {
         flags |= CXTranslationUnit_CacheCompletionResults
 #if CINDEX_VERSION_MINOR >= 32
               |  CXTranslationUnit_CreatePreambleOnFirstParse
 #endif
               |  CXTranslationUnit_PrecompiledPreamble;
-        if (environment.quality() == ClangParsingEnvironment::Unknown) {
-            flags |= CXTranslationUnit_Incomplete;
-        }
     }
 
     const auto tuUrl = environment.translationUnitUrl();
@@ -280,8 +290,10 @@ ParseSessionData::ParseSessionData(const QVector<UnsavedFile>& unsavedFiles, Cla
     smartArgs << ClangHelpers::clangBuiltinIncludePath().toUtf8();
     clangArguments << "-isystem" << smartArgs.last().constData();
 
-    smartArgs << writeDefinesFile(environment.defines());
-    clangArguments << "-imacros" << smartArgs.last().constData();
+    if (!environment.defines().isEmpty()) {
+        smartArgs << writeDefinesFile(environment.defines());
+        clangArguments << "-imacros" << smartArgs.last().constData();
+    }
 
     if (!environment.workingDirectory().isEmpty()) {
         QByteArray workingDirectory = environment.workingDirectory().toLocalFile().toUtf8();
@@ -358,7 +370,7 @@ QByteArray ParseSessionData::writeDefinesFile(const QMap<QString, QString>& defi
             {
                 continue;
             }
-            definesStream << QStringLiteral("#define ") << it.key() << ' ' << it.value() << '\n';
+            definesStream << QLatin1String("#define ") << it.key() << ' ' << it.value() << '\n';
         }
     }
     m_definesFile.close();
@@ -440,6 +452,10 @@ IndexedString ParseSession::languageString()
 
 ClangProblem::Ptr ParseSession::getOrCreateProblem(int indexInTU, CXDiagnostic diagnostic) const
 {
+    if (!d) {
+        return {};
+    }
+
     auto& problem = d->m_diagnosticsCache[indexInTU];
     if (!problem) {
         problem = ClangDiagnosticEvaluator::createProblem(diagnostic, d->m_unit);
@@ -529,7 +545,7 @@ QList<ProblemPointer> ParseSession::problemsForFile(CXFile file) const
         CXFile diagnosticFile;
         clang_getFileLocation(location, &diagnosticFile, nullptr, nullptr, nullptr);
 
-        auto requestedHereProblems = createRequestedHereProblems(i, diagnostic, file);
+        const auto requestedHereProblems = createRequestedHereProblems(i, diagnostic, file);
         for (const auto& ptr : requestedHereProblems) {
             problems.append(static_cast<const ProblemPointer&>(ptr));
         }
@@ -557,8 +573,11 @@ QList<ProblemPointer> ParseSession::problemsForFile(CXFile file) const
     // see also TestDUChain::testReparseIncludeGuard
     const QString path = QDir(ClangString(clang_getFileName(file)).toString()).canonicalPath();
     const IndexedString indexedPath(path);
+    const auto location = clang_getLocationForOffset(d->m_unit, file, 0);
     if (ClangHelpers::isHeader(path) && !clang_isFileMultipleIncludeGuarded(unit(), file)
-        && !clang_Location_isInSystemHeader(clang_getLocationForOffset(d->m_unit, file, 0)))
+        && !clang_Location_isInSystemHeader(location)
+        // clang_isFileMultipleIncludeGuarded always returns 0 in case our only file is the header
+        && !clang_Location_isFromMainFile(location))
     {
         QExplicitlySharedDataPointer<StaticAssistantProblem> problem(new StaticAssistantProblem);
         problem->setSeverity(IProblem::Warning);
@@ -616,5 +635,8 @@ bool ParseSession::reparse(const QVector<UnsavedFile>& unsavedFiles, const Clang
 
 ClangParsingEnvironment ParseSession::environment() const
 {
+    if (!d) {
+        return {};
+    }
     return d->m_environment;
 }

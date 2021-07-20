@@ -36,6 +36,7 @@
 
 #include <QHash>
 
+class QDBusServiceWatcher;
 class QUrl;
 
 namespace KDevelop {
@@ -81,11 +82,6 @@ Q_SIGNALS:
 
 Q_SIGNALS:
     void reset();
-    void stopDebugger();
-    void attachTo(int pid);
-    void coreFile(const QString& core);
-    void runUntil(const QUrl &url, int line);
-    void jumpTo(const QUrl &url, int line);
     void addWatchVariable(const QString& var);
     void evaluateExpression(const QString& expr);
     void raiseDebuggerConsoleViews();
@@ -95,11 +91,9 @@ protected Q_SLOTS:
     void slotDebugExternalProcess(DBusProxy* proxy);
     void slotExamineCore();
 
-#if KF5SysGuard_FOUND
+#if HAVE_KSYSGUARD
     void slotAttachProcess();
 #endif
-
-    void slotDBusOwnerChanged(const QString& service, const QString& oldOwner, const QString& newOwner);
 
 protected:
     void setupActions();
@@ -111,6 +105,7 @@ protected:
 private:
     QHash<QString, DBusProxy*> m_drkonqis;
     const QString m_displayName;
+    QDBusServiceWatcher* m_watcher = nullptr;
 };
 
 template<class T, class Plugin = MIDebuggerPlugin>
@@ -131,7 +126,7 @@ public:
         return m_id;
     }
 
-    Qt::DockWidgetArea defaultPosition() override
+    Qt::DockWidgetArea defaultPosition() const override
     {
         return m_defaultArea;
     }

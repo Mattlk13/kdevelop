@@ -30,6 +30,7 @@ CustomBuildSystemKCModule::CustomBuildSystemKCModule(KDevelop::IPlugin* plugin, 
     : ProjectConfigPage<CustomBuildSystemSettings>(plugin, options, parent)
 {
     auto* layout = new QVBoxLayout( this );
+    layout->setContentsMargins(0, 0, 0, 0);
     configWidget = new CustomBuildSystemConfigWidget( this );
     connect(configWidget, &CustomBuildSystemConfigWidget::changed, this, &ConfigPage::changed);
     layout->addWidget( configWidget );
@@ -62,7 +63,7 @@ void CustomBuildSystemKCModule::defaults()
 
 QString CustomBuildSystemKCModule::name() const
 {
-    return i18n("Custom Build System");
+    return i18nc("@title:tab", "Custom Build System");
 }
 
 QString CustomBuildSystemKCModule::fullName() const

@@ -77,7 +77,7 @@ KDevDocumentView::KDevDocumentView( KDevDocumentViewPlugin *plugin, QWidget *par
     setObjectName( i18n( "Documents" ) );
 
     setWindowIcon( QIcon::fromTheme( QStringLiteral( "document-multiple" ), windowIcon() ) );
-    setWindowTitle( i18n( "Documents" ) );
+    setWindowTitle(i18nc("@title:window", "Documents"));
 
     setFocusPolicy( Qt::NoFocus );
     setIndentation(10);
@@ -105,7 +105,7 @@ void KDevDocumentView::mousePressEvent( QMouseEvent * event )
 
     if (event->modifiers() == Qt::NoModifier) {
         const bool actionOpen = event->button() == Qt::LeftButton;
-        const bool actionClose = event->button() == Qt::MidButton;
+        const bool actionClose = event->button() == Qt::MiddleButton;
         const bool action = actionOpen || actionClose;
 
         if (action) {
@@ -221,14 +221,14 @@ void KDevDocumentView::contextMenuEvent( QContextMenuEvent * event )
         QAction* save = KStandardAction::save(this, SLOT(saveSelected()), ctxMenu);
         save->setEnabled(selectedDocHasChanges());
         ctxMenu->addAction(save);
-        ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n( "Reload" ), this, SLOT(reloadSelected()));
+        ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18nc("@action:inmenu", "Reload"), this, SLOT(reloadSelected()));
 
         appendActions(ctxMenu, editActions);
         appendActions(ctxMenu, vcsActions);
         appendActions(ctxMenu, extensionActions);
 
-        ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18n("Close"), this, SLOT(closeSelected()));
-        QAction* closeUnselected = ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18n( "Close All Other" ), this, SLOT(closeUnselected()));
+        ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18nc("@action:inmenu", "Close"), this, SLOT(closeSelected()));
+        QAction* closeUnselected = ctxMenu->addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18nc("@action:inmenu", "Close All Other"), this, SLOT(closeUnselected()));
         closeUnselected->setEnabled(!m_unselectedDocs.isEmpty());
 
         ctxMenu->exec(event->globalPos());
@@ -299,7 +299,7 @@ void KDevDocumentView::opened( KDevelop::IDocument* document )
 
     if ( !categoryItem->file( document->url() ) )
     {
-        KDevFileItem * fileItem = new KDevFileItem( document->url() );
+        auto* fileItem = new KDevFileItem( document->url() );
         categoryItem->setChild( categoryItem->rowCount(), fileItem );
         setCurrentIndex( m_proxy->mapFromSource( m_documentModel->indexFromItem( fileItem ) ) );
         m_doc2index[ document ] = fileItem;

@@ -54,7 +54,7 @@ QString BazaarUtils::getRevisionSpec(const KDevelop::VcsRevision& revision)
         else
             return QString(); // Don't know how to handle this situation
     } else if (revision.revisionType() == KDevelop::VcsRevision::GlobalNumber)
-        return QStringLiteral("-r") + QString::number(revision.revisionValue().toLongLong());
+        return QLatin1String("-r") + QString::number(revision.revisionValue().toLongLong());
     else
         return QString(); // Don't know how to handle this situation
 }
@@ -107,9 +107,9 @@ QString BazaarUtils::getRevisionSpecRange(const KDevelop::VcsRevision& begin,
     } else if (begin.revisionType() == KDevelop::VcsRevision::GlobalNumber) {
         if (end.revisionType() == KDevelop::VcsRevision::Special) {
             // Assuming working copy
-            return QStringLiteral("-r") + QString::number(begin.revisionValue().toLongLong());
+            return QLatin1String("-r") + QString::number(begin.revisionValue().toLongLong());
         } else {
-            return QStringLiteral("-r") + QString::number(begin.revisionValue().toLongLong())
+            return QLatin1String("-r") + QString::number(begin.revisionValue().toLongLong())
                    + QLatin1String("..") + QString::number(end.revisionValue().toLongLong());
         }
     }
@@ -125,7 +125,11 @@ bool BazaarUtils::isValidDirectory(const QUrl& dirPath)
 
 KDevelop::VcsStatusInfo BazaarUtils::parseVcsStatusInfoLine(const QString& line)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const QStringList tokens = line.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+#else
     QStringList tokens = line.split(QLatin1Char(' '), QString::SkipEmptyParts);
+#endif
     KDevelop::VcsStatusInfo result;
     if (tokens.size() < 2) // Don't know how to handle this situation (it is an error)
         return result;
@@ -164,23 +168,23 @@ KDevelop::VcsEvent BazaarUtils::parseBzrLogPart(const QString& output)
     KDevelop::VcsItemEvent::Action currentAction;
     for (const QString &line : outputLines) {
         if (!atMessage) {
-            if (line.startsWith(QStringLiteral("revno"))) {
+            if (line.startsWith(QLatin1String("revno"))) {
                 QString revno = line.mid(QStringLiteral("revno: ").length());
                 revno = revno.left(revno.indexOf(QLatin1Char(' ')));
                 KDevelop::VcsRevision revision;
                 revision.setRevisionValue(revno.toLongLong(), KDevelop::VcsRevision::GlobalNumber);
                 commitInfo.setRevision(revision);
-            } else if (line.startsWith(QStringLiteral("committer: "))) {
+            } else if (line.startsWith(QLatin1String("committer: "))) {
                 QString commiter = line.mid(QStringLiteral("committer: ").length());
                 commitInfo.setAuthor(commiter);     // Author goes after committer, but only if is different
-            } else if (line.startsWith(QStringLiteral("author"))) {
+            } else if (line.startsWith(QLatin1String("author"))) {
                 QString author = line.mid(QStringLiteral("author: ").length());
                 commitInfo.setAuthor(author);       // It may override committer (In fact committer is not supported by VcsEvent)
-            } else if (line.startsWith(QStringLiteral("timestamp"))) {
+            } else if (line.startsWith(QLatin1String("timestamp"))) {
                 const QString formatString = QStringLiteral("yyyy-MM-dd hh:mm:ss");
                 QString timestamp = line.mid(QStringLiteral("timestamp: ddd ").length(), formatString.length());
                 commitInfo.setDate(QDateTime::fromString(timestamp, formatString));
-            } else if (line.startsWith(QStringLiteral("message"))) {
+            } else if (line.startsWith(QLatin1String("message"))) {
                 atMessage = true;
             }
         } else if (atMessage && !afterMessage) {
@@ -220,7 +224,7 @@ KDevelop::VcsItemEvent::Action BazaarUtils::parseActionDescription(const QString
         return KDevelop::VcsItemEvent::Deleted;
     } else if (action == QLatin1String("kind changed:")) {
         return KDevelop::VcsItemEvent::Replaced; // Best approximation
-    } else if (action.startsWith(QStringLiteral("renamed"))) {
+    } else if (action.startsWith(QLatin1String("renamed"))) {
         return KDevelop::VcsItemEvent::Modified; // Best approximation
     } else {
         qCritical("Unsupported action: %s", action.toLocal8Bit().constData());

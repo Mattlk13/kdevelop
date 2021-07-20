@@ -32,6 +32,13 @@ using namespace KDevelop;
 using namespace KDevelopUtils;
 
 class ClangParser {
+    using TextStreamFunction = QTextStream& (*)(QTextStream&);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    static constexpr TextStreamFunction endl = Qt::endl;
+#else
+    static constexpr TextStreamFunction endl = ::endl;
+#endif
+
 public:
     ClangParser(const bool printAst, const bool printTokens)
       : m_session({})
@@ -63,6 +70,11 @@ public:
     void setIncludePaths(const QStringList& paths)
     {
         m_includePaths = paths;
+    }
+
+    void setCustomArgs(const QString& args)
+    {
+        m_customArgs = args;
     }
 private:
     /**
@@ -115,6 +127,7 @@ private:
         ClangParsingEnvironment environment;
         environment.setTranslationUnitUrl(IndexedString(fileName));
         environment.addIncludes(toPathList(m_includePaths));
+        environment.addParserArguments(m_customArgs);
         return environment;
     }
     ParseSession m_session;
@@ -122,6 +135,7 @@ private:
     const bool m_printTokens;
     ClangIndex m_index;
     QStringList m_includePaths;
+    QString m_customArgs;
 };
 
 namespace KDevelopUtils {
@@ -129,12 +143,14 @@ template<>
 void setupCustomArgs<ClangParser>(QCommandLineParser* args)
 {
     args->addOption(QCommandLineOption{QStringList{"I", "include"}, i18n("add include path"), QStringLiteral("include")});
+    args->addOption(QCommandLineOption{QStringList{"custom-arg"}, i18n("custom clang args"), QStringLiteral("arg")});
 }
 
 template<>
 void setCustomArgs<ClangParser>(ClangParser* parser, QCommandLineParser* args)
 {
     parser->setIncludePaths(args->values(QStringLiteral("include")));
+    parser->setCustomArgs(args->values(QStringLiteral("custom-arg")).join(QLatin1String(" ")));
 }
 }
 

@@ -31,9 +31,12 @@ public:
     explicit BenchQuickOpen(QObject* parent = nullptr);
 private:
     void getData();
+    void getAddRemoveData();
 private Q_SLOTS:
     void benchProjectFileFilter_addRemoveProject();
     void benchProjectFileFilter_addRemoveProject_data();
+    void benchProjectFileFilter_addRemoveProjects();
+    void benchProjectFileFilter_addRemoveProjects_data();
     void benchProjectFileFilter_reset();
     void benchProjectFileFilter_reset_data();
     void benchProjectFileFilter_setFilter();
@@ -42,6 +45,8 @@ private Q_SLOTS:
     void benchProjectFileFilter_providerData_data();
     void benchProjectFileFilter_providerDataIcon();
     void benchProjectFileFilter_providerDataIcon_data();
+    void benchProjectFileFilter_files();
+    void benchProjectFileFilter_files_data();
 };
 
 #endif // KDEVPLATFORM_PLUGIN_BENCH_QUICKOPEN_H

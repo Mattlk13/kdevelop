@@ -11,43 +11,67 @@
    </rect>
   </property>
   <layout class="QFormLayout" name="formLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
    <item row="2" column="0">
     <widget class="QLabel" name="label">
      <property name="whatsThis">
-      <string>Android KDE extra-cmake-modules toolchain file</string>
+      <string comment="@info:whatsthis">Android KDE extra-cmake-modules toolchain file</string>
      </property>
      <property name="text">
-      <string>Android toolchain:</string>
+      <string comment="@label:textbox">Android toolchain:</string>
      </property>
     </widget>
    </item>
    <item row="2" column="1">
-    <widget class="KUrlRequester" name="kcfg_cmakeToolchain"/>
+    <widget class="KUrlRequester" name="kcfg_cmakeToolchain">
+    <property name="mode">
+    <set>KFile::File|KFile::ExistingOnly|KFile::LocalOnly</set>
+    </property>
+    </widget>
    </item>
    <item row="3" column="0">
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Android NDK:</string>
+      <string comment="@label:textbox">Android NDK:</string>
      </property>
     </widget>
    </item>
    <item row="3" column="1">
-    <widget class="KUrlRequester" name="kcfg_ndk"/>
+    <widget class="KUrlRequester" name="kcfg_ndk">
+    <property name="mode">
+     <set>KFile::Directory|KFile::ExistingOnly|KFile::LocalOnly</set>
+    </property>
+    </widget>
    </item>
    <item row="4" column="0">
     <widget class="QLabel" name="label_3">
      <property name="text">
-      <string>Android SDK:</string>
+      <string comment="@label:textbox">Android SDK:</string>
      </property>
     </widget>
    </item>
    <item row="4" column="1">
-    <widget class="KUrlRequester" name="kcfg_sdk"/>
+    <widget class="KUrlRequester" name="kcfg_sdk">
+    <property name="mode">
+     <set>KFile::Directory|KFile::ExistingOnly|KFile::LocalOnly</set>
+    </property>
+    </widget>
    </item>
    <item row="5" column="0">
     <widget class="QLabel" name="label_4">
      <property name="text">
-      <string>Architecture:</string>
+      <string comment="@label:textbox">Architecture:</string>
      </property>
     </widget>
    </item>
@@ -57,7 +81,7 @@
    <item row="6" column="0">
     <widget class="QLabel" name="label_5">
      <property name="text">
-      <string>Toolchain:</string>
+      <string comment="@label:textbox">Toolchain:</string>
      </property>
     </widget>
    </item>
@@ -67,7 +91,7 @@
    <item row="7" column="0">
     <widget class="QLabel" name="label_6">
      <property name="text">
-      <string>ABI:</string>
+      <string comment="@label:textbox">ABI:</string>
      </property>
     </widget>
    </item>
@@ -80,7 +104,7 @@
   <customwidget>
    <class>KUrlRequester</class>
    <extends>QWidget</extends>
-   <header>kurlrequester.h</header>
+   <header>KUrlRequester</header>
   </customwidget>
  </customwidgets>
  <resources/>

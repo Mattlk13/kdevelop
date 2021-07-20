@@ -321,9 +321,8 @@ private:
         if (temporary)
             return;
 
-        for (QSet<DUContext*>::const_iterator it = m_directImporters.constBegin(); it != m_directImporters.constEnd();
-             ++it) {
-            auto* top = dynamic_cast<TopDUContext*>(const_cast<DUContext*>(*it)); //Avoid detaching, so use const_cast
+        for (auto* context : qAsConst(m_directImporters)) {
+            auto* top = dynamic_cast<TopDUContext*>(context);
             if (top) ///@todo also record this for local imports
                 top->m_local->addImportedContextRecursion(m_ctxt, imported, depth + 1);
         }
@@ -374,11 +373,10 @@ private:
 
     void rebuildImportStructureRecursion(const QSet<QPair<TopDUContext*, const TopDUContext*>>& rebuild)
     {
-        for (QSet<QPair<TopDUContext*, const TopDUContext*>>::const_iterator it = rebuild.constBegin();
-             it != rebuild.constEnd(); ++it) {
+        for (auto& rebuildPair : rebuild) {
             //for(int a = rebuild.size()-1; a >= 0; --a) {
             //Find the best imported parent
-            it->first->m_local->rebuildStructure(it->second);
+            rebuildPair.first->m_local->rebuildStructure(rebuildPair.second);
         }
     }
 };
@@ -486,9 +484,8 @@ void TopDUContextLocalPrivate::rebuildStructure(const TopDUContext* imported)
     if (m_ctxt == imported)
         return;
 
-    for (QVector<DUContext::Import>::const_iterator parentIt = m_importedContexts.constBegin();
-         parentIt != m_importedContexts.constEnd(); ++parentIt) {
-        auto* top = dynamic_cast<TopDUContext*>(const_cast<DUContext*>(parentIt->context(nullptr))); //To avoid detaching, use const iterator
+    for (auto& importedContext : qAsConst(m_importedContexts)) {
+        auto* top = dynamic_cast<TopDUContext*>(importedContext.context(nullptr));
         if (top) {
 //       top->m_local->needImportStructure();
             if (top == imported) {
@@ -546,6 +543,7 @@ TopDUContext::TopDUContext(TopDUContextData& data) : DUContext(data)
     , m_local(new TopDUContextLocalPrivate(this, data.m_ownIndex))
     , m_dynamicData(new TopDUContextDynamicData(this))
 {
+    initFromTopContext();
 }
 
 TopDUContext::TopDUContext(const IndexedString& url, const RangeInRevision& range, ParsingEnvironmentFile* file)
@@ -553,6 +551,8 @@ TopDUContext::TopDUContext(const IndexedString& url, const RangeInRevision& rang
     , m_local(new TopDUContextLocalPrivate(this, DUChain::newTopContextIndex()))
     , m_dynamicData(new TopDUContextDynamicData(this))
 {
+    initFromTopContext();
+
     Q_ASSERT(url.toUrl().isValid() && !url.toUrl().isRelative());
     d_func_dynamic()->setClassId(this);
     setType(Global);
@@ -604,19 +604,19 @@ void TopDUContext::deleteSelf()
 
 TopDUContext::Features TopDUContext::features() const
 {
-    uint ret = d_func()->m_features;
+    auto ret = d_func()->m_features;
 
     if (ast())
         ret |= TopDUContext::AST;
 
-    return ( TopDUContext::Features )ret;
+    return ret;
 }
 
 void TopDUContext::setFeatures(Features features)
 {
-    features = ( TopDUContext::Features )(features & (~Recursive)); //Remove the "Recursive" flag since that's only for searching
-    features = ( TopDUContext::Features )(features & (~ForceUpdateRecursive)); //Remove the update flags
-    features = ( TopDUContext::Features )(features & (~AST)); //Remove the AST flag, it's only used while updating
+    features &= ~Recursive; //Remove the "Recursive" flag since that's only for searching
+    features &= ~ForceUpdateRecursive; //Remove the update flags
+    features &= ~AST; //Remove the AST flag, it's only used while updating
     d_func_dynamic()->m_features = features;
 
     //Replicate features to ParsingEnvironmentFile
@@ -1007,13 +1007,18 @@ void TopDUContext::clearProblems()
 QVector<DUContext*> TopDUContext::importers() const
 {
     ENSURE_CAN_READ
-    return QVector<DUContext*>::fromList(m_local->m_directImporters.toList());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QSet<DUContext*>& directImporters = m_local->m_directImporters;
+    return QVector<DUContext*>(directImporters.begin(), directImporters.end());
+#else
+    return QVector<DUContext*>::fromList(m_local->m_directImporters.values());
+#endif
 }
 
 QList<DUContext*> TopDUContext::loadedImporters() const
 {
     ENSURE_CAN_READ
-    return m_local->m_directImporters.toList();
+    return m_local->m_directImporters.values();
 }
 
 QVector<DUContext::Import> TopDUContext::importedParentContexts() const

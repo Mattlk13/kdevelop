@@ -40,8 +40,8 @@
 #include <interfaces/iproject.h>
 #include "projectproxymodel.h"
 
-static const QChar sep = QLatin1Char('/');
-static const QChar escape = QLatin1Char('\\');
+constexpr QChar sep = QLatin1Char('/');
+constexpr QChar escape = QLatin1Char('\\');
 
 
 class ProjectItemCompleter : public QCompleter
@@ -166,9 +166,9 @@ ProjectItemLineEdit::ProjectItemLineEdit(QWidget* parent)
 
     setCompleter(d->completer);
     setValidator(d->validator);
-    setPlaceholderText( i18n("Enter the path to an item from the projects tree" ) );
+    setPlaceholderText( i18nc("@info:placeholder", "Enter the path to an item from the projects tree..." ) );
 
-    QAction* selectItemAction = new QAction(QIcon::fromTheme(QStringLiteral("folder-document")), i18n("Select..."), this);
+    auto* selectItemAction = new QAction(QIcon::fromTheme(QStringLiteral("folder-document")), i18nc("@action", "Select..."), this);
     connect(selectItemAction, &QAction::triggered, this, &ProjectItemLineEdit::selectItemDialog);
     addAction(selectItemAction);
 
@@ -192,7 +192,7 @@ bool ProjectItemLineEdit::selectItemDialog()
     KDevelop::ProjectModel* model=KDevelop::ICore::self()->projectController()->projectModel();
 
     QDialog dialog;
-    dialog.setWindowTitle(i18n("Select an item..."));
+    dialog.setWindowTitle(i18nc("@title:window", "Select an Item"));
 
     auto mainLayout = new QVBoxLayout(&dialog);
 
@@ -205,7 +205,7 @@ bool ProjectItemLineEdit::selectItemDialog()
     mainLayout->addWidget(new QLabel(i18n("Select the item you want to get the path from.")));
     mainLayout->addWidget(view);
 
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
+    auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok|QDialogButtonBox::Cancel);
     QPushButton *okButton = buttonBox->button(QDialogButtonBox::Ok);
     okButton->setDefault(true);
     okButton->setShortcut(Qt::CTRL | Qt::Key_Return);

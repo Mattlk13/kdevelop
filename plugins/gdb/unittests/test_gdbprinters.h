@@ -25,6 +25,7 @@ class QtPrintersTest : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
+    void initTestCase();
     void testQString();
     void testQByteArray();
     void testQListContainer_data();
@@ -43,6 +44,7 @@ private Q_SLOTS:
     void testQChar();
     void testQListPOD();
     void testQUuid();
+    void testQVariant();
     void testKTextEditorTypes();
     void testKDevelopTypes();
 };

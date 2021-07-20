@@ -40,7 +40,7 @@
 #include <KParts/MainWindow>
 #include <KLocalizedString>
 #include <interfaces/ilanguagecontroller.h>
-#include <language/interfaces/ilanguagesupport.h>
+#include <interfaces/ilanguagesupport.h>
 #include <util/path.h>
 #include <debug.h>
 
@@ -75,7 +75,6 @@ static QString replaceVariables(QString command, const QMap<QString, QString>& v
 CustomScriptPlugin::CustomScriptPlugin(QObject* parent, const QVariantList&)
     : IPlugin(QStringLiteral("kdevcustomscript"), parent)
 {
-    m_currentStyle = predefinedStyles().at(0);
     indentPluginSingleton = this;
 }
 
@@ -159,7 +158,7 @@ QString CustomScriptPlugin::formatSourceWithStyle(SourceFormatterStyle style, co
 
     proc.start();
     if (!proc.waitForStarted()) {
-        qCDebug(CUSTOMSCRIPT) << "Unable to start indent" << endl;
+        qCDebug(CUSTOMSCRIPT) << "Unable to start indent";
         return text;
     }
 
@@ -169,7 +168,7 @@ QString CustomScriptPlugin::formatSourceWithStyle(SourceFormatterStyle style, co
 
     proc.closeWriteChannel();
     if (!proc.waitForFinished()) {
-        qCDebug(CUSTOMSCRIPT) << "Process doesn't finish" << endl;
+        qCDebug(CUSTOMSCRIPT) << "Process doesn't finish";
         return text;
     }
 
@@ -512,17 +511,17 @@ CustomScriptPreferences::CustomScriptPreferences()
     m_updateTimer->setInterval(1000);
     connect(m_updateTimer, &QTimer::timeout, this, &CustomScriptPreferences::updateTimeout);
     m_vLayout = new QVBoxLayout(this);
-    m_vLayout->setMargin(0);
+    m_vLayout->setContentsMargins(0, 0, 0, 0);
     m_captionLabel = new QLabel;
     m_vLayout->addWidget(m_captionLabel);
     m_vLayout->addSpacing(10);
     m_hLayout = new QHBoxLayout;
     m_vLayout->addLayout(m_hLayout);
     m_commandLabel = new QLabel;
+    m_commandLabel->setText(i18nc("@label:textbox", "Command:"));
     m_hLayout->addWidget(m_commandLabel);
     m_commandEdit = new QLineEdit;
     m_hLayout->addWidget(m_commandEdit);
-    m_commandLabel->setText(i18n("Command:"));
     m_vLayout->addSpacing(10);
     m_bottomLabel = new QLabel;
     m_vLayout->addWidget(m_bottomLabel);
@@ -540,7 +539,7 @@ CustomScriptPreferences::CustomScriptPreferences()
 
     m_vLayout->addSpacing(10);
 
-    m_moreVariablesButton = new QPushButton(i18n("More Variables"));
+    m_moreVariablesButton = new QPushButton(i18nc("@action:button", "More Variables"));
     connect(m_moreVariablesButton, &QPushButton::clicked, this, &CustomScriptPreferences::moreVariablesClicked);
     m_vLayout->addWidget(m_moreVariablesButton);
     m_vLayout->addStretch();
@@ -575,7 +574,7 @@ void CustomScriptPreferences::moreVariablesClicked(bool)
                                   "<b>${PROJECT_NAME}</b> will be replaced by the path of <br />"
                                   "the currently open project with the matching name."
 
-                                  ), i18n("Variable Replacements"));
+                                  ), i18nc("@title:window", "Variable Replacements"));
 }
 
 #include "customscript_plugin.moc"

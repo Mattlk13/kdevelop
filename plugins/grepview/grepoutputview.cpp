@@ -42,7 +42,7 @@ QWidget* GrepOutputViewFactory::create(QWidget* parent)
     return new GrepOutputView(parent, m_plugin);
 }
 
-Qt::DockWidgetArea GrepOutputViewFactory::defaultPosition()
+Qt::DockWidgetArea GrepOutputViewFactory::defaultPosition() const
 {
     return Qt::BottomDockWidgetArea;
 }
@@ -75,17 +75,22 @@ GrepOutputView::GrepOutputView(QWidget* parent, GrepViewPlugin* plugin)
     setWindowTitle(i18nc("@title:window", "Find/Replace Output View"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("edit-find"), windowIcon()));
 
-    m_prev = new QAction(QIcon::fromTheme(QStringLiteral("go-previous")), i18n("&Previous Item"), this);
-    m_next = new QAction(QIcon::fromTheme(QStringLiteral("go-next")), i18n("&Next Item"), this);
-    m_collapseAll = new QAction(QIcon::fromTheme(QStringLiteral("arrow-left-double")), i18n("C&ollapse All"), this); // TODO change icon
-    m_expandAll = new QAction(QIcon::fromTheme(QStringLiteral("arrow-right-double")), i18n("&Expand All"), this); // TODO change icon
+    m_prev = new QAction(QIcon::fromTheme(QStringLiteral("go-previous")), i18nc("@action", "&Previous Item"), this);
+    m_next = new QAction(QIcon::fromTheme(QStringLiteral("go-next")), i18nc("@action", "&Next Item"), this);
+    /* Expand-all and collapse-all icons were added to breeze with version 5.57. We use a fallback
+     * icon here because we support older frameworks versions and oxygen doesn't have such an icon
+     */
+    m_collapseAll = new QAction(QIcon::fromTheme(QStringLiteral("collapse-all"),
+                        QIcon::fromTheme(QStringLiteral("arrow-left-double"))), i18nc("@action", "C&ollapse All"), this);
+    m_expandAll = new QAction(QIcon::fromTheme(QStringLiteral("expand-all"),
+                        QIcon::fromTheme(QStringLiteral("arrow-right-double"))), i18nc("@action", "&Expand All"), this);
     updateButtonState(false);
     auto *separator = new QAction(this);
     separator->setSeparator(true);
-    QAction *newSearchAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-find")), i18n("New &Search"), this);
-    m_refresh = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18n("Refresh"), this);
+    auto* newSearchAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-find")), i18nc("@action", "New &Search"), this);
+    m_refresh = new QAction(QIcon::fromTheme(QStringLiteral("view-refresh")), i18nc("@action", "Refresh"), this);
     m_refresh->setEnabled(false);
-    m_clearSearchHistory = new QAction(QIcon::fromTheme(QStringLiteral("edit-clear-list")), i18n("Clear Search History"), this);
+    m_clearSearchHistory = new QAction(QIcon::fromTheme(QStringLiteral("edit-clear-list")), i18nc("@action", "Clear Search History"), this);
     m_clearSearchHistory->setEnabled(false);
 
     addAction(m_prev);
@@ -233,7 +238,7 @@ GrepOutputModel* GrepOutputView::renewModel(const GrepJobSettings& settings, con
     connect(m_plugin, &GrepViewPlugin::grepJobFinished, this, &GrepOutputView::updateScrollArea);
 
     // appends new model to history
-    modelSelector->insertItem(0, description, qVariantFromValue<QObject*>(newModel));
+    modelSelector->insertItem(0, description, QVariant::fromValue<QObject*>(newModel));
     modelSelector->setCurrentIndex(0);
 
     m_settingsHistory.append(settings);
@@ -320,7 +325,7 @@ void GrepOutputView::onApply()
         // ask a confirmation before an empty string replacement
         if(replacementCombo->currentText().length() == 0 &&
            KMessageBox::questionYesNo(this, i18n("Do you want to replace with an empty string?"),
-                                            i18n("Start replacement")) == KMessageBox::No)
+                                            i18nc("@title:window", "Start Replacement")) == KMessageBox::No)
         {
             return;
         }

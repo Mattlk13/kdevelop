@@ -30,7 +30,6 @@
 #include <KConfig>
 #include <KConfigGroup>
 
-#include <qtcompat_p.h>
 #include <interfaces/iproject.h>
 #include <interfaces/icore.h>
 #include <project/projectmodel.h>
@@ -46,19 +45,19 @@ constexpr Utils::LanguageType configurableLanguageTypes[] =
     { Utils::C, Utils::Cpp, Utils::OpenCl, Utils::Cuda };
 
 namespace ConfigConstants {
-const QString configKey = QStringLiteral( "CustomDefinesAndIncludes" );
-const QString definesKey = QStringLiteral( "Defines" );
-const QString includesKey = QStringLiteral( "Includes" );
-const QString projectPathPrefix = QStringLiteral( "ProjectPath" );
-const QString projectPathKey = QStringLiteral( "Path" );
+inline QString configKey() { return QStringLiteral("CustomDefinesAndIncludes"); }
+inline QString definesKey() { return QStringLiteral("Defines"); }
+inline QString includesKey() { return QStringLiteral("Includes"); }
+inline QString projectPathPrefix() { return QStringLiteral("ProjectPath"); }
+inline QString projectPathKey() { return QStringLiteral("Path"); }
 
-const QString customBuildSystemGroup = QStringLiteral( "CustomBuildSystem" );
-const QString definesAndIncludesGroup = QStringLiteral( "Defines And Includes" );
+inline QString customBuildSystemGroup() { return QStringLiteral("CustomBuildSystem"); }
+inline QString definesAndIncludesGroup() { return QStringLiteral("Defines And Includes"); }
 
-const QString compilersGroup = QStringLiteral( "Compilers" );
-const QString compilerNameKey = QStringLiteral( "Name" );
-const QString compilerPathKey = QStringLiteral( "Path" );
-const QString compilerTypeKey = QStringLiteral( "Type" );
+inline QString compilersGroup() { return QStringLiteral("Compilers"); }
+inline QString compilerNameKey() { return QStringLiteral("Name"); }
+inline QString compilerPathKey() { return QStringLiteral("Path"); }
+inline QString compilerTypeKey() { return QStringLiteral("Type"); }
 
 QString parserArgumentsKey(Utils::LanguageType languageType)
 {
@@ -123,7 +122,7 @@ const ParserArguments& defaultArguments()
 CompilerPointer createCompilerFromConfig(KConfigGroup& cfg)
 {
     auto grp = cfg.group("Compiler");
-    auto name = grp.readEntry( ConfigConstants::compilerNameKey, QString() );
+    auto name = grp.readEntry( ConfigConstants::compilerNameKey(), QString() );
     if (name.isEmpty()) {
         return SettingsManager::globalInstance()->provider()->defaultCompiler();
     }
@@ -145,15 +144,15 @@ void writeCompilerToConfig(KConfigGroup& cfg, const CompilerPointer& compiler)
 
     auto grp = cfg.group("Compiler");
     // Store only compiler name, path and type retrieved from registered compilers
-    grp.writeEntry(ConfigConstants::compilerNameKey, compiler->name());
+    grp.writeEntry(ConfigConstants::compilerNameKey(), compiler->name());
 }
 
 void doWriteSettings( KConfigGroup grp, const QVector<ConfigEntry>& paths )
 {
     int pathIndex = 0;
     for ( const auto& path : paths ) {
-        KConfigGroup pathgrp = grp.group( ConfigConstants::projectPathPrefix + QString::number( pathIndex++ ) );
-        pathgrp.writeEntry(ConfigConstants::projectPathKey, path.path);
+        KConfigGroup pathgrp = grp.group(ConfigConstants::projectPathPrefix() + QString::number(pathIndex++));
+        pathgrp.writeEntry(ConfigConstants::projectPathKey(), path.path);
         for (auto type : configurableLanguageTypes) {
             pathgrp.writeEntry(ConfigConstants::parserArgumentsKey(type), path.parserArguments[type]);
         }
@@ -161,14 +160,14 @@ void doWriteSettings( KConfigGroup grp, const QVector<ConfigEntry>& paths )
 
         {
             int index = 0;
-            KConfigGroup includes(pathgrp.group(ConfigConstants::includesKey));
-            for( auto it = path.includes.begin() ; it != path.includes.end(); ++it){
-                includes.writeEntry(QString::number(++index), *it);
+            KConfigGroup includes(pathgrp.group(ConfigConstants::includesKey()));
+            for (auto& include : path.includes) {
+                includes.writeEntry(QString::number(++index), include);
             }
 
         }
         {
-            KConfigGroup defines(pathgrp.group(ConfigConstants::definesKey));
+            KConfigGroup defines(pathgrp.group(ConfigConstants::definesKey()));
             for (auto it = path.defines.begin(); it != path.defines.end(); ++it) {
                 defines.writeEntry(it.key(), it.value());
             }
@@ -183,13 +182,13 @@ QVector<ConfigEntry> doReadSettings( KConfigGroup grp, bool remove = false )
     QVector<ConfigEntry> paths;
     const auto& sortedGroupNames = sorted(grp.groupList());
     for (const QString& grpName : sortedGroupNames) {
-        if ( !grpName.startsWith( ConfigConstants::projectPathPrefix ) ) {
+        if (!grpName.startsWith(ConfigConstants::projectPathPrefix())) {
             continue;
         }
         KConfigGroup pathgrp = grp.group( grpName );
 
         ConfigEntry path;
-        path.path = pathgrp.readEntry( ConfigConstants::projectPathKey, "" );
+        path.path = pathgrp.readEntry(ConfigConstants::projectPathKey(), "");
         for (auto type : configurableLanguageTypes) {
             path.parserArguments[type] = pathgrp.readEntry(ConfigConstants::parserArgumentsKey(type), defaultArguments()[type]);
         }
@@ -203,8 +202,8 @@ QVector<ConfigEntry> doReadSettings( KConfigGroup grp, bool remove = false )
 
         { // defines
             // Backwards compatibility with old config style
-            if(pathgrp.hasKey(ConfigConstants::definesKey)) {
-                QByteArray tmp = pathgrp.readEntry( ConfigConstants::definesKey, QByteArray() );
+            if(pathgrp.hasKey(ConfigConstants::definesKey())) {
+                QByteArray tmp = pathgrp.readEntry(ConfigConstants::definesKey(), QByteArray() );
                 QDataStream s( tmp );
                 s.setVersion( QDataStream::Qt_4_5 );
                 // backwards compatible reading
@@ -212,7 +211,7 @@ QVector<ConfigEntry> doReadSettings( KConfigGroup grp, bool remove = false )
                 s >> defines;
                 path.setDefines(defines);
             } else {
-                KConfigGroup defines(pathgrp.group(ConfigConstants::definesKey));
+                KConfigGroup defines(pathgrp.group(ConfigConstants::definesKey()));
                 QMap<QString, QString> defMap = defines.entryMap();
                 path.defines.reserve(defMap.size());
                 for(auto it = defMap.constBegin(); it != defMap.constEnd(); ++it) {
@@ -230,16 +229,15 @@ QVector<ConfigEntry> doReadSettings( KConfigGroup grp, bool remove = false )
 
         { // includes
             // Backwards compatibility with old config style
-            if(pathgrp.hasKey(ConfigConstants::includesKey)){
-                QByteArray tmp = pathgrp.readEntry( ConfigConstants::includesKey, QByteArray() );
+            if(pathgrp.hasKey(ConfigConstants::includesKey())){
+                QByteArray tmp = pathgrp.readEntry(ConfigConstants::includesKey(), QByteArray());
                 QDataStream s( tmp );
                 s.setVersion( QDataStream::Qt_4_5 );
                 s >> path.includes;
             } else {
-                KConfigGroup includes(pathgrp.group(ConfigConstants::includesKey));
-                QMap<QString, QString> incMap = includes.entryMap();
-                for(auto it = incMap.begin(); it != incMap.end(); ++it){
-                    QString value = it.value();
+                KConfigGroup includes(pathgrp.group(ConfigConstants::includesKey()));
+                const QMap<QString, QString> incMap = includes.entryMap();
+                for (auto& value :incMap) {
                     if(value.isEmpty()){
                         continue;
                     }
@@ -267,7 +265,7 @@ QVector<ConfigEntry> doReadSettings( KConfigGroup grp, bool remove = false )
  */
 QVector<ConfigEntry> convertedPaths( KConfig* cfg )
 {
-    KConfigGroup group = cfg->group( ConfigConstants::customBuildSystemGroup );
+    KConfigGroup group = cfg->group(ConfigConstants::customBuildSystemGroup());
     if ( !group.isValid() )
         return {};
 
@@ -323,7 +321,7 @@ void SettingsManager::writePaths( KConfig* cfg, const QVector< ConfigEntry >& pa
 {
     Q_ASSERT(QThread::currentThread() == qApp->thread());
 
-    KConfigGroup grp = cfg->group( ConfigConstants::configKey );
+    KConfigGroup grp = cfg->group(ConfigConstants::configKey());
     if ( !grp.isValid() )
         return;
 
@@ -342,7 +340,7 @@ QVector<ConfigEntry> SettingsManager::readPaths( KConfig* cfg ) const
         return converted;
     }
 
-    KConfigGroup grp = cfg->group( ConfigConstants::configKey );
+    KConfigGroup grp = cfg->group(ConfigConstants::configKey());
     if ( !grp.isValid() ) {
         return {};
     }
@@ -352,7 +350,7 @@ QVector<ConfigEntry> SettingsManager::readPaths( KConfig* cfg ) const
 
 bool SettingsManager::needToReparseCurrentProject( KConfig* cfg ) const
 {
-    auto grp = cfg->group( ConfigConstants::definesAndIncludesGroup );
+    auto grp = cfg->group(ConfigConstants::definesAndIncludesGroup());
     return grp.readEntry( "reparse", true );
 }
 
@@ -366,7 +364,7 @@ void SettingsManager::writeUserDefinedCompilers(const QVector< CompilerPointer >
         editableCompilers.append(compiler);
     }
 
-    KConfigGroup config = KSharedConfig::openConfig()->group(ConfigConstants::compilersGroup);
+    KConfigGroup config = KSharedConfig::openConfig()->group(ConfigConstants::compilersGroup());
     config.deleteGroup();
     config.writeEntry("number", editableCompilers.count());
     int i = 0;
@@ -374,9 +372,9 @@ void SettingsManager::writeUserDefinedCompilers(const QVector< CompilerPointer >
         KConfigGroup grp = config.group(QString::number(i));
         ++i;
 
-        grp.writeEntry(ConfigConstants::compilerNameKey, compiler->name());
-        grp.writeEntry(ConfigConstants::compilerPathKey, compiler->path());
-        grp.writeEntry(ConfigConstants::compilerTypeKey, compiler->factoryName());
+        grp.writeEntry(ConfigConstants::compilerNameKey(), compiler->name());
+        grp.writeEntry(ConfigConstants::compilerPathKey(), compiler->path());
+        grp.writeEntry(ConfigConstants::compilerTypeKey(), compiler->factoryName());
     }
     config.sync();
 }
@@ -385,14 +383,14 @@ QVector< CompilerPointer > SettingsManager::userDefinedCompilers() const
 {
     QVector< CompilerPointer > compilers;
 
-    KConfigGroup config = KSharedConfig::openConfig()->group(ConfigConstants::compilersGroup);
+    KConfigGroup config = KSharedConfig::openConfig()->group(ConfigConstants::compilersGroup());
     int count = config.readEntry("number", 0);
     for (int i = 0; i < count; i++) {
         KConfigGroup grp = config.group(QString::number(i));
 
-        auto name = grp.readEntry(ConfigConstants::compilerNameKey, QString());
-        auto path = grp.readEntry(ConfigConstants::compilerPathKey, QString());
-        auto type = grp.readEntry(ConfigConstants::compilerTypeKey, QString());
+        auto name = grp.readEntry(ConfigConstants::compilerNameKey(), QString());
+        auto path = grp.readEntry(ConfigConstants::compilerPathKey(), QString());
+        auto type = grp.readEntry(ConfigConstants::compilerTypeKey(), QString());
 
         const auto cf = m_provider.compilerFactories();
         for (auto& f : cf) {
@@ -421,8 +419,8 @@ LanguageType languageType(const QString& path, bool treatAmbiguousAsCPP)
 {
     QMimeDatabase db;
     const auto mimeType = db.mimeTypeForFile(path).name();
-    if (mimeType == QStringLiteral("text/x-csrc") ||
-        mimeType == QStringLiteral("text/x-chdr") ) {
+    if (mimeType == QLatin1String("text/x-csrc") ||
+        mimeType == QLatin1String("text/x-chdr") ) {
         if (treatAmbiguousAsCPP) {
             if (path.endsWith(QLatin1String(".h"), Qt::CaseInsensitive)) {
                 return Cpp;
@@ -444,20 +442,20 @@ LanguageType languageType(const QString& path, bool treatAmbiguousAsCPP)
         return C;
     }
 
-    if (mimeType == QStringLiteral("text/x-c++src") ||
-        mimeType == QStringLiteral("text/x-c++hdr") ) {
+    if (mimeType == QLatin1String("text/x-c++src") ||
+        mimeType == QLatin1String("text/x-c++hdr") ) {
         return Cpp;
     }
 
-    if (mimeType == QStringLiteral("text/x-objc++src")) {
+    if (mimeType == QLatin1String("text/x-objc++src")) {
         return ObjCpp;
     }
 
-    if (mimeType == QStringLiteral("text/x-objcsrc")) {
+    if (mimeType == QLatin1String("text/x-objcsrc")) {
         return ObjC;
     }
 
-    if (mimeType == QStringLiteral("text/x-opencl-src")) {
+    if (mimeType == QLatin1String("text/x-opencl-src")) {
         return OpenCl;
     }
 

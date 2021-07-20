@@ -89,39 +89,10 @@ namespace KDevelop {
 
 Core *Core::m_self = nullptr;
 
-KAboutData createAboutData()
-{
-    KAboutData aboutData( QStringLiteral("kdevplatform"),
-                          i18n("KDevelop Platform"), QStringLiteral(KDEVPLATFORM_VERSION_STRING),
-                          i18n("Development Platform for IDE-like Applications"),
-                          KAboutLicense::LGPL_V2, i18n("Copyright 2004-%1, The KDevelop developers", 2019),
-                          QString(), QStringLiteral("https://www.kdevelop.org/"));
-
-    aboutData.addAuthor( i18n("Andreas Pakulat"), i18n( "Architecture, VCS Support, Project Management Support, QMake Projectmanager" ), QStringLiteral("apaku@gmx.de") );
-    aboutData.addAuthor( i18n("Alexander Dymo"), i18n( "Architecture, Sublime UI, Ruby support" ), QStringLiteral("adymo@kdevelop.org") );
-    aboutData.addAuthor( i18n("David Nolden"), i18n( "Definition-Use Chain, C++ Support" ), QStringLiteral("david.nolden.kdevelop@art-master.de") );
-    aboutData.addAuthor( i18n("Aleix Pol Gonzalez"), i18n( "CMake Support, Run Support, Kross Support" ), QStringLiteral("aleixpol@kde.org") );
-    aboutData.addAuthor( i18n("Vladimir Prus"), i18n( "GDB integration" ), QStringLiteral("ghost@cs.msu.su") );
-    aboutData.addAuthor( i18n("Hamish Rodda"), i18n( "Text editor integration, definition-use chain" ), QStringLiteral("rodda@kde.org") );
-
-    aboutData.addCredit( i18n("Matt Rogers"), QString(), QStringLiteral("mattr@kde.org"));
-    aboutData.addCredit( i18n("Cédric Pasteur"), i18n("astyle and indent support"), QStringLiteral("cedric.pasteur@free.fr") );
-    aboutData.addCredit( i18n("Evgeniy Ivanov"), i18n("Distributed VCS, Git, Mercurial"), QStringLiteral("powerfox@kde.ru") );
-    //Veritas is outside in playground currently.
-    //aboutData.addCredit( i18n("Manuel Breugelmanns"), i18n( "Veritas, QTest integration"), "mbr.nxi@gmail.com" );
-    aboutData.addCredit( i18n("Robert Gruber") , i18n( "SnippetPart, debugger and usability patches" ), QStringLiteral("rgruber@users.sourceforge.net") );
-    aboutData.addCredit( i18n("Dukju Ahn"), i18n( "Subversion plugin, Custom Make Manager, Overall improvements" ), QStringLiteral("dukjuahn@gmail.com") );
-    aboutData.addAuthor( i18n("Niko Sams"), i18n( "GDB integration, Webdevelopment Plugins" ), QStringLiteral("niko.sams@gmail.com") );
-    aboutData.addAuthor( i18n("Milian Wolff"), i18n( "Generic manager, Webdevelopment Plugins, Snippets, Performance" ), QStringLiteral("mail@milianw.de") );
-    aboutData.addAuthor( i18n("Kevin Funk"), i18n( "Co-maintainer, C++/Clang, QA, Windows Support, Performance, Website" ), QStringLiteral("kfunk@kde.org") );
-    aboutData.addAuthor( i18n("Sven Brauch"), i18n( "Co-maintainer, AppImage, Python Support, User Interface improvements" ), QStringLiteral("svenbrauch@gmx.de") );
-    aboutData.addAuthor( i18n("Friedrich W. H. Kossebau"), QString(), QStringLiteral("kossebau@kde.org") );
-
-    return aboutData;
-}
-
-CorePrivate::CorePrivate(Core *core):
-    m_aboutData( createAboutData() ), m_core(core), m_cleanedUp(false), m_shuttingDown(false)
+CorePrivate::CorePrivate(Core *core)
+    : m_core(core)
+    , m_cleanedUp(false)
+    , m_shuttingDown(false)
 {
 }
 
@@ -152,7 +123,7 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
         const auto pluginInfos = pluginController->allPluginInfos();
         if (pluginInfos.isEmpty()) {
             QMessageBox::critical(nullptr,
-                                  i18n("Could not find any plugins"),
+                                  i18nc("@title:window", "No Plugins Found"),
                                   i18n("<p>Could not find any plugins during startup.<br/>"
                                   "Please make sure QT_PLUGIN_PATH is set correctly.</p>"
                                   "Refer to <a href=\"https://community.kde.org/Guidelines_and_HOWTOs/Build_from_source#Set_up_the_runtime_environment\">this article</a> for more information."),
@@ -267,6 +238,11 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
     qCDebug(SHELL) << "Initializing plugin controller (loading session plugins)";
     pluginController->initialize();
 
+    /* To make breakpoints show up in the UI, we need to make sure
+       DebugController is initialized and has loaded BreakpointModel
+       before UI is made visible. */
+    debugController->initialize();
+
     qCDebug(SHELL) << "Initializing working set controller";
     if(!(mode & Core::NoUi))
     {
@@ -285,7 +261,6 @@ bool CorePrivate::initialize(Core::Setup mode, const QString& session )
     if (documentationController) {
         documentationController->initialize();
     }
-    debugController->initialize();
     testController->initialize();
     runtimeController->initialize();
 
@@ -312,22 +287,6 @@ CorePrivate::~CorePrivate()
     delete workingSetController.data();
     delete testController.data();
     delete runtimeController.data();
-
-    selectionController.clear();
-    projectController.clear();
-    languageController.clear();
-    pluginController.clear();
-    uiController.clear();
-    partController.clear();
-    documentController.clear();
-    runController.clear();
-    sessionController.clear();
-    sourceFormatterController.clear();
-    documentationController.clear();
-    debugController.clear();
-    workingSetController.clear();
-    testController.clear();
-    runtimeController.clear();
 }
 
 bool Core::initialize(Setup mode, const QString& session)
@@ -408,8 +367,11 @@ void Core::cleanup()
 
         d->debugController->cleanup();
         d->selectionController->cleanup();
-        // Save the layout of the ui here, so run it first
-        d->uiController->cleanup();
+
+        if (!(d->m_mode & Core::NoUi)) {
+            // Save the layout of the ui here, so run it first
+            d->uiController->cleanup();
+        }
 
         if (d->workingSetController)
             d->workingSetController->cleanup();
@@ -426,6 +388,11 @@ void Core::cleanup()
 
         // before unloading language plugins, we need to make sure all parse jobs are done
         d->languageController->backgroundParser()->waitForIdle();
+
+        DUChain::self()->shutdown();
+
+        // Only unload plugins after the DUChain shutdown to prevent issues with non-loaded factories for types
+        // See: https://bugs.kde.org/show_bug.cgi?id=379669
         d->pluginController->cleanup();
 
         d->sessionController->cleanup();
@@ -434,17 +401,10 @@ void Core::cleanup()
 
         //Disable the functionality of the language controller
         d->languageController->cleanup();
-
-        DUChain::self()->shutdown();
     }
 
     d->m_cleanedUp = true;
     emit shutdownCompleted();
-}
-
-KAboutData Core::aboutData() const
-{
-    return d->m_aboutData;
 }
 
 IUiController *Core::uiController()

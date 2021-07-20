@@ -1,6 +1,7 @@
 set(kdevtests_LIB_SRCS
     autotestshell.cpp
     kdevsignalspy.cpp
+    projectsgenerator.cpp
     testcore.cpp
     testproject.cpp
     testfile.cpp
@@ -11,12 +12,16 @@ set(kdevtests_LIB_SRCS
     testvariablecontroller.cpp
     testbreakpointcontroller.cpp
     testframestackmodel.cpp
-    modeltest.cpp
 
     json/delayedoutput.cpp
     json/declarationvalidator.cpp
     json/testsuite.cpp
 )
+if(Qt5_VERSION VERSION_LESS "5.11.0")
+    list(APPEND kdevtests_LIB_SRCS
+        modeltest.cpp
+    )
+endif()
 
 kdevplatform_add_library(KDevPlatformTests SOURCES ${kdevtests_LIB_SRCS})
 target_link_libraries(KDevPlatformTests
@@ -32,7 +37,7 @@ PRIVATE
 install(FILES
     autotestshell.h
     kdevsignalspy.h
-    modeltest.h
+    projectsgenerator.h
     testcore.h
     testproject.h
     testfile.h

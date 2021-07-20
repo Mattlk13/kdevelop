@@ -29,7 +29,6 @@
 #include <KLocalizedString>
 #include <KTextEditor/Document>
 #include <KTextEditor/MovingInterface>
-#include <ktexteditor_version.h>
 
 #include "../interfaces/icore.h"
 #include "../interfaces/idebugcontroller.h"
@@ -75,6 +74,10 @@ public:
     bool dirty = false;
     bool dontUpdateMarks = false;
     QList<Breakpoint*> breakpoints;
+    /// FIXME: this is just an ugly workaround to not leak deleted breakpoints
+    ///        a real fix would make sure that we actually delete breakpoints
+    ///        right when we delete them... aka remove Breakpoint::{set}deleted
+    QList<Breakpoint*> deletedBreakpoints;
 };
 
 BreakpointModel::BreakpointModel(QObject* parent)
@@ -109,6 +112,7 @@ BreakpointModel::~BreakpointModel()
     Q_D(BreakpointModel);
 
     qDeleteAll(d->breakpoints);
+    qDeleteAll(d->deletedBreakpoints);
 }
 
 void BreakpointModel::slotPartAdded(KParts::Part* part)
@@ -131,15 +135,24 @@ void BreakpointModel::slotPartAdded(KParts::Part* part)
 
 void BreakpointModel::textDocumentCreated(KDevelop::IDocument* doc)
 {
-    KTextEditor::MarkInterface *iface =
-        qobject_cast<KTextEditor::MarkInterface*>(doc->textDocument());
+    Q_D(const BreakpointModel);
 
-    if (iface) {
+    KTextEditor::Document* const textDocument = doc->textDocument();
+
+    if (qobject_cast<KTextEditor::MarkInterface*>(textDocument)) {
         // can't use new signal slot syntax here, MarkInterface is not a QObject
-        connect(doc->textDocument(), SIGNAL(markChanged(KTextEditor::Document*,KTextEditor::Mark,KTextEditor::MarkInterface::MarkChangeAction)),
+        connect(textDocument, SIGNAL(markChanged(KTextEditor::Document*,KTextEditor::Mark,KTextEditor::MarkInterface::MarkChangeAction)),
                  this, SLOT(markChanged(KTextEditor::Document*,KTextEditor::Mark,KTextEditor::MarkInterface::MarkChangeAction)));
-        connect(doc->textDocument(), SIGNAL(markContextMenuRequested(KTextEditor::Document*,KTextEditor::Mark,QPoint,bool&)),
+        connect(textDocument, SIGNAL(markContextMenuRequested(KTextEditor::Document*,KTextEditor::Mark,QPoint,bool&)),
                 SLOT(markContextMenuRequested(KTextEditor::Document*,KTextEditor::Mark,QPoint,bool&)));
+    }
+
+    // markChanged() is not triggered for loaded breakpoints, so get them a moving cursor now
+    const QUrl docUrl = textDocument->url();
+    for (Breakpoint* breakpoint : qAsConst(d->breakpoints)) {
+        if (docUrl == breakpoint->url()) {
+            setupMovingCursor(textDocument, breakpoint);
+        }
     }
 }
 
@@ -184,15 +197,8 @@ void BreakpointModel::markContextMenuRequested(Document* document, Mark mark, co
             if (b) {
                 b->setDeleted();
             } else {
-                Breakpoint *breakpoint = addCodeBreakpoint(document->url(), mark.line);
-                MovingInterface *moving = qobject_cast<MovingInterface*>(document);
-                if (moving) {
-                    MovingCursor* cursor = moving->newMovingCursor(Cursor(mark.line, 0));
-                    // can't use new signal/slot syntax here, MovingInterface is not a QObject
-                    connect(document, SIGNAL(aboutToDeleteMovingInterfaceContent(Document*)),
-                            this, SLOT(aboutToDeleteMovingInterfaceContent(Document*)), Qt::UniqueConnection);
-                    breakpoint->setMovingCursor(cursor);
-                }
+                Breakpoint* breakpoint = addCodeBreakpoint(document->url(), mark.line);
+                setupMovingCursor(document, breakpoint);
             }
         } else if (triggeredAction == enableAction) {
             b->setData(Breakpoint::EnableColumn, b->enabled() ? Qt::Unchecked : Qt::Checked);
@@ -279,6 +285,9 @@ bool KDevelop::BreakpointModel::removeRows(int row, int count, const QModelIndex
         b->m_model = nullptr;
         // To be changed: the controller is currently still responsible for deleting the breakpoint
         // object
+        // FIXME: this whole notion of m_deleted is utterly broken and needs to be fixed properly
+        // for now just prevent a leak...
+        d->deletedBreakpoints.append(b);
     }
     endRemoveRows();
     updateMarks();
@@ -380,15 +389,8 @@ void BreakpointModel::markChanged(
             b->setDeleted();
             return;
         }
-        Breakpoint *breakpoint = addCodeBreakpoint(document->url(), mark.line);
-        KTextEditor::MovingInterface *moving = qobject_cast<KTextEditor::MovingInterface*>(document);
-        if (moving) {
-            KTextEditor::MovingCursor* cursor = moving->newMovingCursor(KTextEditor::Cursor(mark.line, 0));
-            // can't use new signal/slot syntax here, MovingInterface is not a QObject
-            connect(document, SIGNAL(aboutToDeleteMovingInterfaceContent(KTextEditor::Document*)),
-                    this, SLOT(aboutToDeleteMovingInterfaceContent(KTextEditor::Document*)), Qt::UniqueConnection);
-            breakpoint->setMovingCursor(cursor);
-        }
+        Breakpoint* breakpoint = addCodeBreakpoint(document->url(), mark.line);
+        setupMovingCursor(document, breakpoint);
     } else {
         // Find this breakpoint and delete it
         Breakpoint *b = breakpoint(document->url(), mark.line);
@@ -407,12 +409,7 @@ void BreakpointModel::markChanged(
 #endif
 }
 
-
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5,50,0)
-constexpr int breakpointMarkPixmapSize = 22; // TODO: add "breakpoint" pixmap icon of size 32 and change here to 32
-#else
-constexpr int breakpointMarkPixmapSize = 16;
-#endif
+static constexpr int breakpointMarkPixmapSize = 32;
 
 const QPixmap* BreakpointModel::breakpointPixmap()
 {
@@ -488,11 +485,18 @@ void KDevelop::BreakpointModel::updateMarks()
     if (d->dontUpdateMarks)
         return;
 
+    const auto* const documentController = ICore::self()->documentController();
+    if (!documentController) {
+        qCDebug(DEBUGGER) << "Cannot update marks without the document controller. "
+                             "KDevelop must be exiting and the document controller already destroyed.";
+        return;
+    }
+
     //add marks
     for (Breakpoint* breakpoint : qAsConst(d->breakpoints)) {
         if (breakpoint->kind() != Breakpoint::CodeBreakpoint) continue;
         if (breakpoint->line() == -1) continue;
-        IDocument *doc = ICore::self()->documentController()->documentForUrl(breakpoint->url());
+        IDocument *doc = documentController->documentForUrl(breakpoint->url());
         if (!doc) continue;
         KTextEditor::MarkInterface *mark = qobject_cast<KTextEditor::MarkInterface*>(doc->textDocument());
         if (!mark) continue;
@@ -513,7 +517,7 @@ void KDevelop::BreakpointModel::updateMarks()
     }
 
     //remove marks
-    const auto documents = ICore::self()->documentController()->openDocuments();
+    const auto documents = documentController->openDocuments();
     for (IDocument* doc : documents) {
         KTextEditor::MarkInterface *mark = qobject_cast<KTextEditor::MarkInterface*>(doc->textDocument());
         if (!mark) continue;
@@ -585,7 +589,14 @@ void BreakpointModel::save()
 
     d->dirty = false;
 
-    KConfigGroup breakpoints = ICore::self()->activeSession()->config()->group("Breakpoints");
+    auto* const activeSession = ICore::self()->activeSession();
+    if (!activeSession) {
+        qCDebug(DEBUGGER) << "Cannot save breakpoints because there is no active session. "
+                             "KDevelop must be exiting and already past SessionController::cleanup().";
+        return;
+    }
+
+    KConfigGroup breakpoints = activeSession->config()->group("Breakpoints");
     breakpoints.writeEntry("number", d->breakpoints.count());
     int i = 0;
     for (Breakpoint* b : qAsConst(d->breakpoints)) {
@@ -719,4 +730,18 @@ Breakpoint* BreakpointModel::breakpoint(const QUrl& url, int line) const
         return (b->url() == url && b->line() == line);
     });
     return (it != d->breakpoints.constEnd()) ? *it : nullptr;
+}
+
+void BreakpointModel::setupMovingCursor(KTextEditor::Document* document, Breakpoint* breakpoint) const
+{
+    Q_ASSERT(document->url() == breakpoint->url() && breakpoint->movingCursor() == nullptr);
+
+    auto* const movingInterface = qobject_cast<KTextEditor::MovingInterface*>(document);
+    if (movingInterface) {
+        auto* const cursor = movingInterface->newMovingCursor(KTextEditor::Cursor(breakpoint->line(), 0));
+        // can't use new signal/slot syntax here, MovingInterface is not a QObject
+        connect(document, SIGNAL(aboutToDeleteMovingInterfaceContent(KTextEditor::Document*)),
+                this, SLOT(aboutToDeleteMovingInterfaceContent(KTextEditor::Document*)), Qt::UniqueConnection);
+        breakpoint->setMovingCursor(cursor);
+    }
 }

@@ -1,5 +1,7 @@
 /***************************************************************************
  *   Copyright 2006-2009 Alexander Dymo  <adymo@kdevelop.org>              *
+ *   Copyright 2012 Dominik Haumann <dhaumann@kde.org>                     *
+ *   Copyright 2020 Friedrich W. H. Kossebau <kossebau@kde.org>            *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU Library General Public License as       *
@@ -28,6 +30,7 @@
 #include <KActionMenu>
 #include <KActionCollection>
 #include <KLocalizedString>
+#include <kwidgetsaddons_version.h>
 
 #include "area.h"
 #include "view.h"
@@ -40,6 +43,8 @@
 #include "idealcontroller.h"
 #include "holdupdates.h"
 #include "idealbuttonbarwidget.h"
+#include "message.h"
+#include "messagewidget.h"
 #include <debug.h>
 
 class IdealToolBar : public QToolBar
@@ -54,7 +59,7 @@ class IdealToolBar : public QToolBar
             setMovable(false);
             setFloatable(false);
             setObjectName(title);
-            layout()->setMargin(0);
+            layout()->setContentsMargins(0, 0, 0, 0);
 
             addWidget(m_buttons);
 
@@ -83,29 +88,29 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *w, Controller* controller)
 {
     KActionCollection *ac = m_mainWindow->actionCollection();
 
-    m_concentrationModeAction = new QAction(i18n("Concentration Mode"), this);
+    m_concentrationModeAction = new QAction(i18nc("@option:check", "Concentration Mode"), this);
     m_concentrationModeAction->setIcon(QIcon::fromTheme(QStringLiteral("page-zoom")));
-    m_concentrationModeAction->setToolTip(i18n("Removes most of the controls so you can focus on what matters."));
+    m_concentrationModeAction->setToolTip(i18nc("@info:tooltip", "Remove most of the controls so you can focus on what matters"));
     m_concentrationModeAction->setCheckable(true);
     m_concentrationModeAction->setChecked(false);
     ac->setDefaultShortcut(m_concentrationModeAction, Qt::META | Qt::Key_C);
     connect(m_concentrationModeAction, &QAction::toggled, this, &MainWindowPrivate::restoreConcentrationMode);
     ac->addAction(QStringLiteral("toggle_concentration_mode"), m_concentrationModeAction);
 
-    QAction* action = new QAction(i18n("Show Left Dock"), this);
+    auto* action = new QAction(i18nc("@option:check", "Show Left Dock"), this);
     action->setCheckable(true);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_Left);
     connect(action, &QAction::toggled, this, &MainWindowPrivate::showLeftDock);
 
     ac->addAction(QStringLiteral("show_left_dock"), action);
 
-    action = new QAction(i18n("Show Right Dock"), this);
+    action = new QAction(i18nc("@option:check", "Show Right Dock"), this);
     action->setCheckable(true);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_Right);
     connect(action, &QAction::toggled, this, &MainWindowPrivate::showRightDock);
     ac->addAction(QStringLiteral("show_right_dock"), action);
 
-    action = new QAction(i18n("Show Bottom Dock"), this);
+    action = new QAction(i18nc("@option:check", "Show Bottom Dock"), this);
     action->setCheckable(true);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_Down);
     connect(action, &QAction::toggled, this, &MainWindowPrivate::showBottomDock);
@@ -116,25 +121,30 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *w, Controller* controller)
     connect(action, &QAction::triggered, this, &MainWindowPrivate::focusEditor);
     ac->addAction(QStringLiteral("focus_editor"), action);
 
-    action = new QAction(i18n("Hide/Restore Docks"), this);
+    action = new QAction(i18nc("@action", "Hide/Restore Docks"), this);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_Up);
     connect(action, &QAction::triggered, this, &MainWindowPrivate::toggleDocksShown);
     ac->addAction(QStringLiteral("hide_all_docks"), action);
 
-    action = new QAction(i18n("Next Tool View"), this);
+    action = new QAction(i18nc("@action", "Next Tool View"), this);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_N);
     action->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
     connect(action, &QAction::triggered, this, &MainWindowPrivate::selectNextDock);
     ac->addAction(QStringLiteral("select_next_dock"), action);
 
-    action = new QAction(i18n("Previous Tool View"), this);
+    action = new QAction(i18nc("@action", "Previous Tool View"), this);
     ac->setDefaultShortcut(action, Qt::META | Qt::CTRL | Qt::Key_P);
     action->setIcon(QIcon::fromTheme(QStringLiteral("go-previous")));
     connect(action, &QAction::triggered, this, &MainWindowPrivate::selectPreviousDock);
     ac->addAction(QStringLiteral("select_previous_dock"), action);
 
-    action = new KActionMenu(i18n("Tool Views"), this);
-    ac->addAction(QStringLiteral("docks_submenu"), action);
+    auto* const toolViewsMenu = new KActionMenu(i18nc("@title:menu", "Tool Views"), this);
+#if KWIDGETSADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
+    toolViewsMenu->setPopupMode(QToolButton::InstantPopup);
+#else
+    toolViewsMenu->setDelayed(false);
+#endif
+    ac->addAction(QStringLiteral("docks_submenu"), toolViewsMenu);
 
     idealController = new IdealController(m_mainWindow);
 
@@ -153,8 +163,11 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *w, Controller* controller)
     centralWidget = new QWidget;
     centralWidget->setObjectName(QStringLiteral("centralWidget"));
     auto* layout = new QVBoxLayout(centralWidget);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     centralWidget->setLayout(layout);
+
+    messageWidget = new MessageWidget();
+    layout->addWidget(messageWidget);
 
     splitterCentralWidget = new QSplitter(centralWidget);
     // take as much space as possible
@@ -185,6 +198,10 @@ MainWindowPrivate::MainWindowPrivate(MainWindow *w, Controller* controller)
 
 MainWindowPrivate::~MainWindowPrivate()
 {
+    // create working copy as messages are auto-removing themselves from the hash on destruction
+    const auto messages = m_messageHash.keys();
+    qDeleteAll(messages);
+
     delete m_leftTabbarCornerWidget.data();
     m_leftTabbarCornerWidget.clear();
 }
@@ -273,10 +290,14 @@ void MainWindowPrivate::showRightDock(bool b)
 void MainWindowPrivate::setBackgroundCentralWidget(QWidget* w)
 {
     delete bgCentralWidget;
-    QLayout* l=m_mainWindow->centralWidget()->layout();
-    l->addWidget(w);
-    bgCentralWidget=w;
-    setBackgroundVisible(area->views().isEmpty());
+
+    bgCentralWidget = w;
+
+    if (bgCentralWidget) {
+        auto* l = static_cast<QVBoxLayout*>(centralWidget->layout());
+        l->addWidget(bgCentralWidget, 2);
+        setBackgroundVisible(area->views().isEmpty());
+    }
 }
 
 void MainWindowPrivate::setBackgroundVisible(bool v)
@@ -792,6 +813,45 @@ void MainWindowPrivate::setTabBarLeftCornerWidget(QWidget* widget)
     Q_ASSERT(c);
 
     c->setLeftCornerWidget(widget);
+}
+
+void MainWindowPrivate::postMessage(Message* message)
+{
+    if (!message) {
+        return;
+    }
+
+    message->setParent(this);
+
+    // if there are no actions, add a close action by default if widget does not auto-hide
+    if (message->actions().isEmpty() && message->autoHide() < 0) {
+        auto* closeAction = new QAction(QIcon::fromTheme(QStringLiteral("window-close")),
+                                        i18nc("@action", "Close"));
+        closeAction->setToolTip(i18nc("@info:tooltip", "Close message"));
+        message->addAction(closeAction);
+    }
+
+    // reparent actions, as we want full control over when they are deleted
+    QVector<QSharedPointer<QAction>> managedMessageActions;
+    const auto messageActions = message->actions();
+    managedMessageActions.reserve(messageActions.size());
+    for (QAction* action : messageActions) {
+        action->setParent(nullptr);
+        managedMessageActions.append(QSharedPointer<QAction>(action));
+    }
+    m_messageHash.insert(message, managedMessageActions);
+
+    // also catch if the user manually calls delete message
+    connect(message, &Message::closed, this, &MainWindowPrivate::messageDestroyed);
+
+    messageWidget->postMessage(message, managedMessageActions);
+}
+
+void MainWindowPrivate::messageDestroyed(Message* message)
+{
+    // Message is already in destructor
+    Q_ASSERT(m_messageHash.contains(message));
+    m_messageHash.remove(message);
 }
 
 }

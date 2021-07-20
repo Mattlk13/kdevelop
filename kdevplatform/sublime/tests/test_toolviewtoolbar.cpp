@@ -25,6 +25,7 @@
 
 #include <QTextEdit>
 #include <QToolBar>
+#include <QStandardPaths>
 
 #include <sublime/view.h>
 #include <sublime/area.h>
@@ -57,6 +58,11 @@ private:
     QList<QAction*> actionList;
 };
 
+void TestToolViewToolBar::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
+}
+
 void TestToolViewToolBar::init()
 {
     // this is starting to become a GeneralFixture
@@ -65,7 +71,7 @@ void TestToolViewToolBar::init()
     auto* mw = new MainWindow(controller);
 
     // a horizontal tool with toolbar
-    ToolViewToolBarFactory* factoryT1 = new ToolViewToolBarFactory(QStringLiteral("tool1factory"));
+    auto* factoryT1 = new ToolViewToolBarFactory(QStringLiteral("tool1factory"));
     actionTextT1 = QStringLiteral("Tool1Action");
     factoryT1->addAction(actionTextT1);
     tool1 = new ToolDocument( QStringLiteral("tool1"), controller, factoryT1 );
@@ -73,7 +79,7 @@ void TestToolViewToolBar::init()
     area->addToolView( viewT11, Sublime::Bottom );
 
     // a vertical tool with toolbar
-    ToolViewToolBarFactory* factoryT2 = new ToolViewToolBarFactory(QStringLiteral("tool2factory"));
+    auto* factoryT2 = new ToolViewToolBarFactory(QStringLiteral("tool2factory"));
     actionTextT2 = QStringLiteral("Tool2Action");
     factoryT2->addAction(actionTextT2);
     tool2 = new ToolDocument( QStringLiteral("tool2"), controller, factoryT2 );

@@ -30,7 +30,6 @@
 #include <KLocalizedString>
 #include <KTextEditor/Document>
 #include <KTextEditor/MarkInterface>
-#include <ktexteditor_version.h>
 #include <KXMLGUIFactory>
 
 #include "../interfaces/idocument.h"
@@ -72,7 +71,7 @@ public:
     return m_id;
   }
 
-  Qt::DockWidgetArea defaultPosition() override
+  Qt::DockWidgetArea defaultPosition() const override
   {
     return m_defaultArea;
   }
@@ -120,19 +119,19 @@ void DebugController::initializeUi()
     setupActions();
 
     ICore::self()->uiController()->addToolView(
-        i18n("Frame Stack"),
+        i18nc("@title:window", "Frame Stack"),
         new DebuggerToolFactory<FramestackWidget>(
             this, QStringLiteral("org.kdevelop.debugger.StackView"),
             Qt::BottomDockWidgetArea));
 
     ICore::self()->uiController()->addToolView(
-        i18n("Breakpoints"),
+        i18nc("@title:window", "Breakpoints"),
         new DebuggerToolFactory<BreakpointWidget>(
             this, QStringLiteral("org.kdevelop.debugger.BreakpointsView"),
             Qt::BottomDockWidgetArea));
 
     ICore::self()->uiController()->addToolView(
-        i18n("Variables"),
+        i18nc("@title:window", "Variables"),
         new DebuggerToolFactory<VariableWidget>(
             this, QStringLiteral("org.kdevelop.debugger.VariablesView"),
             Qt::LeftDockWidgetArea));
@@ -160,6 +159,17 @@ void DebugController::cleanup()
 
 DebugController::~DebugController()
 {
+    // The longest possible time interval has been allotted for previous and
+    // the current debug sessions to stop their debugger processes: stopDebugger()
+    // was called on the sessions in addSession() and cleanup() respectively.
+    // Now is the last safe moment for a DebugSession to finalize its state and
+    // invoke DebugController::debuggerStateChanged(), which in turn schedules the
+    // session's deletion. This finalization not only ensures that debug sessions
+    // are destroyed, but also prevents crashes: a DebugSession's state transition
+    // signals lead to accesses to DebugController and its children, such as a
+    // call to BreakpointModel::updateState(). Therefore we must force all debug
+    // sessions to synchronously finalize their states now.
+    emit killAllDebuggersNow();
 }
 
 BreakpointModel* DebugController::breakpointModel()
@@ -206,29 +216,29 @@ void DebugController::setupActions()
     ac->addAction("debug_restart", action);
     #endif
 
-    m_interruptDebugger = action = new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")), i18n("Interrupt"), this);
-    action->setToolTip( i18n("Interrupt application") );
-    action->setWhatsThis(i18n("Interrupts the debugged process or current debugger command."));
+    m_interruptDebugger = action = new QAction(QIcon::fromTheme(QStringLiteral("media-playback-pause")), i18nc("@action", "Interrupt"), this);
+    action->setToolTip( i18nc("@info:tooltip", "Interrupt application") );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Interrupts the debugged process or current debugger command."));
     connect(action, &QAction::triggered, this, &DebugController::interruptDebugger);
     ac->addAction(QStringLiteral("debug_pause"), action);
 
-    m_runToCursor = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-run-cursor")), i18n("Run to &Cursor"), this);
-    action->setToolTip( i18n("Run to cursor") );
-    action->setWhatsThis(i18n("Continues execution until the cursor position is reached."));
+    m_runToCursor = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-run-cursor")), i18nc("@action", "Run to &Cursor"), this);
+    action->setToolTip( i18nc("@info:tooltip", "Run to cursor") );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Continues execution until the cursor position is reached."));
     connect(action, &QAction::triggered, this, &DebugController::runToCursor);
     ac->addAction(QStringLiteral("debug_runtocursor"), action);
 
 
-    m_jumpToCursor = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-execute-to-cursor")), i18n("Set E&xecution Position to Cursor"), this);
-    action->setToolTip( i18n("Jump to cursor") );
-    action->setWhatsThis(i18n("Continue execution from the current cursor position."));
+    m_jumpToCursor = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-execute-to-cursor")), i18nc("@action", "Set E&xecution Position to Cursor"), this);
+    action->setToolTip( i18nc("@info:tooltip", "Jump to cursor") );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Continue execution from the current cursor position."));
     connect(action, &QAction::triggered, this, &DebugController::jumpToCursor);
     ac->addAction(QStringLiteral("debug_jumptocursor"), action);
 
-    m_stepOver = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-over")), i18n("Step &Over"), this);
+    m_stepOver = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-over")), i18nc("@action", "Step &Over"), this);
     ac->setDefaultShortcut( action, Qt::Key_F10);
-    action->setToolTip( i18n("Step over the next line") );
-    action->setWhatsThis( i18n("Executes one line of source in the current source file. "
+    action->setToolTip( i18nc("@info:tooltip", "Step over the next line") );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Executes one line of source in the current source file. "
                                "If the source line is a call to a function the whole "
                                "function is executed and the app will stop at the line "
                                "following the function call.") );
@@ -236,33 +246,33 @@ void DebugController::setupActions()
     ac->addAction(QStringLiteral("debug_stepover"), action);
 
 
-    m_stepOverInstruction = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-instruction")), i18n("Step over Ins&truction"), this);
-    action->setToolTip( i18n("Step over instruction") );
-    action->setWhatsThis(i18n("Steps over the next assembly instruction."));
+    m_stepOverInstruction = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-instruction")), i18nc("@action", "Step over Ins&truction"), this);
+    action->setToolTip( i18nc("@info:tooltip", "Step over instruction") );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Steps over the next assembly instruction."));
     connect(action, &QAction::triggered, this, &DebugController::stepOverInstruction);
     ac->addAction(QStringLiteral("debug_stepoverinst"), action);
 
 
-    m_stepInto = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-into")), i18n("Step &Into"), this);
+    m_stepInto = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-into")), i18nc("@action", "Step &Into"), this);
     ac->setDefaultShortcut( action, Qt::Key_F11);
-    action->setToolTip( i18n("Step into the next statement") );
-    action->setWhatsThis( i18n("Executes exactly one line of source. If the source line "
+    action->setToolTip( i18nc("@info:tooltip", "Step into the next statement") );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Executes exactly one line of source. If the source line "
                                "is a call to a function then execution will stop after "
                                "the function has been entered.") );
     connect(action, &QAction::triggered, this, &DebugController::stepInto);
     ac->addAction(QStringLiteral("debug_stepinto"), action);
 
 
-    m_stepIntoInstruction = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-into-instruction")), i18n("Step into I&nstruction"), this);
-    action->setToolTip( i18n("Step into instruction") );
-    action->setWhatsThis(i18n("Steps into the next assembly instruction."));
+    m_stepIntoInstruction = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-into-instruction")), i18nc("@action", "Step into I&nstruction"), this);
+    action->setToolTip( i18nc("@info:tooltip", "Step into instruction") );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Steps into the next assembly instruction."));
     connect(action, &QAction::triggered, this, &DebugController::stepIntoInstruction);
     ac->addAction(QStringLiteral("debug_stepintoinst"), action);
 
-    m_stepOut = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-out")), i18n("Step O&ut"), this);
+    m_stepOut = action = new QAction(QIcon::fromTheme(QStringLiteral("debug-step-out")), i18nc("@action", "Step O&ut"), this);
     ac->setDefaultShortcut( action, Qt::Key_F12);
-    action->setToolTip( i18n("Step out of the current function") );
-    action->setWhatsThis( i18n("Executes the application until the currently executing "
+    action->setToolTip( i18nc("@info:tooltip", "Step out of the current function") );
+    action->setWhatsThis( i18nc("@whatsthis", "Executes the application until the currently executing "
                                "function is completed. The debugger will then display "
                                "the line after the original call to that function. If "
                                "program execution is in the outermost frame (i.e. in "
@@ -270,16 +280,16 @@ void DebugController::setupActions()
     connect(action, &QAction::triggered, this, &DebugController::stepOut);
     ac->addAction(QStringLiteral("debug_stepout"), action);
 
-    m_toggleBreakpoint = action = new QAction(QIcon::fromTheme(QStringLiteral("breakpoint")), i18n("Toggle Breakpoint"), this);
+    m_toggleBreakpoint = action = new QAction(QIcon::fromTheme(QStringLiteral("breakpoint")), i18nc("@action", "Toggle Breakpoint"), this);
     ac->setDefaultShortcut( action, i18n("Ctrl+Alt+B") );
-    action->setToolTip(i18n("Toggle breakpoint"));
-    action->setWhatsThis(i18n("Toggles the breakpoint at the current line in editor."));
+    action->setToolTip(i18nc("@info:tooltip", "Toggle breakpoint"));
+    action->setWhatsThis(i18nc("@info:whatsthis", "Toggles the breakpoint at the current line in editor."));
     connect(action, &QAction::triggered, this, &DebugController::toggleBreakpoint);
     ac->addAction(QStringLiteral("debug_toggle_breakpoint"), action);
 
-    m_showCurrentLine = action = new QAction(QIcon::fromTheme(QStringLiteral("go-jump")), i18n("Show Current Line"), this);
-    action->setToolTip(i18n("Show the current execution position"));
-    action->setWhatsThis(i18n("Jumps to the execution line in the editor."));
+    m_showCurrentLine = action = new QAction(QIcon::fromTheme(QStringLiteral("go-jump")), i18nc("@action", "Show Current Line"), this);
+    action->setToolTip(i18nc("@info:tooltip", "Show the current execution position"));
+    action->setWhatsThis(i18nc("@info:whatsthis", "Jumps to the execution line in the editor."));
     connect(action, &QAction::triggered, this, &DebugController::showCurrentLine);
     ac->addAction(QStringLiteral("debug_showcurrentline"), action);
 }
@@ -301,6 +311,7 @@ void DebugController::addSession(IDebugSession* session)
     connect(session, &IDebugSession::showStepInSource, this, &DebugController::showStepInSource);
     connect(session, &IDebugSession::clearExecutionPoint, this, &DebugController::clearExecutionPoint);
     connect(session, &IDebugSession::raiseFramestackViews, this, &DebugController::raiseFramestackViews);
+    connect(this, &DebugController::killAllDebuggersNow, session, &IDebugSession::killDebuggerNow);
 
     updateDebuggerState(session->state(), session);
 
@@ -310,18 +321,24 @@ void DebugController::addSession(IDebugSession* session)
 
 
     Sublime::MainWindow* mainWindow = Core::self()->uiControllerInternal()->activeSublimeWindow();
-    if (mainWindow->area()->objectName() != QLatin1String("debug")) {
-        QString workingSet = mainWindow->area()->workingSet();
+    auto oldArea = mainWindow->area();
+    if (oldArea->objectName() != QLatin1String("debug")) {
         ICore::self()->uiController()->switchToArea(QStringLiteral("debug"), IUiController::ThisWindow);
-        mainWindow->area()->setWorkingSet(workingSet);
+        mainWindow->area()->setWorkingSet(oldArea->workingSet(), oldArea->workingSetPersistent(), oldArea);
         connect(mainWindow, &Sublime::MainWindow::areaChanged, this, &DebugController::areaChanged);
     }
 }
 
 void DebugController::clearExecutionPoint()
 {
-    qCDebug(SHELL);
-    const auto documents = KDevelop::ICore::self()->documentController()->openDocuments();
+    const auto* const documentController = KDevelop::ICore::self()->documentController();
+    if (!documentController) {
+        qCDebug(SHELL) << "Cannot clear execution point without the document controller. "
+                          "KDevelop must be exiting and the document controller already destroyed.";
+        return;
+    }
+
+    const auto documents = documentController->openDocuments();
     for (KDevelop::IDocument* document : documents) {
         auto* iface = qobject_cast<KTextEditor::MarkInterface*>(document->textDocument());
         if (!iface)
@@ -379,11 +396,12 @@ void DebugController::debuggerStateChanged(KDevelop::IDebugSession::DebuggerStat
             if (!Core::self()->shuttingDown()) {
                 Sublime::MainWindow* mainWindow = Core::self()->uiControllerInternal()->activeSublimeWindow();
                 if (mainWindow && mainWindow->area()->objectName() != QLatin1String("code")) {
-                    QString workingSet = mainWindow->area()->workingSet();
+                    auto oldArea = mainWindow->area();
+                    QString workingSet = oldArea->workingSet();
                     ICore::self()->uiController()->switchToArea(QStringLiteral("code"), IUiController::ThisWindow);
-                    mainWindow->area()->setWorkingSet(workingSet);
+                    mainWindow->area()->setWorkingSet(workingSet, oldArea->workingSetPersistent(), oldArea);
                 }
-                ICore::self()->uiController()->findToolView(i18n("Debug"), nullptr, IUiController::Raise);
+                ICore::self()->uiController()->findToolView(i18nc("@title:window", "Debug"), nullptr, IUiController::Raise);
             }
         }
         session->deleteLater();
@@ -433,16 +451,16 @@ void DebugController::updateDebuggerState(IDebugSession::DebuggerState state, ID
 void DebugController::setContinueStartsDebug(bool startsDebug)
 {
     if (startsDebug) {
-        m_continueDebugger->setText(i18n("Debug Launch"));
+        m_continueDebugger->setText(i18nc("@action", "Debug Launch"));
         m_continueDebugger->setIcon(QIcon::fromTheme(QStringLiteral("debug-run")));
-        m_continueDebugger->setToolTip(i18n("Debug current launch"));
-        m_continueDebugger->setWhatsThis(i18n("Executes the target or the program specified in "
+        m_continueDebugger->setToolTip(i18nc("@info:tooltip", "Debug current launch"));
+        m_continueDebugger->setWhatsThis(i18nc("@info:whatsthis", "Executes the target or the program specified in "
                                               "currently active launch configuration inside a Debugger."));
     } else {
-        m_continueDebugger->setText(i18n("&Continue"));
+        m_continueDebugger->setText(i18nc("@action", "&Continue"));
         m_continueDebugger->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
-        m_continueDebugger->setToolTip(i18n("Continue application execution") );
-        m_continueDebugger->setWhatsThis(i18n("Continues the execution of your application in the "
+        m_continueDebugger->setToolTip(i18nc("@info:tooltip", "Continue application execution") );
+        m_continueDebugger->setWhatsThis(i18nc("@info:whatsthis", "Continues the execution of your application in the "
                                               "debugger. This only takes effect when the application "
                                               "has been halted by the debugger (i.e. a breakpoint has "
                                               "been activated or the interrupt was pressed).") );
@@ -541,7 +559,7 @@ void DebugController::stepOut() {
 
 void DebugController::areaChanged(Sublime::Area* newArea)
 {
-    if (newArea->objectName()!=QLatin1String("debug")) {
+    if (newArea->objectName() != QLatin1String("debug") && newArea->objectName() != QLatin1String("review")) {
         stopDebugger();
     }
 }
@@ -570,11 +588,7 @@ void DebugController::showCurrentLine()
 
 const QPixmap* DebugController::executionPointPixmap()
 {
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5,50,0)
     constexpr int markPixmapSize = 32;
-#else
-    constexpr int markPixmapSize = 22;
-#endif
     static QPixmap pixmap=QIcon::fromTheme(QStringLiteral("go-next")).pixmap(QSize(markPixmapSize, markPixmapSize), QIcon::Normal, QIcon::Off);
     return &pixmap;
 }

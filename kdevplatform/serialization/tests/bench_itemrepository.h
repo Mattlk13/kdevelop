@@ -40,8 +40,11 @@ private Q_SLOTS:
     void lookupKey();
     void lookupValue();
 
+    void shouldDoReferenceCounting_data();
+    void shouldDoReferenceCounting();
+
 private:
-    QString m_repositoryPath = QDir::tempPath() + QStringLiteral("/bench_itemrepository");
+    const QString m_repositoryPath = QDir::tempPath() + QStringLiteral("/bench_itemrepository");
 };
 
 #endif // TESTITEMREPOSITORY_H

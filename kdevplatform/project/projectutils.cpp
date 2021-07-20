@@ -43,33 +43,29 @@ QList<QUrl> ProjectItemContextImpl::urls() const
     return urls;
 }
 
-QList<ProjectFileItem*> allFiles(ProjectBaseItem* projectItem)
+/**
+ * Runs the @p callback on all files that have @p projectItem as ancestor
+ */
+void forEachFile(const ProjectBaseItem* projectItem,
+                  const std::function<void(ProjectFileItem*)>& callback)
+{
+    if (auto* file = projectItem->file()) {
+        callback(file);
+        return;
+    }
+
+    const auto children = projectItem->children();
+    for (const auto *child : children) {
+        forEachFile(child, callback);
+    }
+}
+
+QList<ProjectFileItem*> allFiles(const ProjectBaseItem* projectItem)
 {
     QList<ProjectFileItem*> files;
-    if ( ProjectFolderItem * folder = projectItem->folder() )
-    {
-        QList<ProjectFolderItem*> folder_list = folder->folderList();
-        for ( QList<ProjectFolderItem*>::Iterator it = folder_list.begin(); it != folder_list.end(); ++it )
-        {
-            files += allFiles( ( *it ) );
-        }
-
-        QList<ProjectTargetItem*> target_list = folder->targetList();
-        for ( QList<ProjectTargetItem*>::Iterator it = target_list.begin(); it != target_list.end(); ++it )
-        {
-            files += allFiles( ( *it ) );
-        }
-
-        files += folder->fileList();
-    }
-    else if ( ProjectTargetItem * target = projectItem->target() )
-    {
-        files += target->fileList();
-    }
-    else if ( ProjectFileItem * file = projectItem->file() )
-    {
-        files.append( file );
-    }
+    forEachFile(projectItem, [&files](ProjectFileItem *fileItem) {
+        files.append(fileItem);
+    });
     return files;
 }
 

@@ -74,16 +74,6 @@ public:
     void setMutable(bool isMutable);
 
     /**
-     * \returns The size in bytes or -1 if unknown.
-     */
-    int64_t sizeOf() const;
-
-    /**
-     * Set the size to given number of bytes. Use -1 to represent unknown size.
-     */
-    void setSizeOf(int64_t sizeOf);
-
-    /**
      * \returns The offset of the field in bits or -1 if unknown or not applicable.
      */
     int64_t bitOffsetOf() const;
@@ -94,16 +84,14 @@ public:
     void setBitOffsetOf(int64_t bitOffsetOf);
 
     /**
-     * \returns The alignment in bytes or -1 if unknown.
+     * \returns The width in bits or -1 if unknown or not applicable.
      */
-    int64_t alignOf() const;
+    int bitWidth() const;
 
     /**
-     * Set the alignment to given number of bytes.
-     *
-     * The value must be non-negative power of 2 or -1 to represent unknown alignment.
+     * Set the width to given number of bits. Use -1 to represent unknown offset.
      */
-    void setAlignOf(int64_t alignedTo);
+    void setBitWidth(int bitWidth);
 
     enum {
         Identity = 9
@@ -117,8 +105,15 @@ protected:
 private:
     Declaration* clonePrivate() const override;
 };
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+Q_DECLARE_OPERATORS_FOR_FLAGS(ClassMemberDeclaration::StorageSpecifiers)
+#endif
+
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 0)
 Q_DECLARE_OPERATORS_FOR_FLAGS(KDevelop::ClassMemberDeclaration::StorageSpecifiers)
+#endif
 
 #endif // KDEVPLATFORM_CLASSMEMBERDECLARATION_H

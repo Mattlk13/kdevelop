@@ -46,7 +46,7 @@ class NoCompiler : public ICompiler
 {
 public:
     NoCompiler():
-        ICompiler(i18n("None"), QString(), QString(), false)
+        ICompiler(i18nc("@item no compiler", "None"), QString(), QString(), false)
     {}
 
     QHash< QString, QString > defines(Utils::LanguageType, const QString&) const override
@@ -75,7 +75,7 @@ ConfigEntry configForItem(KDevelop::ProjectBaseItem* item)
     const Path itemPath = item->path();
     const Path rootDirectory = item->project()->path();
 
-    auto paths = SettingsManager::globalInstance()->readPaths(item->project()->projectConfiguration().data());
+    const auto paths = SettingsManager::globalInstance()->readPaths(item->project()->projectConfiguration().data());
     ConfigEntry config;
     Path closestPath;
 
@@ -99,6 +99,16 @@ ConfigEntry configForItem(KDevelop::ProjectBaseItem* item)
     }
 
     return config;
+}
+
+QString parserArguments( const ConfigEntry& config, Utils::LanguageType languageType, ProjectBaseItem* item )
+{
+    auto args = config.parserArguments[languageType];
+    if (item && item->project()->buildSystemManager()) {
+        args += QLatin1Char(' ');
+        args += item->project()->buildSystemManager()->extraArguments(item);
+    }
+    return args;
 }
 }
 
@@ -168,7 +178,7 @@ void CompilerProvider::projectChanged(KDevelop::IProject* p)
     Q_ASSERT(QDir::isAbsolutePath(path.toLocalFile()));
     const auto pathString = path.toLocalFile();
     auto it = std::find_if(m_compilers.begin(), m_compilers.end(),
-        [pathString](const CompilerPointer& compiler) { return compiler->path() == pathString; });
+        [&pathString](const CompilerPointer& compiler) { return compiler->path() == pathString; });
     if (it != m_compilers.end()) {
         m_defaultProvider = *it;
         return;
@@ -195,7 +205,7 @@ QHash<QString, QString> CompilerProvider::defines( const QString& path ) const
         return {};
     }
 
-    return config.compiler->defines(languageType, config.parserArguments[languageType]);
+    return config.compiler->defines(languageType, parserArguments(config, languageType, nullptr));
 }
 
 QHash<QString, QString> CompilerProvider::defines( ProjectBaseItem* item ) const
@@ -210,7 +220,7 @@ QHash<QString, QString> CompilerProvider::defines( ProjectBaseItem* item ) const
         return {};
     }
 
-    return config.compiler->defines(languageType, config.parserArguments[languageType]);
+    return config.compiler->defines(languageType, parserArguments(config, languageType, item));
 }
 
 Path::List CompilerProvider::includes( const QString& path ) const
@@ -222,7 +232,7 @@ Path::List CompilerProvider::includes( const QString& path ) const
         return {};
     }
 
-    return config.compiler->includes(languageType, config.parserArguments[languageType]);
+    return config.compiler->includes(languageType, parserArguments(config, languageType, nullptr));
 }
 
 Path::List CompilerProvider::includes( ProjectBaseItem* item ) const
@@ -237,7 +247,7 @@ Path::List CompilerProvider::includes( ProjectBaseItem* item ) const
         return {};
     }
 
-    return config.compiler->includes(languageType, config.parserArguments[languageType]);
+    return config.compiler->includes(languageType, parserArguments(config, languageType, item));
 }
 
 Path::List CompilerProvider::frameworkDirectories( const QString& /* path */ ) const
@@ -261,15 +271,10 @@ CompilerPointer CompilerProvider::defaultCompiler() const
         return m_defaultProvider;
 
     auto rt = ICore::self()->runtimeController()->currentRuntime();
-    const auto path = QFile::decodeName(rt->getenv("PATH")).split(QDir::listSeparator());
 
     for ( const CompilerPointer& compiler : m_compilers ) {
-        const bool absolutePath = QDir::isAbsolutePath(compiler->path());
-        if ((absolutePath && QFileInfo::exists(rt->pathInHost(Path(compiler->path())).toLocalFile()))
-            || QStandardPaths::findExecutable( compiler->path(), path).isEmpty() ) {
+        if (rt->findExecutable(compiler->path()).isEmpty())
             continue;
-        }
-
         m_defaultProvider = compiler;
         break;
     }

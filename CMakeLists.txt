@@ -1,17 +1,24 @@
-cmake_minimum_required(VERSION 3.0)
-project(KDevelop VERSION 5.4.40)
+cmake_minimum_required(VERSION 3.16)
+project(KDevelop VERSION 5.6.40)
 
 # KDevelop SOVERSION
 # E.g. for KDevelop 5.2.0 => SOVERSION 52 (we only promise ABI compatibility between patch version updates)
-set(KDEVELOP_SOVERSION 55)
+set(KDEVELOP_SOVERSION 57)
 
 # plugin version as used e.g. in plugin installation path
-set(KDEV_PLUGIN_VERSION 33)
+set(KDEV_PLUGIN_VERSION 35)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED YES)
+set(QT_MIN_VERSION "5.15.0")
+set(KF5_DEP_VERSION "5.78.0")
 
 # we need some parts of the ECM CMake helpers
-find_package (ECM 5.28.0 REQUIRED NO_MODULE)
+find_package (ECM ${KF5_DEP_VERSION} REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${KDevelop_SOURCE_DIR}/cmake/modules ${ECM_MODULE_PATH})
 
+include(KDEInstallDirs)
+include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE) # needs to be first, as set policies influence following macros
 include(ECMOptionalAddSubdirectory)
 include(ECMInstallIcons)
@@ -21,31 +28,19 @@ include(ECMAddTests)
 include(ECMMarkNonGuiExecutable)
 include(ECMGenerateHeaders)
 include(ECMQtDeclareLoggingCategory)
-
 include(GenerateExportHeader)
 include(CMakePackageConfigHelpers)
 include(FeatureSummary)
 include(WriteBasicConfigVersionFile)
 include(CheckFunctionExists)
-
-include(KDEInstallDirs)
-include(KDECMakeSettings)
-
 include(KDevelopMacrosInternal)
 
-if(POLICY CMP0071)
-  # CMake 3.10 generates warnings when projects combine AUTOMOC with qt5_wrap_ui() or qt5_add_resources()
-  # Avoid that by setting this policy (cf. https://bugreports.qt.io/browse/QTBUG-63442)
-  # Note: Once we depend on a Qt which has this fix (likely Qt 5.9.4+), remove this
-  cmake_policy(SET CMP0071 OLD)
-endif()
 
-set(QT_MIN_VERSION "5.7.0")
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED Widgets Concurrent Quick QuickWidgets)
 if(BUILD_TESTING)
   find_package(Qt5Test ${QT_MIN_VERSION} CONFIG REQUIRED)
 endif()
-set(KF5_DEP_VERSION "5.28.0")
+
 find_package(KF5 ${KF5_DEP_VERSION} REQUIRED COMPONENTS
   Config
   Declarative
@@ -70,11 +65,25 @@ find_package(KF5 ${KF5_DEP_VERSION} REQUIRED COMPONENTS
   Archive
   Notifications
 )
-find_package(KF5SysGuard CONFIG)
-set_package_properties(KF5SysGuard PROPERTIES
+
+set(HAVE_KSYSGUARD FALSE)
+find_package(KSysGuard CONFIG QUIET)
+set_package_properties(KSysGuard PROPERTIES
     PURPOSE "Framework for process listing. Required for the 'Attach to Process' feature"
     TYPE RECOMMENDED
 )
+if(NOT KSysGuard_FOUND)
+    # try old pre-Plasma 5.19 name
+    find_package(KF5SysGuard CONFIG)
+    set_package_properties(KF5SysGuard PROPERTIES
+        PURPOSE "Framework for process listing (older name of KSysGuard). Required for the 'Attach to Process' feature"
+        TYPE RECOMMENDED
+    )
+endif()
+if(KSysGuard_FOUND OR KF5SysGuard_FOUND)
+    set(HAVE_KSYSGUARD TRUE)
+endif()
+
 find_package(KDevelop-PG-Qt 1.90.90 CONFIG)
 set_package_properties(KDevelop-PG-Qt PROPERTIES
     PURPOSE "KDevelop parser generator library. Required for the QMake Builder/Manager plugin."
@@ -83,30 +92,10 @@ set_package_properties(KDevelop-PG-Qt PROPERTIES
 
 find_package(SharedMimeInfo REQUIRED)
 
-if(NOT CMAKE_VERSION VERSION_LESS "3.10.0" AND KF5_VERSION VERSION_LESS "5.42.0")
-  # CMake 3.9+ warns about automoc on files without Q_OBJECT, and doesn't know about other macros.
-  # 3.10+ lets us provide more macro names that require automoc.
-  # KF5 >= 5.42 takes care itself of adding its macros in its cmake config files
-  list(APPEND CMAKE_AUTOMOC_MACRO_NAMES
-       "K_PLUGIN_FACTORY_WITH_JSON" "K_EXPORT_PLASMA_DATAENGINE_WITH_JSON" "K_EXPORT_PLASMA_RUNNER")
-endif()
-if(NOT CMAKE_VERSION VERSION_LESS "3.9.0" AND KF5_VERSION VERSION_LESS "5.44.0")
-    # CMake's automoc needs help to find names of plugin metadata files in case Q_PLUGIN_METADATA
-    # is indirectly used via other C++ preprocessor macros
-    # 3.9+ lets us provide some filter rule pairs (keyword, regexp) to match the names of such files
-    # in the plain text of the sources. See AUTOMOC_DEPEND_FILTERS docs for details.
-    list(APPEND CMAKE_AUTOMOC_DEPEND_FILTERS
-        "K_PLUGIN_FACTORY_WITH_JSON"
-        "[\n^][ \t]*K_PLUGIN_FACTORY_WITH_JSON[ \t\n]*\\([^,]*,[ \t\n]*\"([^\"]+)\""
-        "K_EXPORT_PLASMA_DATAENGINE_WITH_JSON"
-        "[\n^][ \t]*K_EXPORT_PLASMA_DATAENGINE_WITH_JSON[ \t\n]*\\([^,]*,[^,]*,[ \t\n]*\"([^\"]+)\""
-    )
-endif()
-
-
 add_definitions(
     -DQT_DEPRECATED_WARNINGS
-    -DQT_DISABLE_DEPRECATED_BEFORE=0x050700
+    -DQT_DISABLE_DEPRECATED_BEFORE=0x050900
+    -DQT_DEPRECATED_WARNINGS_SINCE=0x060000
     -DQT_NO_SIGNALS_SLOTS_KEYWORDS
     -DQT_NO_URL_CAST_FROM_STRING
     -DQT_NO_CAST_FROM_ASCII
@@ -115,6 +104,9 @@ add_definitions(
     -DQT_STRICT_ITERATORS
     -DQT_USE_QSTRINGBUILDER
     -DQT_NO_NARROWING_CONVERSIONS_IN_CONNECT
+    -DKF_DISABLE_DEPRECATED_BEFORE_AND_AT=0x053200
+    -DKF_DEPRECATED_WARNINGS_SINCE=0x060000
+    -DQT_NO_FOREACH
 )
 
 # Turn off missing-field-initializers warning for GCC to avoid noise from false positives with empty {}
@@ -142,14 +134,18 @@ endif()
 string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_TOLOWER)
 if(CMAKE_BUILD_TYPE_TOLOWER MATCHES "debug"
   OR CMAKE_BUILD_TYPE_TOLOWER STREQUAL "")
-  set(COMPILER_OPTIMIZATIONS_DISABLED TRUE)
+  set(COMPILER_OPTIMIZATIONS_ENABLED OFF)
 else()
-  set(COMPILER_OPTIMIZATIONS_DISABLED FALSE)
+  set(COMPILER_OPTIMIZATIONS_ENABLED ON)
 endif()
+
+option(BUILD_BENCHMARKS "Whether benchmarks should be compiled or not" ${COMPILER_OPTIMIZATIONS_ENABLED})
 
 # create config-kdevelop.h
 configure_file(config-kdevelop.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config-kdevelop.h)
 include_directories(${KDevelop_BINARY_DIR}) # for config-kdevelop.h
+
+add_subdirectory(3rdparty/timsort)
 
 add_subdirectory(kdevplatform)
 add_subdirectory(plugins)

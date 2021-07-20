@@ -20,6 +20,9 @@
 
 #include <QTimer>
 #include <QVBoxLayout>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#include <QRandomGenerator>
+#endif
 
 #include "mainwindow.h"
 #include "partdocument.h"
@@ -38,7 +41,7 @@
 #include "workingsets/workingsetwidget.h"
 #include "workingsets/closedworkingsetswidget.h"
 #include "core.h"
-#include "debug.h"
+#include "debug_workingset.h"
 
 using namespace KDevelop;
 
@@ -55,14 +58,28 @@ void WorkingSetController::initialize()
 {
     //Load all working-sets
     KConfigGroup setConfig(Core::self()->activeSession()->config(), "Working File Sets");
+    QMap<QString, QStringList> areaConfigs;
     const auto sets = setConfig.groupList();
     for (const QString& set : sets) {
         // do not load working set if the id contains an '|', because it then belongs to an area.
         // this is functionally equivalent to the if ( ! config->icon ) stuff which was there before.
         if (set.contains(QLatin1Char('|'))) {
+            areaConfigs[set.left(set.indexOf(QLatin1Char('|')))] << set;
+        } else if (!setConfig.group(set).hasKey("Orientation") && setConfig.group(set).readEntry("View Count", 0) == 0) {
+            areaConfigs[set] << set;
+        } else {
+            workingSet(set);
+        }
+    }
+
+    // Clean up config
+    for (auto it = areaConfigs.constBegin(); it != areaConfigs.constEnd(); ++it) {
+        if (m_workingSets.contains(it.key())) {
             continue;
         }
-        workingSet(set);
+        for (auto &areaConfig : it.value()) {
+            setConfig.deleteGroup(areaConfig);
+        }
     }
 
     m_emptyWorkingSet = new WorkingSet(QStringLiteral("empty"));
@@ -74,22 +91,17 @@ void WorkingSetController::initialize()
 
 void WorkingSetController::cleanup()
 {
-    const auto windows = Core::self()->uiControllerInternal()->mainWindows();
-    for (Sublime::MainWindow* window : windows) {
-        const auto areas = window->areas();
-        for (Sublime::Area* area : areas) {
-            if (!area->workingSet().isEmpty()) {
-                Q_ASSERT(m_workingSets.contains(area->workingSet()));
-                m_workingSets[area->workingSet()]->saveFromArea(area, area->rootIndex());
-            }
-        }
+    auto area = Core::self()->uiControllerInternal()->activeArea();
+    if (area && !area->workingSet().isEmpty()) {
+        Q_ASSERT(m_workingSets.contains(area->workingSet()));
+        m_workingSets[area->workingSet()]->saveFromArea(area);
     }
 
     const auto oldWorkingSet = m_workingSets;
     for (WorkingSet* set : oldWorkingSet) {
-        qCDebug(SHELL) << "set" << set->id() << "persistent" << set->isPersistent() << "has areas:" << set->hasConnectedAreas() << "files" << set->fileList();
+        qCDebug(WORKINGSET) << "set" << set->id() << "persistent" << set->isPersistent() << "has areas:" << set->hasConnectedAreas() << "files" << set->fileList();
         if(!set->isPersistent() && !set->hasConnectedAreas()) {
-            qCDebug(SHELL) << "deleting";
+            qCDebug(WORKINGSET) << "deleting";
             set->deleteSet(true, true);
         }
         delete set;
@@ -105,8 +117,16 @@ const QString WorkingSetController::makeSetId(const QString& prefix) const
 {
     QString newId;
     const uint maxRetries = 10;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    auto* randomGenerator = QRandomGenerator::global();
+#endif
     for(uint retry = 2; retry <= maxRetries; retry++) {
-        newId = QStringLiteral("%1_%2").arg(prefix).arg(qrand() % 10000000);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+        const auto random = randomGenerator->bounded(10000000);
+#else
+        const auto random = qrand() % 10000000;
+#endif
+        newId = QStringLiteral("%1_%2").arg(prefix).arg(random);
         WorkingSetIconParameters params(newId);
         for (WorkingSet* set : m_workingSets) {
             if(set->isEmpty()) {
@@ -172,7 +192,7 @@ void WorkingSetController::showToolTip(WorkingSet* set, const QPoint& pos)
 
     m_tooltip = new KDevelop::ActiveToolTip(window, pos);
     auto* layout = new QVBoxLayout(m_tooltip);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     auto* widget = new WorkingSetToolTipWidget(m_tooltip, set, window);
     layout->addWidget(widget);
     m_tooltip->resize( m_tooltip->sizeHint() );
@@ -254,32 +274,40 @@ void WorkingSetController::areaCreated( Sublime::Area* area )
             this, &WorkingSetController::clearWorkingSet);
 }
 
-void WorkingSetController::changingWorkingSet(Sublime::Area* area, const QString& from, const QString& to)
+void WorkingSetController::saveArea(Sublime::Area* area)
 {
-    qCDebug(SHELL) << "changing working-set from" << from << "to" << to << "area" << area;
+    if (area && !area->workingSet().isEmpty()) {
+        workingSet(area->workingSet())->saveFromArea(area);
+    }
+}
+
+void WorkingSetController::changingWorkingSet(Sublime::Area *area, Sublime::Area *oldArea, const QString &from, const QString &to)
+{
+    qCDebug(WORKINGSET) << "changing working-set from" << from << oldArea << "to" << to << area;
     if (from == to)
         return;
 
     if (!from.isEmpty()) {
         WorkingSet* oldSet = workingSet(from);
         oldSet->disconnectArea(area);
-        if (!oldSet->id().isEmpty()) {
-            oldSet->saveFromArea(area, area->rootIndex());
+        if (!oldSet->id().isEmpty() && area == oldArea) {
+            oldSet->saveFromArea(area);
         }
     }
 }
 
-void WorkingSetController::changedWorkingSet(Sublime::Area* area, const QString& from, const QString& to)
+void WorkingSetController::changedWorkingSet(Sublime::Area *area, Sublime::Area *oldArea, const QString &from, const QString &to)
 {
-    qCDebug(SHELL) << "changed working-set from" << from << "to" << to << "area" << area;
-    if (from == to || m_changingWorkingSet)
+    qCDebug(WORKINGSET) << "changed working-set from" << from << "to" << to << "area" << area;
+    if ((oldArea == area && from == to) || m_changingWorkingSet) {
         return;
+    }
 
     if (!to.isEmpty()) {
         WorkingSet* newSet = workingSet(to);
         newSet->connectArea(area);
-        newSet->loadToArea(area, area->rootIndex());
-    }else{
+        newSet->loadToArea(area);
+    } else {
         // Clear silently, any user-interaction should have happened before
         area->clearViews(true);
     }
@@ -296,10 +324,11 @@ void WorkingSetController::viewAdded( Sublime::AreaIndex* , Sublime::View* )
         //Spawn a new working-set
         m_changingWorkingSet = true;
         WorkingSet* set = Core::self()->workingSetControllerInternal()->newWorkingSet(area->objectName());
-        qCDebug(SHELL) << "Spawned new working-set" << set->id() << "because a view was added";
+        qCDebug(WORKINGSET) << "Spawned new working-set" << set->id() << "because a view was added";
+        set->setPersistent(area->workingSetPersistent());
         set->connectArea(area);
-        set->saveFromArea(area, area->rootIndex());
-        area->setWorkingSet(set->id());
+        set->saveFromArea(area);
+        area->setWorkingSet(set->id(), area->workingSetPersistent());
         m_changingWorkingSet = false;
     }
 }
@@ -317,6 +346,6 @@ void WorkingSetController::clearWorkingSet(Sublime::Area * area)
 
     WorkingSet* newSet = workingSet(workingSetId);
     newSet->connectArea(area);
-    newSet->loadToArea(area, area->rootIndex());
+    newSet->loadToArea(area);
     Q_ASSERT(newSet->fileList().isEmpty());
 }

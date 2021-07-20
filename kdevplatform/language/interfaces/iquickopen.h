@@ -31,27 +31,6 @@ namespace KDevelop {
 class QuickOpenDataProviderBase;
 class IndexedString;
 
-class KDEVPLATFORMLANGUAGE_EXPORT IQuickOpenLine
-    : public QLineEdit
-{
-    Q_OBJECT
-
-public:
-    /**
-     * Returns a non-zero declaration if it has been explicitly selected
-     * and executed through the quickopen line
-     * \code IndexedDeclaration selectedDeclaration() = 0; \endcode
-     *
-     * Returns a non-empty string if the file has been explicitly selected
-     * and executed through the quickopen line
-     * \code IndexedString selectedFile() = 0; \endcode
-     */
-    virtual void setDefaultText(const QString& text) = 0;
-
-Q_SIGNALS:
-    void itemSelected();
-};
-
 /**
  * Interface to quickopen
  */
@@ -98,8 +77,8 @@ public:
         Outline
     };
 
-    virtual IQuickOpenLine* createQuickOpenLine(const QStringList& scopes, const QStringList& types,
-                                                QuickOpenType type = Standard) = 0;
+    virtual QLineEdit* createQuickOpenLine(const QStringList& scopes, const QStringList& types,
+                                           QuickOpenType type = Standard) = 0;
 };
 }
 

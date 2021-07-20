@@ -100,12 +100,12 @@ void IdealController::addView(Qt::DockWidgetArea area, View* view)
     if (toolBarActions.isEmpty()) {
       dock->setWidget(w);
     } else {
-      QMainWindow *toolView = new QMainWindow();
+      auto* toolView = new QMainWindow();
       auto *toolBar = new QToolBar(toolView);
       int iconSize = m_mainWindow->style()->pixelMetric(QStyle::PM_SmallIconSize);
       toolBar->setIconSize(QSize(iconSize, iconSize));
       toolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-      toolBar->setWindowTitle(i18n("%1 Toolbar", w->windowTitle()));
+      toolBar->setWindowTitle(i18nc("@title:window", "%1 Toolbar", w->windowTitle()));
       toolBar->setFloatable(false);
       toolBar->setMovable(false);
       toolBar->addActions(toolBarActions);
@@ -128,7 +128,7 @@ void IdealController::addView(Qt::DockWidgetArea area, View* view)
     dock->setFocusProxy(dock->widget());
 
     if (IdealButtonBarWidget* bar = barForDockArea(area)) {
-        QAction* action = bar->addWidget(dock, static_cast<MainWindow*>(parent())->area(), view);
+        QAction* action = bar->addWidget(dock, m_mainWindow->area(), view);
         m_dockwidget_to_action[dock] = m_view_to_action[view] = action;
 
         m_docks->addAction(action);
@@ -177,7 +177,7 @@ void IdealController::dockLocationChanged(Qt::DockWidgetArea area)
     docks.insert(dock);
 
     if (IdealButtonBarWidget* bar = barForDockArea(area)) {
-        QAction* action = bar->addWidget(dock, static_cast<MainWindow*>(parent())->area(), view);
+        QAction* action = bar->addWidget(dock, m_mainWindow->area(), view);
         m_dockwidget_to_action[dock] = m_view_to_action[view] = action;
 
         // at this point the dockwidget is visible (user dragged it)
@@ -185,9 +185,10 @@ void IdealController::dockLocationChanged(Qt::DockWidgetArea area)
         bar->showWidget(action, true);
 
         // the dock should now be the "last" opened in a new area, not in the old area
-        for (auto it = lastDockWidget.begin(); it != lastDockWidget.end(); ++it) {
-            if (it->data() == dock)
-                it->clear();
+        for (auto& dockWidgetPtr : lastDockWidget) {
+            if (dockWidgetPtr.data() == dock) {
+                dockWidgetPtr.clear();
+            }
         }
         lastDockWidget[area] = dock;
 
@@ -198,7 +199,7 @@ void IdealController::dockLocationChanged(Qt::DockWidgetArea area)
     }
 
     if (area == Qt::BottomDockWidgetArea || area == Qt::TopDockWidgetArea)
-        dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | IdealDockWidget::DockWidgetVerticalTitleBar);
+        dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetVerticalTitleBar);
     else
         dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable);
 }
@@ -258,7 +259,7 @@ void IdealController::raiseView(View* view, RaiseMode mode)
 
 QList< IdealDockWidget* > IdealController::allDockWidgets() const
 {
-    return docks.toList();
+    return docks.values();
 }
 
 void IdealController::showDockWidget(IdealDockWidget* dock, bool show)
@@ -413,14 +414,15 @@ void IdealController::showDock(Qt::DockWidgetArea area, bool show)
         // open the last opened tool view (or the first one) and focus it
         if (lastDock) {
             if (QAction *action = m_dockwidget_to_action.value(lastDock))
-                action->setChecked(show);
+                action->setChecked(true);
 
             lastDock->setFocus(Qt::ShortcutFocusReason);
             return;
         }
 
-        if (!barForDockArea(area)->actions().isEmpty())
-            barForDockArea(area)->actions().first()->setChecked(show);
+        const auto barActions = bar->actions();
+        if (!barActions.isEmpty())
+            barActions.first()->setChecked(true);
     }
 }
 

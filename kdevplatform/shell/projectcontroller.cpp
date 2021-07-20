@@ -39,6 +39,7 @@ Boston, MA 02110-1301, USA.
 
 #include <KActionCollection>
 #include <KConfigGroup>
+#include <kio_version.h>
 #include <KIO/DeleteJob>
 #include <KIO/FileCopyJob>
 #include <KIO/ListJob>
@@ -46,12 +47,12 @@ Boston, MA 02110-1301, USA.
 #include <KJobWidgets>
 #include <KLocalizedString>
 #include <KMessageBox>
-#include <KPassivePopup>
 #include <KRecentFilesAction>
 #include <KSharedConfig>
 #include <KStandardAction>
 
 #include <sublime/area.h>
+#include <sublime/message.h>
 #include <interfaces/iplugin.h>
 #include <interfaces/isession.h>
 #include <interfaces/context.h>
@@ -107,7 +108,7 @@ public:
     bool m_foundProjectFile; //Temporary flag used while searching the hierarchy for a project file
     bool m_cleaningUp; //Temporary flag enabled while destroying the project-controller
     ProjectChangesModel* m_changesModel = nullptr;
-    QHash< IProject*, QPointer<KJob> > m_parseJobs; // parse jobs that add files from the project to the background parser.
+    QHash<IProject*, KJob*> m_parseJobs; // parse jobs that add files from the project to the background parser.
 
     ProjectControllerPrivate(Core* core, ProjectController* p)
         : m_core(core)
@@ -170,7 +171,7 @@ public:
                     "ConfigDialog signalled project config change, but no project set for configuring!");
             emit q->projectConfigurationChanged(proj);
         });
-        cfgDlg->setWindowTitle(i18n("Configure Project %1", proj->name()));
+        cfgDlg->setWindowTitle(i18nc("@title:window", "Configure Project %1", proj->name()));
         QObject::connect(cfgDlg, &KDevelop::ConfigDialog::finished, proj, [proj]() {
             proj->projectConfiguration()->sync();
         });
@@ -313,18 +314,20 @@ public:
 
         if ( !url.isValid() )
         {
-            KMessageBox::error(Core::self()->uiControllerInternal()->activeMainWindow(),
-                            i18n("Invalid Location: %1", url.toDisplayString(QUrl::PreferLocalFile)));
+            const QString messageText =  i18n("Invalid Location: %1", url.toDisplayString(QUrl::PreferLocalFile));
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
             return;
         }
 
         if ( m_currentlyOpening.contains(url))
         {
             qCDebug(SHELL) << "Already opening " << url << ". Aborting.";
-            KPassivePopup::message( i18n( "Project already being opened"),
-                                    i18n( "Already opening %1, not opening again",
-                                        url.toDisplayString(QUrl::PreferLocalFile) ),
-                                    m_core->uiController()->activeMainWindow() );
+            const QString messageText =
+                i18n("Already opening %1, not opening again", url.toDisplayString(QUrl::PreferLocalFile));
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Information);
+            message->setAutoHide(0);
+            ICore::self()->uiController()->postMessage(message);
             return;
         }
 
@@ -420,7 +423,11 @@ bool projectFileExists( const QUrl& u )
         return QFileInfo::exists( u.toLocalFile() );
     } else
     {
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+        auto statJob = KIO::statDetails(u, KIO::StatJob::DestinationSide, KIO::StatNoDetails, KIO::HideProgressInfo);
+#else
         auto statJob = KIO::stat(u, KIO::StatJob::DestinationSide, 0, KIO::HideProgressInfo);
+#endif
         KJobWidgets::setWindow(statJob, Core::self()->uiControllerInternal()->activeMainWindow());
         return statJob->exec();
     }
@@ -479,19 +486,19 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
         if ( shouldAsk )
         {
             KGuiItem yes = KStandardGuiItem::yes();
-            yes.setText(i18n("Override"));
-            yes.setToolTip(i18nc("@info:tooltip", "Continue to open the project and use the just provided project configuration."));
+            yes.setText(i18nc("@action:button", "Override"));
+            yes.setToolTip(i18nc("@info:tooltip", "Continue to open the project and use the just provided project configuration"));
             yes.setIcon(QIcon());
             KGuiItem no = KStandardGuiItem::no();
-            no.setText(i18n("Open Existing File"));
-            no.setToolTip(i18nc("@info:tooltip", "Continue to open the project but use the existing project configuration."));
+            no.setText(i18nc("@action:button", "Open Existing File"));
+            no.setToolTip(i18nc("@info:tooltip", "Continue to open the project but use the existing project configuration"));
             no.setIcon(QIcon());
             KGuiItem cancel = KStandardGuiItem::cancel();
-            cancel.setToolTip(i18nc("@info:tooltip", "Cancel and do not open the project."));
+            cancel.setToolTip(i18nc("@info:tooltip", "Cancel and do not open the project"));
             int ret = KMessageBox::questionYesNoCancel(qApp->activeWindow(),
                 i18n("There already exists a project configuration file at %1.\n"
                      "Do you want to override it or open the existing file?", projectFileUrl.toDisplayString(QUrl::PreferLocalFile)),
-                i18n("Override existing project configuration"), yes, no, cancel );
+                i18nc("@title:window", "Override Existing Project Configuration"), yes, no, cancel );
             if ( ret == KMessageBox::No )
             {
                 writeProjectConfigToFile = false;
@@ -511,8 +518,9 @@ QUrl ProjectDialogProvider::askProjectConfigLocation(bool fetch, const QUrl& sta
         delJob->exec();
 
         if (!writeProjectSettingsToConfigFile(projectFileUrl, dlg)) {
-            KMessageBox::error(d->m_core->uiControllerInternal()->defaultMainWindow(),
-                i18n("Unable to create configuration file %1", projectFileUrl.url()));
+            const QString messageText = i18n("Unable to create configuration file %1", projectFileUrl.url());
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
             return QUrl();
         }
     }
@@ -602,14 +610,14 @@ void ProjectController::setupActions()
     d->m_openConfig = action = ac->addAction( QStringLiteral("project_open_config") );
     connect(action, &QAction::triggered,
             this, [this] { Q_D(ProjectController); d->openProjectConfig(); } );
-    action->setText( i18n( "Open Configuration..." ) );
+    action->setText( i18nc("@action", "Open Configuration..." ) );
     action->setIcon( QIcon::fromTheme(QStringLiteral("configure")) );
     action->setEnabled( false );
 
     action = ac->addAction( QStringLiteral("commit_current_project") );
     connect( action, &QAction::triggered, this, &ProjectController::commitCurrentProject );
-    action->setText( i18n( "Commit Current Project..." ) );
-    action->setIconText( i18n( "Commit..." ) );
+    action->setText( i18nc("@action", "Commit Current Project..." ) );
+    action->setIconText( i18nc("@action", "Commit..." ) );
     action->setIcon( QIcon::fromTheme(QStringLiteral("svn-commit")) );
     connect(d->m_core->uiControllerInternal()->defaultMainWindow(), &MainWindow::areaChanged,
             this, [this] (Sublime::Area* area) { Q_D(ProjectController); d->areaChanged(area); });
@@ -620,13 +628,13 @@ void ProjectController::setupActions()
 
     d->m_recentProjectsAction = KStandardAction::openRecent(this, SLOT(openProject(QUrl)), this);
     ac->addAction( QStringLiteral("project_open_recent"), d->m_recentProjectsAction );
-    d->m_recentProjectsAction->setText( i18n( "Open Recent Project" ) );
+    d->m_recentProjectsAction->setText( i18nc("@action", "Open Recent Project" ) );
     d->m_recentProjectsAction->setWhatsThis( i18nc( "@info:whatsthis", "Opens recently opened project." ) );
     d->m_recentProjectsAction->loadEntries( KConfigGroup(config, "RecentProjects") );
 
     auto* openProjectForFileAction = new QAction( this );
     ac->addAction(QStringLiteral("project_open_for_file"), openProjectForFileAction);
-    openProjectForFileAction->setText(i18n("Open Project for Current File"));
+    openProjectForFileAction->setText(i18nc("@action", "Open Project for Current File"));
     openProjectForFileAction->setIcon(QIcon::fromTheme(QStringLiteral("project-open")));
     connect( openProjectForFileAction, &QAction::triggered, this, &ProjectController::openProjectForUrlSlot);
 }
@@ -777,10 +785,12 @@ void ProjectController::openProjectForUrlSlot(bool) {
         if(!project) {
             openProjectForUrl(url);
         }else{
-            KMessageBox::error(Core::self()->uiController()->activeMainWindow(), i18n("Project already open: %1", project->name()));
+            auto* message = new Sublime::Message(i18n("Project already open: %1", project->name()), Sublime::Message::Error);
+            Core::self()->uiController()->postMessage(message);
         }
     }else{
-        KMessageBox::error(Core::self()->uiController()->activeMainWindow(), i18n("No active document"));
+        auto* message = new Sublime::Message(i18n("No active document"), Sublime::Message::Error);
+        Core::self()->uiController()->postMessage(message);
     }
 }
 
@@ -860,18 +870,18 @@ void ProjectController::openProject( const QUrl &projectFile )
 
     if ( ! existingSessions.isEmpty() ) {
         ScopedDialog<QDialog> dialog(Core::self()->uiControllerInternal()->activeMainWindow());
-        dialog->setWindowTitle(i18n("Project Already Open"));
+        dialog->setWindowTitle(i18nc("@title:window", "Project Already Open"));
 
         auto mainLayout = new QVBoxLayout(dialog);
         mainLayout->addWidget(new QLabel(i18n("The project you're trying to open is already open in at least one "
                                                      "other session.<br>What do you want to do?")));
         QGroupBox sessions;
         sessions.setLayout(new QVBoxLayout);
-        QRadioButton* newSession = new QRadioButton(i18n("Add project to current session"));
+        auto* newSession = new QRadioButton(i18nc("@option:radio", "Add project to current session"));
         sessions.layout()->addWidget(newSession);
         newSession->setChecked(true);
         for (const Session* session : qAsConst(existingSessions)) {
-            QRadioButton* button = new QRadioButton(i18n("Open session %1", session->description()));
+            auto* button = new QRadioButton(i18nc("@option:radio", "Open session %1", session->description()));
             button->setProperty("sessionid", session->id().toString());
             sessions.layout()->addWidget(button);
         }
@@ -911,7 +921,7 @@ void ProjectController::openProject( const QUrl &projectFile )
     }
 }
 
-bool ProjectController::fetchProjectFromUrl(const QUrl& repoUrl)
+bool ProjectController::fetchProjectFromUrl(const QUrl& repoUrl, FetchFlags fetchFlags)
 {
     Q_D(ProjectController);
 
@@ -930,8 +940,12 @@ bool ProjectController::fetchProjectFromUrl(const QUrl& repoUrl)
         }
     }
     if (!vcsOrProviderPlugin) {
-        KMessageBox::error(Core::self()->uiController()->activeMainWindow(),
-                            i18n("No enabled plugin supports this repository URL: %1", repoUrl.toDisplayString()));
+        if (fetchFlags.testFlag(FetchShowErrorIfNotSupported)) {
+            const QString messageText =
+                i18n("No enabled plugin supports this repository URL: %1", repoUrl.toDisplayString());
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
+        }
         return false;
     }
 
@@ -993,7 +1007,7 @@ void ProjectController::unloadUnusedProjectPlugins(IProject* proj)
 {
     Q_D(ProjectController);
 
-    QList<IPlugin*> pluginsForProj = d->m_projectPlugins.value( proj );
+    const QList<IPlugin*> pluginsForProj = d->m_projectPlugins.value( proj );
     d->m_projectPlugins.remove( proj );
 
     QList<IPlugin*> otherProjectPlugins;
@@ -1001,8 +1015,13 @@ void ProjectController::unloadUnusedProjectPlugins(IProject* proj)
         otherProjectPlugins << _list;
     }
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    QSet<IPlugin*> pluginsForProjSet(pluginsForProj.begin(), pluginsForProj.end());
+    QSet<IPlugin*> otherPrjPluginsSet(otherProjectPlugins.constBegin(), otherProjectPlugins.constEnd());
+#else
     QSet<IPlugin*> pluginsForProjSet = QSet<IPlugin*>::fromList( pluginsForProj );
     QSet<IPlugin*> otherPrjPluginsSet = QSet<IPlugin*>::fromList( otherProjectPlugins );
+#endif
     // loaded - target = tobe unloaded.
     const QSet<IPlugin*> tobeRemoved = pluginsForProjSet.subtract( otherPrjPluginsSet );
     for (IPlugin* _plugin : tobeRemoved) {
@@ -1048,6 +1067,9 @@ void ProjectController::takeProject(IProject* proj)
     // loading might have failed
     d->m_currentlyOpening.removeAll(proj->projectFile().toUrl());
     d->m_projects.removeAll(proj);
+    if (auto* job = d->m_parseJobs.value(proj)) {
+        job->kill(); // Removes job from m_parseJobs.
+    }
     emit projectClosing(proj);
     //Core::self()->saveSettings();     // The project file is being closed.
                                         // Now we can save settings for all of the Core
@@ -1229,7 +1251,7 @@ ContextMenuExtension ProjectController::contextMenuExtension(Context* ctx, QWidg
     }
     if (!static_cast<ProjectItemContext*>(ctx)->items().isEmpty() ) {
 
-        auto* action = new QAction(i18n("Reparse the Entire Project"), this);
+        auto* action = new QAction(i18nc("@action", "Reparse the Entire Project"), this);
         connect(action, &QAction::triggered, this, [this] {
             Q_D(ProjectController);
             const auto projects = d->selectedProjects();
@@ -1280,7 +1302,7 @@ void ProjectController::commitCurrentProject()
             ICore::self()->documentController()->saveAllDocuments(KDevelop::IDocument::Silent);
 
             const Path basePath = project->path();
-            VCSCommitDiffPatchSource* patchSource = new VCSCommitDiffPatchSource(new VCSStandardDiffUpdater(vcs, basePath.toUrl()));
+            auto* patchSource = new VCSCommitDiffPatchSource(new VCSStandardDiffUpdater(vcs, basePath.toUrl()));
 
             bool ret = showVcsDiff(patchSource);
 
@@ -1350,16 +1372,23 @@ QString ProjectController::mapSourceBuild( const QString& path_, bool reverse, b
     return QString();
 }
 
-    void KDevelop::ProjectController::reparseProject(IProject *project, bool forceUpdate, bool forceAll)
-    {
+void ProjectController::reparseProject(IProject* project, bool forceUpdate, bool forceAll)
+{
     Q_D(ProjectController);
 
-    if (auto job = d->m_parseJobs.value(project)) {
-        job->kill();
+    if (auto* oldJob = d->m_parseJobs.value(project)) {
+        oldJob->kill(); // Removes oldJob from m_parseJobs.
     }
 
-    d->m_parseJobs[project] = new KDevelop::ParseProjectJob(project, forceUpdate, forceAll);
-    ICore::self()->runController()->registerJob(d->m_parseJobs[project]);
+    auto& job = d->m_parseJobs[project];
+    job = new ParseProjectJob(project, forceUpdate, forceAll || parseAllProjectSources());
+    connect(job, &KJob::finished, this, [d, project](KJob* job) {
+        const auto it = d->m_parseJobs.constFind(project);
+        if (it != d->m_parseJobs.cend() && *it == job) {
+            d->m_parseJobs.erase(it);
+        }
+    });
+    ICore::self()->runController()->registerJob(job);
 }
 
 }

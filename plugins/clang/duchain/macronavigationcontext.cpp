@@ -47,7 +47,7 @@ QString MacroNavigationContext::html(bool shorten)
     Q_UNUSED(shorten);
     clear();
 
-    modifyHtml() += QLatin1String("<html><body><p>");
+    modifyHtml() += QStringLiteral("<html><body><p>");
 
     QStringList parameterList;
     parameterList.reserve(m_macro->parametersSize());
@@ -55,7 +55,7 @@ QString MacroNavigationContext::html(bool shorten)
         parameterList << parameter.str();
     }
     const QString parameters = (!parameterList.isEmpty() ?
-        QStringLiteral("(%1)").arg(parameterList.join(QStringLiteral(", "))) :
+        QLatin1Char('(') + parameterList.join(QLatin1String(", ")) + QLatin1Char(')') :
         QString());
 
     const QUrl url = m_macro->url().toUrl();
@@ -79,7 +79,7 @@ QString MacroNavigationContext::html(bool shorten)
     modifyHtml() += QLatin1String("<tt>") + code.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br/>")) + QLatin1String("</tt>");
     modifyHtml() += QStringLiteral("</p>");
 
-    modifyHtml() += QLatin1String("</p></body></html>");
+    modifyHtml() += QStringLiteral("</p></body></html>");
     return currentHtml();
 }
 

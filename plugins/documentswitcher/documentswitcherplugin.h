@@ -22,18 +22,20 @@
 #include <interfaces/iplugin.h>
 #include <QVariant>
 
-class QStandardItemModel;
 namespace Sublime
 {
-    class View;
     class MainWindow;
-    class Area;
-class MainWindow;
+}
+
+namespace KDevelop
+{
+    class IDocument;
 }
 
 class DocumentSwitcherTreeView;
-class QModelIndex;
 
+class QStandardItemModel;
+class QModelIndex;
 class QAction;
 
 class DocumentSwitcherPlugin: public KDevelop::IPlugin {
@@ -46,26 +48,21 @@ public:
 public Q_SLOTS:
     void itemActivated( const QModelIndex& );
     void switchToClicked(const QModelIndex& );
-private Q_SLOTS:
-    void addView( Sublime::View* );
-    void changeView( Sublime::View* );
-    void addMainWindow( Sublime::MainWindow* );
-    void changeArea( Sublime::Area* );
-    void removeView( Sublime::View* );
-    void removeMainWindow(QObject*);
     void walkForward();
     void walkBackward();
+    void documentOpened(KDevelop::IDocument *document);
+    void documentActivated(KDevelop::IDocument *document);
+    void documentClosed(KDevelop::IDocument *document);
 protected:
     bool eventFilter( QObject*, QEvent* ) override;
 private:
     void setViewGeometry(Sublime::MainWindow* window);
-    void storeAreaViewList( Sublime::MainWindow* mainwindow, Sublime::Area* area );
     void enableActions();
-    void fillModel( Sublime::MainWindow* window );
+    void fillModel();
     void walk(const int from, const int to);
-    // Need to use QObject here as we only have a QObject* in
-    // the removeMainWindow method and cannot cast it to the mainwindow anymore
-    QMap<QObject*, QHash<Sublime::Area*, QList<Sublime::View*> > > documentLists;
+
+    // List of opened document sorted activation.
+    QList<KDevelop::IDocument *> documentLists;
     DocumentSwitcherTreeView* view;
     QStandardItemModel* model;
     QAction* forwardAction;

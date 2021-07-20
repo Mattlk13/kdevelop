@@ -22,20 +22,19 @@
 #include <KColorScheme>
 #include <KIconEffect>
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KParts/MainWindow>
 #include <KTextEditor/View>
 #include <KTextEditor/Cursor>
 
 #include <KTextEditor/MovingInterface>
 #include <KTextEditor/MarkInterface>
-#include <ktexteditor_version.h>
 
 #include <interfaces/icore.h>
 #include <interfaces/idocument.h>
 #include <interfaces/iuicontroller.h>
 #include <language/highlighting/colorcache.h>
 #include <util/activetooltip.h>
+#include <sublime/message.h>
 
 #include <QApplication>
 #include <QPointer>
@@ -123,22 +122,20 @@ void PatchHighlighter::showToolTipForMark(const QPoint& pos, KTextEditor::Moving
     }
     html += QLatin1String("</b>");
 
-    for( int a = 0; a < lines.size(); ++a ) {
-        Diff2::DifferenceString* line = lines[a];
+    for (auto* line : qAsConst(lines)) {
         uint currentPos = 0;
-        QString string = line->string();
+        const QString& string = line->string();
 
-        Diff2::MarkerList markers = line->markerList();
+        const Diff2::MarkerList& markers = line->markerList();
 
-        for( int b = 0; b < markers.size(); ++b ) {
-            QString spanText = string.mid( currentPos, markers[b]->offset() - currentPos ).toHtmlEscaped();
-            if( markers[b]->type() == Diff2::Marker::End && ( currentPos != 0 || markers[b]->offset() != static_cast<uint>( string.size() ) ) )
-            {
+        for (auto* marker : markers) {
+            const QString spanText = string.mid( currentPos, marker->offset() - currentPos ).toHtmlEscaped();
+            if (marker->type() == Diff2::Marker::End && (currentPos != 0 || marker->offset() != static_cast<uint>( string.size()))) {
                 html += QLatin1String("<b><span style=\"background:#FFBBBB\">") + spanText + QLatin1String("</span></b>");
             }else{
                 html += spanText;
             }
-            currentPos = markers[b]->offset();
+            currentPos = marker->offset();
         }
 
         html += string.mid(currentPos, string.length()-currentPos).toHtmlEscaped() + QLatin1String("<br/>");
@@ -156,10 +153,10 @@ void PatchHighlighter::showToolTipForMark(const QPoint& pos, KTextEditor::Moving
         browser->setVerticalScrollBarPolicy( Qt::ScrollBarAlwaysOff );
 
     auto* layout = new QVBoxLayout;
-    layout->setMargin( 0 );
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget( browser );
 
-    KDevelop::ActiveToolTip* tooltip = new KDevelop::ActiveToolTip( ICore::self()->uiController()->activeMainWindow(), pos + QPoint( 5, -browser->sizeHint().height() - 30 ) );
+    auto* tooltip = new KDevelop::ActiveToolTip( ICore::self()->uiController()->activeMainWindow(), pos + QPoint( 5, -browser->sizeHint().height() - 30 ) );
     tooltip->setLayout( layout );
     tooltip->resize( tooltip->sizeHint() + QSize( 10, 10 ) );
     tooltip->move( pos - QPoint( 0, 20 + tooltip->height() ) );
@@ -208,7 +205,9 @@ void PatchHighlighter::markClicked( KTextEditor::Document* doc, const KTextEdito
         QString &replaceWith(applied ? sourceText : targetText);
 
         if( currentText.simplified() != replace.simplified() ) {
-            KMessageBox::error( ICore::self()->uiController()->activeMainWindow(), i18n( "Could not apply the change: Text should be \"%1\", but is \"%2\".", replace, currentText ) );
+            const QString messageText = i18n("Could not apply the change: Text should be \"%1\", but is \"%2\".", replace, currentText);
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
 
             m_applying = false;
             return;
@@ -406,11 +405,7 @@ void PatchHighlighter::documentReloaded(KTextEditor::Document* doc)
 
     clear();
 
-#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5,50,0)
     constexpr int markPixmapSize = 32;
-#else
-    constexpr int markPixmapSize = 16;
-#endif
     KColorScheme scheme( QPalette::Active );
 
     QImage tintedInsertion = QIcon::fromTheme(QStringLiteral("insert-text")).pixmap(markPixmapSize, markPixmapSize).toImage();
@@ -420,22 +415,21 @@ void PatchHighlighter::documentReloaded(KTextEditor::Document* doc)
     QImage tintedChange = QIcon::fromTheme(QStringLiteral("text-field")).pixmap(markPixmapSize, markPixmapSize).toImage();
     KIconEffect::colorize( tintedChange, scheme.foreground( KColorScheme::NegativeText ).color(), 1.0 );
 
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType22, i18n( "Insertion" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType22, i18nc("@item", "Insertion") );
     markIface->setMarkPixmap( KTextEditor::MarkInterface::markType22, QPixmap::fromImage( tintedInsertion ) );
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType23, i18n( "Removal" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType23, i18nc("@item", "Removal") );
     markIface->setMarkPixmap( KTextEditor::MarkInterface::markType23, QPixmap::fromImage( tintedRemoval ) );
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType24, i18n( "Change" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType24, i18nc("@item", "Change") );
     markIface->setMarkPixmap( KTextEditor::MarkInterface::markType24, QPixmap::fromImage( tintedChange ) );
 
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType25, i18n( "Insertion" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType25, i18nc("@item", "Insertion" ) );
     markIface->setMarkPixmap(KTextEditor::MarkInterface::markType25, QIcon::fromTheme(QStringLiteral("insert-text")).pixmap(markPixmapSize, markPixmapSize));
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType26, i18n( "Removal" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType26, i18nc("@item", "Removal") );
     markIface->setMarkPixmap(KTextEditor::MarkInterface::markType26, QIcon::fromTheme(QStringLiteral("edit-delete")).pixmap(markPixmapSize, markPixmapSize));
-    markIface->setMarkDescription( KTextEditor::MarkInterface::markType27, i18n( "Change" ) );
+    markIface->setMarkDescription( KTextEditor::MarkInterface::markType27, i18nc("@item", "Change") );
     markIface->setMarkPixmap(KTextEditor::MarkInterface::markType27, QIcon::fromTheme(QStringLiteral("text-field")).pixmap(markPixmapSize, markPixmapSize));
 
-    for ( Diff2::DifferenceList::const_iterator it = m_model->differences()->constBegin(); it != m_model->differences()->constEnd(); ++it ) {
-        Diff2::Difference* diff = *it;
+    for (Diff2::Difference* diff : qAsConst(*m_model->differences())) {
         int line, lineCount;
         Diff2::DifferenceStringList lines;
 
@@ -632,16 +626,14 @@ void PatchHighlighter::addLineMarker( KTextEditor::MovingRange* range, Diff2::Di
     for( int a = 0; a < lines.size(); ++a ) {
         Diff2::DifferenceString* line = lines[a];
         int currentPos = 0;
-        QString string = line->string();
+        const uint lineLength = static_cast<uint>(line->string().size());
 
-        Diff2::MarkerList markers = line->markerList();
+        const Diff2::MarkerList& markers = line->markerList();
 
-        for( int b = 0; b < markers.size(); ++b ) {
-            if( markers[b]->type() == Diff2::Marker::End )
-            {
-                if( currentPos != 0 || markers[b]->offset() != static_cast<uint>( string.size() ) )
-                {
-                    KTextEditor::MovingRange * r2 = moving->newMovingRange( KTextEditor::Range( KTextEditor::Cursor( a + range->start().line(), currentPos ), KTextEditor::Cursor( a + range->start().line(), markers[b]->offset() ) ) );
+        for (auto* marker : markers) {
+            if (marker->type() == Diff2::Marker::End) {
+                if (currentPos != 0 || marker->offset() != lineLength) {
+                    KTextEditor::MovingRange* r2 = moving->newMovingRange( KTextEditor::Range( KTextEditor::Cursor( a + range->start().line(), currentPos ), KTextEditor::Cursor( a + range->start().line(), marker->offset() ) ) );
                     m_ranges[r2] = nullptr;
 
                     KTextEditor::Attribute::Ptr t( new KTextEditor::Attribute() );
@@ -651,7 +643,7 @@ void PatchHighlighter::addLineMarker( KTextEditor::MovingRange* range, Diff2::Di
                     r2->setZDepth( -600 );
                 }
             }
-            currentPos = markers[b]->offset();
+            currentPos = marker->offset();
         }
     }
 }

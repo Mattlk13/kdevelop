@@ -21,11 +21,11 @@
 
 #include <QVBoxLayout>
 
+#include <kcoreaddons_version.h>
 #include <KSharedConfig>
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KMessageBox>
-#include <kwidgetsaddons_version.h>
 
 #include <interfaces/iprojectprovider.h>
 
@@ -45,9 +45,8 @@ ProjectSourcePage::ProjectSourcePage(const QUrl& initial, const QUrl& repoUrl, I
 
     m_ui->workingDir->setUrl(initial);
     m_ui->workingDir->setMode(KFile::Directory);
-    m_ui->remoteWidget->setLayout(new QVBoxLayout(m_ui->remoteWidget));
 
-    m_ui->sources->addItem(QIcon::fromTheme(QStringLiteral("folder")), i18n("From File System"));
+    m_ui->sources->addItem(QIcon::fromTheme(QStringLiteral("folder")), i18nc("@item:inlistbox", "From File System"));
     m_plugins.append(nullptr);
 
     int preselectIndex = -1;
@@ -108,9 +107,8 @@ void ProjectSourcePage::setSourceWidget(int index, const QUrl& repoUrl)
 {
     m_locationWidget = nullptr;
     m_providerWidget = nullptr;
-    QLayout* remoteWidgetLayout = m_ui->remoteWidget->layout();
     QLayoutItem *child;
-    while ((child = remoteWidgetLayout->takeAt(0)) != nullptr) {
+    while ((child = m_ui->remoteWidgetLayout->takeAt(0)) != nullptr) {
         delete child->widget();
         delete child;
     }
@@ -127,7 +125,7 @@ void ProjectSourcePage::setSourceWidget(int index, const QUrl& repoUrl)
         if (!repoUrl.isEmpty()) {
             m_locationWidget->setLocation(repoUrl);
         }
-        remoteWidgetLayout->addWidget(m_locationWidget);
+        m_ui->remoteWidgetLayout->addWidget(m_locationWidget);
     } else {
         providerIface = providerPerIndex(index);
         if(providerIface) {
@@ -135,7 +133,7 @@ void ProjectSourcePage::setSourceWidget(int index, const QUrl& repoUrl)
             m_providerWidget=providerIface->providerWidget(m_ui->sourceBox);
             connect(m_providerWidget, &IProjectProviderWidget::changed, this, &ProjectSourcePage::projectChanged);
 
-            remoteWidgetLayout->addWidget(m_providerWidget);
+            m_ui->remoteWidgetLayout->addWidget(m_providerWidget);
         }
     }
     reevaluateCorrection();
@@ -199,8 +197,11 @@ void ProjectSourcePage::checkoutVcsProject()
     m_ui->get->setEnabled(false);
     m_ui->creationProgress->setValue(m_ui->creationProgress->minimum());
     connect(job, &VcsJob::result, this, &ProjectSourcePage::projectReceived);
-    // Can't use new signal-slot syntax, KJob::percent is private :/
-    connect(job, SIGNAL(percent(KJob*,ulong)), SLOT(progressChanged(KJob*,ulong)));
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 80, 0)
+    connect(job, QOverload<KJob*, unsigned long>::of(&KJob::percent), this, &ProjectSourcePage::progressChanged);
+#else
+    connect(job, &KJob::percentChanged, this, &ProjectSourcePage::progressChanged);
+#endif
     connect(job, &VcsJob::infoMessage, this, &ProjectSourcePage::infoMessage);
     ICore::self()->runController()->registerJob(job);
 }
@@ -268,7 +269,7 @@ void ProjectSourcePage::locationChanged()
     Q_ASSERT(m_locationWidget);
     if(m_locationWidget->isCorrect()) {
         QString currentUrl = m_ui->workingDir->text();
-        currentUrl = currentUrl.left(currentUrl.lastIndexOf(QLatin1Char('/'))+1);
+        currentUrl.truncate(currentUrl.lastIndexOf(QLatin1Char('/'))+1);
 
         QUrl current = QUrl::fromUserInput(currentUrl + m_locationWidget->projectName());
         m_ui->workingDir->setUrl(current);
@@ -281,7 +282,7 @@ void ProjectSourcePage::projectChanged(const QString& name)
 {
     Q_ASSERT(m_providerWidget);
     QString currentUrl = m_ui->workingDir->text();
-    currentUrl = currentUrl.left(currentUrl.lastIndexOf(QLatin1Char('/'))+1);
+    currentUrl.truncate(currentUrl.lastIndexOf(QLatin1Char('/'))+1);
 
     QUrl current = QUrl::fromUserInput(currentUrl + name);
     m_ui->workingDir->setUrl(current);
@@ -295,19 +296,6 @@ void ProjectSourcePage::setStatus(const QString& message)
 
 void ProjectSourcePage::clearStatus()
 {
-#if KWIDGETSADDONS_VERSION < QT_VERSION_CHECK(5,32,0)
-    // workaround for KMessageWidget bug:
-    // animatedHide() will not explicitly hide the widget if it is not yet shown.
-    // So if it has never been explicitly hidden otherwise,
-    // if show() is called on the parent later the KMessageWidget will be shown as well.
-    // As this method is sometimes called when the page is created and thus not yet shown,
-    // we have to ensure the hidden state ourselves here.
-    if (!m_ui->status->isVisible()) {
-        m_ui->status->hide();
-        return;
-    }
-#endif
-
     m_ui->status->animatedHide();
 }
 

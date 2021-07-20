@@ -360,8 +360,6 @@ DUContext::DUContext(const RangeInRevision& range, DUContext* parent, bool anony
     d_func_dynamic()->setClassId(this);
     if (parent)
         m_dynamicData->m_topContext = parent->topContext();
-    else
-        m_dynamicData->m_topContext = static_cast<TopDUContext*>(this);
 
     d_func_dynamic()->setClassId(this);
     DUCHAIN_D_DYNAMIC(DUContext);
@@ -393,14 +391,19 @@ bool DUContext::isAnonymous() const
            (m_dynamicData->m_parentContext && m_dynamicData->m_parentContext->isAnonymous());
 }
 
+void DUContext::initFromTopContext()
+{
+    Q_ASSERT(dynamic_cast<TopDUContext*>(this));
+    m_dynamicData->m_topContext = static_cast<TopDUContext*>(this);
+}
+
 DUContext::DUContext(DUContextData& dd, const RangeInRevision& range, DUContext* parent, bool anonymous)
     : DUChainBase(dd, range)
     , m_dynamicData(new DUContextDynamicData(this))
 {
     if (parent)
         m_dynamicData->m_topContext = parent->topContext();
-    else
-        m_dynamicData->m_topContext = static_cast<TopDUContext*>(this);
+    // else initTopContext must be called, doing a static_cast here is UB
 
     DUCHAIN_D_DYNAMIC(DUContext);
     d->m_contextType = Other;
@@ -429,43 +432,47 @@ DUContext::~DUContext()
 {
     TopDUContext* top = topContext();
 
-    if (!top->deleting() || !top->isOnDisk()) {
-        DUCHAIN_D_DYNAMIC(DUContext);
+    if (top != this) {
+        const auto doCleanup = !top->deleting() || !top->isOnDisk();
 
-        if (d->m_owner.declaration())
-            d->m_owner.declaration()->setInternalContext(nullptr);
+        if (doCleanup) {
+            DUCHAIN_D_DYNAMIC(DUContext);
 
-        while (d->m_importersSize() != 0) {
-            if (d->m_importers()[0].data())
-                d->m_importers()[0].data()->removeImportedParentContext(this);
-            else {
-                qCDebug(LANGUAGE) << "importer disappeared";
-                d->m_importersList().removeOne(d->m_importers()[0]);
+            if (d->m_owner.declaration())
+                d->m_owner.declaration()->setInternalContext(nullptr);
+
+            while (d->m_importersSize() != 0) {
+                if (d->m_importers()[0].data())
+                    d->m_importers()[0].data()->removeImportedParentContext(this);
+                else {
+                    qCDebug(LANGUAGE) << "importer disappeared";
+                    d->m_importersList().removeOne(d->m_importers()[0]);
+                }
             }
+
+            clearImportedParentContexts();
         }
 
-        clearImportedParentContexts();
-    }
+        deleteChildContextsRecursively();
 
-    deleteChildContextsRecursively();
+        if (doCleanup)
+            deleteUses();
 
-    if (!topContext()->deleting() || !topContext()->isOnDisk())
-        deleteUses();
+        deleteLocalDeclarations();
 
-    deleteLocalDeclarations();
-
-    //If the top-context is being delete, we don't need to spend time rebuilding the inner structure.
-    //That's expensive, especially when the data is not dynamic.
-    if (!top->deleting() || !top->isOnDisk()) {
-        if (m_dynamicData->m_parentContext)
+        //If the top-context is being delete, we don't need to spend time rebuilding the inner structure.
+        //That's expensive, especially when the data is not dynamic.
+        if (doCleanup && m_dynamicData->m_parentContext) {
             m_dynamicData->m_parentContext->m_dynamicData->removeChildContext(this);
+        }
+
+        top->m_dynamicData->clearContextIndex(this);
+
+        Q_ASSERT(d_func()->isDynamic() ==
+                (doCleanup ||
+                top->m_dynamicData->isTemporaryContextIndex(m_dynamicData->m_indexInTopContext)));
     }
 
-    top->m_dynamicData->clearContextIndex(this);
-
-    Q_ASSERT(d_func()->isDynamic() ==
-             (!top->deleting() || !top->isOnDisk() ||
-              top->m_dynamicData->isTemporaryContextIndex(m_dynamicData->m_indexInTopContext)));
     delete m_dynamicData;
 }
 
@@ -686,10 +693,10 @@ bool DUContext::findDeclarationsInternal(const SearchItem::PtrList& baseIdentifi
     DUCHAIN_D(DUContext);
     if (d->m_contextType != Namespace) {
         // If we're in a namespace, delay all the searching into the top-context, because only that has the overview to pick the correct declarations.
-        for (int a = 0; a < baseIdentifiers.size(); ++a) {
-            if (!baseIdentifiers[a]->isExplicitlyGlobal && baseIdentifiers[a]->next.isEmpty()) {
+        for (auto& baseIdentifier : baseIdentifiers) {
+            if (!baseIdentifier->isExplicitlyGlobal && baseIdentifier->next.isEmpty()) {
                 // It makes no sense searching locally for qualified identifiers
-                findLocalDeclarationsInternal(baseIdentifiers[a]->identifier, position, dataType, ret, source, flags);
+                findLocalDeclarationsInternal(baseIdentifier->identifier, position, dataType, ret, source, flags);
             }
         }
 
@@ -1500,10 +1507,8 @@ AbstractNavigationWidget* DUContext::createNavigationWidget(Declaration* decl, T
     if (decl) {
         auto* widget = new AbstractNavigationWidget;
         widget->setDisplayHints(hints);
-        AbstractDeclarationNavigationContext* context = new AbstractDeclarationNavigationContext(DeclarationPointer(
-                                                                                                     decl),
-                                                                                                 TopDUContextPointer(
-                                                                                                     topContext));
+        auto* context = new AbstractDeclarationNavigationContext(DeclarationPointer(decl),
+                                                                 TopDUContextPointer(topContext));
         widget->setContext(NavigationContextPointer(context));
         return widget;
     } else {

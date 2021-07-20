@@ -941,8 +941,9 @@ Set BasicSetRepository::createSet(const std::set<Index>& indices)
     std::vector<Index> indicesVector;
     indicesVector.reserve(indices.size());
 
-    for (auto it = indices.begin(); it != indices.end(); ++it)
-        indicesVector.push_back(*it);
+    for (unsigned int index : indices) {
+        indicesVector.push_back(index);
+    }
 
     return createSetFromIndices(indicesVector);
 }
@@ -1188,9 +1189,8 @@ void StringSetRepository::itemRemovedFromSets(uint index)
     ///Call the IndexedString destructor with enabled reference-counting
     KDevelop::IndexedString string = KDevelop::IndexedString::fromIndex(index);
 
-    KDevelop::enableDUChainReferenceCounting(&string, sizeof(KDevelop::IndexedString));
+    const KDevelop::DUChainReferenceCountingEnabler rcEnabler(&string, sizeof(KDevelop::IndexedString));
     string.~IndexedString(); //Call destructor with enabled reference-counting
-    KDevelop::disableDUChainReferenceCounting(&string);
 }
 
 void StringSetRepository::itemAddedToSets(uint index)
@@ -1201,8 +1201,7 @@ void StringSetRepository::itemAddedToSets(uint index)
 
     char data[sizeof(KDevelop::IndexedString)];
 
-    KDevelop::enableDUChainReferenceCounting(data, sizeof(KDevelop::IndexedString));
+    const KDevelop::DUChainReferenceCountingEnabler rcEnabler(data, sizeof(KDevelop::IndexedString));
     new (data) KDevelop::IndexedString(string); //Call constructor with enabled reference-counting
-    KDevelop::disableDUChainReferenceCounting(data);
 }
 }

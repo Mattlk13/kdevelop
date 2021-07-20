@@ -309,7 +309,7 @@ void OutputExecuteJob::start()
         } else {
             KDevelop::ICore::self()->runtimeController()->currentRuntime()->startProcess(d->m_process);
         }
-        model()->appendLine(d->m_process->workingDirectory() + QStringLiteral("> ") + KShell::joinArgs(d->m_process->program()));
+        model()->appendLine(d->m_process->workingDirectory() + QLatin1String("> ") + KShell::joinArgs(d->m_process->program()));
     } else {
         QString errorMessage = i18n("Failed to specify program to start: %1", d->joinCommandLine());
         model()->appendLine( i18n( "*** %1 ***", errorMessage) );
@@ -357,6 +357,8 @@ void OutputExecuteJob::childProcessError( QProcess::ProcessError processError )
     if( d->m_status != OutputExecuteJob::JobRunning )
         return;
     d->m_status = OutputExecuteJob::JobFailed;
+
+    qCWarning(OUTPUTVIEW) << processError << d->m_process->errorString();
 
     QString errorValue;
     switch( processError ) {
@@ -420,6 +422,7 @@ void OutputExecuteJob::childProcessExited( int exitCode, QProcess::ExitStatus ex
 void OutputExecuteJobPrivate::childProcessStdout()
 {
     QByteArray out = m_process->readAllStandardOutput();
+    qCDebug(OUTPUTVIEW) << out;
     if( m_properties.testFlag( OutputExecuteJob::DisplayStdout ) ) {
         m_lineMaker->slotReceivedStdout( out );
     }
@@ -428,6 +431,7 @@ void OutputExecuteJobPrivate::childProcessStdout()
 void OutputExecuteJobPrivate::childProcessStderr()
 {
     QByteArray err = m_process->readAllStandardError();
+    qCDebug(OUTPUTVIEW) << err;
     if( m_properties.testFlag( OutputExecuteJob::DisplayStderr ) ) {
         m_lineMaker->slotReceivedStderr( err );
     }

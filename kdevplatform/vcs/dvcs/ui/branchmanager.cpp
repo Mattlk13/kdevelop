@@ -48,18 +48,26 @@ BranchManager::BranchManager(const QString& repository, KDevelop::DistributedVer
     , m_repository(repository)
     , m_dvcPlugin(executor)
 {
-    setWindowTitle(i18n("Branch Manager"));
+    setWindowTitle(i18nc("@title:window", "Branch Manager"));
 
-    QWidget *mainWidget = new QWidget(this);
+    auto* mainWidget = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(mainWidget);
 
     m_ui = new Ui::BranchDialogBase;
-    QWidget* w = new QWidget(this);
+    auto* w = new QWidget(this);
     m_ui->setupUi(w);
     mainLayout->addWidget(w);
 
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
+    auto iconWithFallback = [] (const QString &icon, const QString &fallback) {
+        return QIcon::fromTheme(icon, QIcon::fromTheme(fallback));
+    };
+    m_ui->newButton->setIcon(iconWithFallback(QStringLiteral("vcs-branch"), QStringLiteral("list-add")));
+    m_ui->deleteButton->setIcon(iconWithFallback(QStringLiteral("vcs-branch-delete"), QStringLiteral("edit-delete")));
+    m_ui->diffButton->setIcon(iconWithFallback(QStringLiteral("vcs-diff"), QStringLiteral("text-x-patch")));
+    m_ui->mergeButton->setIcon(iconWithFallback(QStringLiteral("vcs-merge"), QStringLiteral("merge")));
+
+    auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Close);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &BranchManager::accept);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &BranchManager::reject);
     mainLayout->addWidget(buttonBox);
@@ -115,7 +123,7 @@ void BranchManager::createBranch()
     }
     QString baseBranch = currentBranchIdx.data().toString();
     bool branchNameEntered = false;
-    QString newBranch = QInputDialog::getText(this, i18n("New branch"), i18n("Name of the new branch:"),
+    QString newBranch = QInputDialog::getText(this, i18nc("@title:window", "New Branch"), i18nc("@label:textbox", "Name of the new branch:"),
             QLineEdit::Normal, QString(), &branchNameEntered);
     if (!branchNameEntered)
         return;
@@ -173,9 +181,10 @@ void BranchManager::checkoutBranch()
     qCDebug(VCS) << "Switching to" << branch << "in" << m_repository;
     KDevelop::VcsJob *branchJob = m_dvcPlugin->switchBranch(QUrl::fromLocalFile(m_repository), branch);
 //     connect(branchJob, SIGNAL(finished(KJob*)), m_model, SIGNAL(resetCurrent()));
-
-    ICore::self()->runController()->registerJob(branchJob);
-    close();
+    if (branchJob) {
+        ICore::self()->runController()->registerJob(branchJob);
+        close();
+    }
 }
 
 void BranchManager::mergeBranch()
@@ -269,7 +278,7 @@ void BranchManager::diffJobFinished(KJob* job)
 
     if (vcsjob->status() != KDevelop::VcsJob::JobSucceeded) {
         KMessageBox::error(ICore::self()->uiController()->activeMainWindow(), vcsjob->errorString(),
-                           i18n("Unable to retrieve diff."));
+                           i18nc("@titlew:indow", "Unable to Retrieve Diff"));
         return;
     }
 
@@ -277,7 +286,7 @@ void BranchManager::diffJobFinished(KJob* job)
     if(diff.isEmpty()){
         KMessageBox::information(ICore::self()->uiController()->activeMainWindow(),
                                     i18n("There are no committed differences."),
-                                    i18n("VCS support"));
+                                    i18nc("@title:window", "VCS Support"));
         return;
     }
 

@@ -20,6 +20,9 @@ import QtQuick 2.1
 
 import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.components 2.0 as PlasmaComponents
+import org.kde.plasma.plasmoid 2.0
+
+import org.kde.plasma.private.kdevelopsessions 1.0 as KDevelopSessions
 
 Item {
    id: kdevelopSessions
@@ -32,19 +35,10 @@ Item {
             view.forceActiveFocus();
     }
 
-    PlasmaCore.DataSource {
-        id: sessionsSource
-        engine: "org.kde.kdevelopsessions"
-        onSourceAdded: connectSource(source)
-        onSourceRemoved: disconnectSource(source)
-
-        Component.onCompleted: connectedSources = sources
-    }
-
-    PlasmaCore.DataModel {
+    KDevelopSessions.SessionListModel {
         id: sessionsModel
-        dataSource: sessionsSource
     }
+
 
     Component.onCompleted: {
         plasmoid.popupIcon = "kdevelop";
@@ -91,6 +85,7 @@ Item {
         // translated but not used, we just need length/height
         text: i18n("Arbitrary String Which Says Something")
     }
+    Keys.forwardTo: view
 
     ListView {
         id: view
@@ -100,7 +95,6 @@ Item {
         model: PlasmaCore.SortFilterModel {
             id: filterModel
             sourceModel: sessionsModel
-            sortRole: "sessionString"
         }
         clip: true
         focus: true
@@ -115,9 +109,8 @@ Item {
             }
 
             function openSession() {
-                var service = sessionsSource.serviceForSource(model["DataEngineSource"])
-                var operation = service.operationDescription("open")
-                var job = service.startOperationCall(operation)
+                sessionsModel.openSession(sessionId);
+                plasmoid.expanded = false
             }
 
             PlasmaComponents.Label {
@@ -132,7 +125,7 @@ Item {
                 }
 
                 verticalAlignment: Text.AlignVCenter
-                text: model.sessionString
+                text: model.display
                 elide: Text.ElideRight
             }
 
@@ -159,13 +152,13 @@ Item {
                 openSession();
             }
         }
-
+        Keys.onReturnPressed: { currentItem.Keys.onPressed(event); }
+        Keys.onEnterPressed: { currentItem.Keys.onPressed(event); }
         highlight: PlasmaComponents.Highlight {
             hover: true
         }
 
-        highlightMoveDuration: 250
-        highlightMoveVelocity: 1
+        highlightMoveDuration: PlasmaCore.Units.shortDuration
     }
 
     PlasmaComponents.ScrollBar {
@@ -178,5 +171,12 @@ Item {
         scrollButtonInterval: view.count / 4
 
         flickableItem: view
+    }
+
+    Plasmoid.onExpandedChanged: {
+        if (plasmoid.expanded) {
+            view.currentIndex = 0;
+            view.highlightItem.opacity = 1;
+        }
     }
 }

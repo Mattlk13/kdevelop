@@ -38,7 +38,6 @@ Boston, MA 02110-1301, USA.
 #include <KTextEditor/View>
 #include <KWindowSystem>
 #include <KXMLGUIFactory>
-#include <kparts_version.h>
 
 #include <sublime/area.h>
 #include "shellextension.h"
@@ -95,18 +94,8 @@ void MainWindow::applyMainWindowSettings(const KConfigGroup& config)
 
 void MainWindow::createGUI(KParts::Part* part)
 {
-    //TODO remove if-clause once KF5 >= 5.24 is required
-#if KPARTS_VERSION_MINOR >= 24
     Sublime::MainWindow::setWindowTitleHandling(false);
     Sublime::MainWindow::createGUI(part);
-#else
-    Sublime::MainWindow::createGUI(part);
-    if (part) {
-        // Don't let the Part control the main window caption -- we take care of that
-        disconnect(part, SIGNAL(setWindowCaption(QString)),
-                   this, SLOT(setCaption(QString)));
-    }
-#endif
 }
 
 void MainWindow::initializeCorners()
@@ -199,10 +188,10 @@ QAction* MainWindow::createCustomElement(QWidget* parent, int index, const QDomE
     //KDevelop needs to ensure that separators defined as <Separator style="visible" />
     //are always shown in the menubar. For those, we create special disabled actions
     //instead of calling QMenuBar::addSeparator() because menubar separators are ignored
-    if (element.tagName().toLower() == QLatin1String("separator")
+    if (element.tagName().compare(QLatin1String("separator"), Qt::CaseInsensitive) == 0
             && element.attribute(QStringLiteral("style")) == QLatin1String("visible")) {
         if ( auto* bar = qobject_cast<QMenuBar*>( parent ) ) {
-            QAction *separatorAction = new QAction(QStringLiteral("|"), this);
+            auto* separatorAction = new QAction(QStringLiteral("|"), this);
             bar->insertAction( before, separatorAction );
             separatorAction->setDisabled(true);
             return separatorAction;
@@ -253,7 +242,7 @@ void MainWindow::dropEvent( QDropEvent* ev )
 
     bool eventUsed = false;
     if (urls.size() == 1) {
-        eventUsed = Core::self()->projectControllerInternal()->fetchProjectFromUrl(urls.at(0));
+        eventUsed = Core::self()->projectControllerInternal()->fetchProjectFromUrl(urls.at(0), ProjectController::NoFetchFlags);
     }
 
     if (!eventUsed) {
@@ -350,7 +339,8 @@ void MainWindow::initialize()
     Q_D(MainWindow);
 
     KStandardAction::keyBindings(this, SLOT(configureShortcuts()), actionCollection());
-    setupGUI( KXmlGuiWindow::ToolBar | KXmlGuiWindow::Create | KXmlGuiWindow::Save );
+    setupGUI(ToolBar | Save);
+    createGUI(nullptr);
 
     Core::self()->partController()->addManagedTopLevelWidget(this);
     qCDebug(SHELL) << "Adding plugin-added connection";
@@ -397,7 +387,10 @@ void MainWindow::initialize()
 
     connect(Core::self()->documentController(), &IDocumentController::documentClosed, this, &MainWindow::updateCaption, Qt::QueuedConnection);
     connect(Core::self()->documentController(), &IDocumentController::documentUrlChanged, this, &MainWindow::updateCaption, Qt::QueuedConnection);
+    connect(Core::self()->documentController(), &IDocumentController::documentStateChanged, this, &MainWindow::updateCaption, Qt::QueuedConnection);
     connect(Core::self()->sessionController()->activeSession(), &ISession::sessionUpdated, this, &MainWindow::updateCaption);
+    // if currently viewed document is part of project, trigger update of full path to project prefixed one
+    connect(Core::self()->projectController(), &ProjectController::projectOpened, this, &MainWindow::updateCaption, Qt::QueuedConnection);
 
     connect(Core::self()->documentController(), &IDocumentController::documentOpened, this, &MainWindow::updateTabColor);
     connect(Core::self()->documentController(), &IDocumentController::documentUrlChanged, this, &MainWindow::updateTabColor);
@@ -441,15 +434,12 @@ void MainWindow::documentActivated(const QPointer<KTextEditor::Document>& textDo
 
 void MainWindow::updateCaption()
 {
-    const auto activeSession = Core::self()->sessionController()->activeSession();
-    QString title = activeSession ? activeSession->description() : QString();
+    QString title;
     QString localFilePath;
+    bool isDocumentModified = false;
 
     if(area()->activeView())
     {
-        if(!title.isEmpty())
-            title += QLatin1String(" - [ ");
-
         Sublime::Document* doc = area()->activeView()->document();
         auto* urlDoc = qobject_cast<Sublime::UrlDocument*>(doc);
         if(urlDoc)
@@ -462,15 +452,36 @@ void MainWindow::updateCaption()
         else
             title += doc->title();
 
-        auto activeDocument = Core::self()->documentController()->activeDocument();
-        if (activeDocument && activeDocument->textDocument() && !activeDocument->textDocument()->isReadWrite())
+        auto iDoc = qobject_cast<IDocument*>(doc);
+        if (iDoc && iDoc->textDocument() && !iDoc->textDocument()->isReadWrite()) {
             title += i18n(" (read only)");
+        }
 
-        title += QLatin1String(" ]");
+        title += QLatin1String(" [*]"); // [*] is placeholder for modifed state, cmp. QWidget::windowModified
+
+        isDocumentModified = iDoc && (iDoc->state() != IDocument::Clean);
     }
 
-    setWindowFilePath(localFilePath);
+    const auto activeSession = Core::self()->sessionController()->activeSession();
+    const QString sessionTitle = activeSession ? activeSession->description() : QString();
+    if (!sessionTitle.isEmpty()) {
+        if (title.isEmpty()) {
+            title = sessionTitle;
+        } else {
+            title = sessionTitle + QLatin1String(" - [ ") + title + QLatin1Char(']');
+        }
+    }
+
+    // Workaround for a bug observed on macOS with Qt 5.9.8 (TODO: test with newer Qt, report bug):
+    // Ensure to call setCaption() (thus implicitly setWindowTitle()) before
+    // setWindowModified() & setWindowFilePath().
+    // Otherwise, if the state will change "modifed" from true to false as well change the title string,
+    // calling setWindowTitle() last results in the "modified" indicator==asterisk becoming part of the
+    // displayed window title somehow.
+    // Other platforms so far not known to be affected, any order of calls seems fine.
     setCaption(title);
+    setWindowModified(isDocumentModified);
+    setWindowFilePath(localFilePath);
 }
 
 void MainWindow::updateAllTabColors()

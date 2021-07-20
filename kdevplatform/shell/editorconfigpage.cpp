@@ -43,7 +43,7 @@ public:
         page->setParent(this);
 
         auto* layout = new QVBoxLayout(this);
-        layout->setMargin(0);
+        layout->setContentsMargins(0, 0, 0, 0);
         layout->addWidget(page);
         setLayout(layout);
 
@@ -98,7 +98,7 @@ EditorConfigPage::~EditorConfigPage() {}
 
 QString EditorConfigPage::name() const
 {
-    return i18n("Editor");
+    return i18nc("@title:tab", "Editor");
 }
 
 QIcon EditorConfigPage::icon() const

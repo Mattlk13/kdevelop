@@ -22,7 +22,7 @@
 #include "sessionsmodel.h"
 
 #include <KDeclarative/KDeclarative>
-#include <kdeclarative_version.h>
+#include <KLocalizedContext>
 
 #include <QQmlContext>
 #include <QQmlComponent>
@@ -48,15 +48,10 @@ WelcomePageWidget::WelcomePageWidget(const QList<IProject*> & /*projects*/, QWid
     qmlRegisterType<SessionsModel>("org.kdevelop.welcomepage", 4, 3, "SessionsModel");
 
     //setup kdeclarative library
-    KDeclarative::KDeclarative kdeclarative;
-    kdeclarative.setDeclarativeEngine(engine());
-    kdeclarative.setTranslationDomain(QStringLiteral("kdevwelcomepage"));
-#if KDECLARATIVE_VERSION >= QT_VERSION_CHECK(5, 45, 0)
-    kdeclarative.setupEngine(engine());
-    kdeclarative.setupContext();
-#else
-    kdeclarative.setupBindings();
-#endif
+    KDeclarative::KDeclarative::setupEngine(engine());
+    KLocalizedContext *localizedContextObject = new KLocalizedContext(engine());
+    localizedContextObject->setTranslationDomain(QStringLiteral("kdevwelcomepage"));
+    engine()->rootContext()->setContextObject(localizedContextObject);
 
     setResizeMode(QQuickWidget::SizeRootObjectToView);
 

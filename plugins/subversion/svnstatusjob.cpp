@@ -106,12 +106,11 @@ void SvnInternalStatusJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::
         try
         {
             QByteArray ba = url.toString( QUrl::PreferLocalFile | QUrl::StripTrailingSlash ).toUtf8();
-            svn::StatusEntries se = cli.status( ba.data(), recursive() );
-            for( svn::StatusEntries::const_iterator it = se.begin(); it != se.end() ; ++it )
-            {
+            const svn::StatusEntries se = cli.status(ba.data(), recursive());
+            for (auto& statusEntry : se) {
                 KDevelop::VcsStatusInfo info;
-                info.setUrl( QUrl::fromLocalFile( QString::fromUtf8( (*it).path() ) ) );
-                info.setState( getState( *it ) );
+                info.setUrl(QUrl::fromLocalFile(QString::fromUtf8(statusEntry.path())));
+                info.setState(getState(statusEntry));
                 emit gotNewStatus( info );
             }
         }catch( const svn::ClientException& ce )
@@ -165,9 +164,8 @@ void SvnStatusJob::setRecursive( bool recursive )
 void SvnStatusJob::addToStats( const KDevelop::VcsStatusInfo& info )
 {
     //qCDebug(PLUGIN_SVN) << "new status info:" << info.url() << info.state();
-    if( !m_stats.contains( qVariantFromValue( info ) ) )
-    {
-        m_stats << qVariantFromValue( info );
+    if (!m_stats.contains(QVariant::fromValue(info))) {
+        m_stats << QVariant::fromValue(info);
         emit resultsReady( this );
     }else
     {

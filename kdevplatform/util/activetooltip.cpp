@@ -29,6 +29,7 @@
 #include <QPalette>
 #include <QPoint>
 #include <QPointer>
+#include <QScreen>
 #include <QStyleOption>
 #include <QStylePainter>
 
@@ -104,7 +105,16 @@ void ActiveToolTipManager::doVisibility()
 
     if (!fullGeometry.isEmpty()) {
         QRect oldFullGeometry = fullGeometry;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+        const auto *screen = QGuiApplication::screenAt(fullGeometry.topLeft());
+        if (!screen) {
+            screen = qApp->primaryScreen();
+            qWarning() << "failed to find screen:" << fullGeometry << "fallback primary geometry:" << screen->geometry();
+        }
+        QRect screenGeometry = screen->geometry();
+#else
         QRect screenGeometry = QApplication::desktop()->screenGeometry(fullGeometry.topLeft());
+#endif
         if (fullGeometry.bottom() > screenGeometry.bottom()) {
             //Move up, avoiding the mouse-cursor
             fullGeometry.moveBottom(fullGeometry.top() - 10);
@@ -129,10 +139,12 @@ void ActiveToolTipManager::doVisibility()
 
         QPoint offset = fullGeometry.topLeft() - oldFullGeometry.topLeft();
         if (!offset.isNull()) {
-            for (auto it = registeredToolTips.constBegin(); it != registeredToolTips.constEnd(); ++it)
-                if (it->first) {
-                    it->first.data()->move(it->first.data()->pos() + offset);
+            for (auto& toolTipData : qAsConst(registeredToolTips)) {
+                auto& toolTip = toolTipData.first;
+                if (toolTip) {
+                    toolTip->move(toolTip->pos() + offset);
                 }
+            }
         }
     }
 

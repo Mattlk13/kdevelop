@@ -26,6 +26,7 @@
 // Qt
 #include <QTest>
 #include <QSignalSpy>
+#include <QStandardPaths>
 
 Q_DECLARE_METATYPE(KDevMI::MI::CommandFlags)
 
@@ -41,6 +42,11 @@ TestDummyCommand::TestDummyCommand(KDevMI::MI::CommandType type, const QString& 
                                    KDevMI::MI::CommandFlags flags)
     : KDevMI::MI::MICommand(type, args, flags)
 {
+}
+
+void TestMICommandQueue::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
 }
 
 void TestMICommandQueue::testConstructor()
@@ -97,10 +103,10 @@ void TestMICommandQueue::addAndTake()
 
     KDevMI::MI::CommandQueue commandQueue;
 
-    auto* command = new TestDummyCommand(KDevMI::MI::NonMI, QString(), flags);
+    auto command = std::make_unique<TestDummyCommand>(KDevMI::MI::NonMI, QString(), flags);
 
     // add
-    commandQueue.enqueue(command);
+    commandQueue.enqueue(command.get());
     // check
     QVERIFY(command->token() != 0);
     QCOMPARE(commandQueue.count(), 1);
@@ -110,7 +116,7 @@ void TestMICommandQueue::addAndTake()
     // take
     auto* nextCommand = commandQueue.nextCommand();
     // check
-    QCOMPARE(nextCommand, command);
+    QCOMPARE(nextCommand, command.get());
     QVERIFY(nextCommand->token() != 0);
     QCOMPARE(commandQueue.count(), 0);
     QCOMPARE(commandQueue.isEmpty(), true);

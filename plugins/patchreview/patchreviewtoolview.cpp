@@ -34,13 +34,14 @@
 #include <sublime/view.h>
 #include <sublime/document.h>
 #include <sublime/mainwindow.h>
+#include <sublime/message.h>
 
 #include <QFileInfo>
 #include <QMenu>
 #include <QJsonObject>
 #include <QJsonArray>
 
-#include <KMessageBox>
+#include <kcoreaddons_version.h>
 #include <KLocalizedString>
 #include <KTextEditor/Document>
 #include <KTextEditor/View>
@@ -221,13 +222,16 @@ void PatchReviewToolView::showEditDialog() {
 
 #ifdef WITH_PURPOSE
     m_exportMenu = new Purpose::Menu(this);
-    connect(m_exportMenu, &Purpose::Menu::finished, this, [](const QJsonObject &output, int error, const QString &message) {
+    connect(m_exportMenu, &Purpose::Menu::finished, this, [](const QJsonObject &output, int error, const QString &errorMessage) {
+        Sublime::Message* message;
         if (error==0) {
-            KMessageBox::information(nullptr, i18n("<qt>You can find the new request at:<br /><a href='%1'>%1</a> </qt>", output[QLatin1String("url")].toString()),
-                                    QString(), QString(), KMessageBox::AllowLink);
+            const QString messageText = i18n("<qt>You can find the new request at:<br /><a href='%1'>%1</a> </qt>", output[QLatin1String("url")].toString());
+            message = new Sublime::Message(messageText, Sublime::Message::Information);
         } else {
-            QMessageBox::warning(nullptr, i18n("Error exporting"), i18n("Couldn't export the patch.\n%1", message));
+            const QString messageText = i18n("Couldn't export the patch.\n%1", errorMessage);
+            message = new Sublime::Message(messageText, Sublime::Message::Error);
         }
+        ICore::self()->uiController()->postMessage(message);
     });
     // set the model input parameters to avoid terminal warnings
     m_exportMenu->model()->setInputData(QJsonObject {
@@ -246,18 +250,18 @@ void PatchReviewToolView::showEditDialog() {
     connect( m_editPatch.nextFile, &QToolButton::clicked, this, &PatchReviewToolView::nextFile );
     connect( m_editPatch.filesList, &QTreeView::activated , this, &PatchReviewToolView::fileDoubleClicked );
 
-    connect( m_editPatch.cancelReview, &QPushButton::clicked, m_plugin, &PatchReviewPlugin::cancelReview );
+    connect( m_editPatch.cancelReview, &QToolButton::clicked, m_plugin, &PatchReviewPlugin::cancelReview );
     //connect( m_editPatch.cancelButton, SIGNAL(pressed()), this, SLOT(slotEditCancel()) );
 
     //connect( this, SIGNAL(finished(int)), this, SLOT(slotEditDialogFinished(int)) );
 
-    connect( m_editPatch.updateButton, &QPushButton::clicked, m_plugin, &PatchReviewPlugin::forceUpdate );
+    connect( m_editPatch.updateButton, &QToolButton::clicked, m_plugin, &PatchReviewPlugin::forceUpdate );
 
-    connect( m_editPatch.testsButton, &QPushButton::clicked, this, &PatchReviewToolView::runTests );
+    connect( m_editPatch.testsButton, &QToolButton::clicked, this, &PatchReviewToolView::runTests );
 
-    m_selectAllAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-select-all")), i18n("Select All"), this );
+    m_selectAllAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-select-all")), i18nc("@action", "Select All"), this );
     connect( m_selectAllAction, &QAction::triggered, this, &PatchReviewToolView::selectAll );
-    m_deselectAllAction = new QAction( i18n("Deselect All"), this );
+    m_deselectAllAction = new QAction( i18nc("@action", "Deselect All"), this );
     connect( m_deselectAllAction, &QAction::triggered, this, &PatchReviewToolView::deselectAll );
 }
 
@@ -308,7 +312,7 @@ void PatchReviewToolView::seekFile(bool forwards)
 {
     if(!m_plugin->patch())
         return;
-    QList<QUrl> checkedUrls = m_fileModel->checkedUrls();
+    const QList<QUrl> checkedUrls = m_fileModel->checkedUrls();
     QList<QUrl> allUrls = m_fileModel->urls();
     IDocument* current = ICore::self()->documentController()->activeDocument();
     if(!current || checkedUrls.empty())
@@ -332,7 +336,11 @@ void PatchReviewToolView::seekFile(bool forwards)
     }
     else
     {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+        QSet<QUrl> checkedUrlsSet(checkedUrls.begin(), checkedUrls.end());
+#else
         QSet<QUrl> checkedUrlsSet( checkedUrls.toSet() );
+#endif
         for(int offset = 1; offset < allUrls.size(); ++offset)
         {
             int pos;
@@ -486,14 +494,13 @@ void PatchReviewToolView::kompareModelChanged() {
     const Diff2::DiffModelList* models = m_plugin->modelList()->models();
     if( models )
     {
-        Diff2::DiffModelList::const_iterator it = models->constBegin();
-        for(; it != models->constEnd(); ++it ) {
-            Diff2::DifferenceList * diffs = ( *it )->differences();
+        for (auto* model : *models) {
+            const Diff2::DifferenceList* diffs = model->differences();
             int cnt = 0;
             if ( diffs )
                 cnt = diffs->count();
 
-            const QUrl file = m_plugin->urlForFileModel( *it );
+            const QUrl file = m_plugin->urlForFileModel(model);
             if( file.isLocalFile() && !QFileInfo( file.toLocalFile() ).isReadable() )
                 continue;
 
@@ -564,11 +571,15 @@ void PatchReviewToolView::runTests()
 
     auto* job = new ProjectTestJob(project, this);
     connect(job, &ProjectTestJob::finished, this, &PatchReviewToolView::testJobResult);
-    connect(job, SIGNAL(percent(KJob*,ulong)), this, SLOT(testJobPercent(KJob*,ulong)));
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 80, 0)
+    connect(job, QOverload<KJob*, unsigned long>::of(&KJob::percent), this, &PatchReviewToolView::testJobPercent);
+#else
+    connect(job, &KJob::percentChanged, this, &PatchReviewToolView::testJobPercent);
+#endif
     ICore::self()->runController()->registerJob(job);
 }
 
-void PatchReviewToolView::testJobPercent(KJob* job, ulong percent)
+void PatchReviewToolView::testJobPercent(KJob* job, unsigned long percent)
 {
     Q_UNUSED(job);
     m_editPatch.testProgressBar->setValue(percent);

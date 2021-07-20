@@ -23,6 +23,7 @@
 #include <QDesktopWidget>
 #include <QMenuBar>
 #include <QStatusBar>
+#include <QScreen>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
@@ -350,8 +351,10 @@ void MainWindow::loadSettings()
     }
 
     const bool tabBarHidden = !Container::configTabBarVisible();
+    const bool closeButtonsOnTabs = Container::configCloseButtonsOnTabs();
     for (Container *container : qAsConst(d->viewContainers)) {
         container->setTabBarHidden(tabBarHidden);
+        container->setCloseButtonsOnTabs(closeButtonsOnTabs);
     }
 
     hu.stop();
@@ -375,14 +378,22 @@ bool MainWindow::queryClose()
     return KParts::MainWindow::queryClose();
 }
 
+void MainWindow::postMessage(Message* message)
+{
+    Q_D(MainWindow);
+
+    d->postMessage(message);
+}
+
 QString MainWindow::screenKey() const
 {
     const int scnum = QApplication::desktop()->screenNumber(parentWidget());
-    QRect desk = QApplication::desktop()->screenGeometry(scnum);
+    QList<QScreen *> screens = QApplication::screens();
+    QRect desk = screens[scnum]->geometry();
 
     // if the desktop is virtual then use virtual screen size
-    if (QApplication::desktop()->isVirtualDesktop())
-        desk = QApplication::desktop()->screenGeometry(QApplication::desktop()->screen());
+    if (QGuiApplication::primaryScreen()->virtualSiblings().size() > 1)
+        desk = QGuiApplication::primaryScreen()->virtualGeometry();
 
     return QStringLiteral("Desktop %1 %2")
         .arg(desk.width()).arg(desk.height());

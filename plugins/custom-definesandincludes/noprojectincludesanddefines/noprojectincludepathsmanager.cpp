@@ -36,12 +36,12 @@
 
 namespace
 {
-const QString includePathsFile = QStringLiteral(".kdev_include_paths");
+inline QString includePathsFile() { return QStringLiteral(".kdev_include_paths"); }
 
 
 bool removeSettings(const QString& storageDirectory)
 {
-    QString file = storageDirectory + QDir::separator() + includePathsFile;
+    const QString file = storageDirectory + QDir::separator() + includePathsFile();
     return QFile::remove(file);
 }
 
@@ -60,7 +60,7 @@ QString NoProjectIncludePathsManager::findConfigurationFile(const QString& path)
 {
     QDir dir(path);
     while (dir.exists()) {
-        QFileInfo customIncludePathsFile(dir, includePathsFile);
+        QFileInfo customIncludePathsFile(dir, includePathsFile());
         if (customIncludePathsFile.exists()) {
             return customIncludePathsFile.absoluteFilePath();
         }
@@ -86,10 +86,16 @@ std::pair<Path::List, QHash<QString, QString>>
 
     QFile f(pathToFile);
     if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        auto lines = QString::fromLocal8Bit(f.readAll()).split(QLatin1Char('\n'), QString::SkipEmptyParts);
+        const QString fileContent = QString::fromLocal8Bit(f.readAll());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        const auto lines = fileContent.splitRef(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
+        const auto lines = fileContent.splitRef(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
         QFileInfo dir(pathToFile);
+        const QChar dirSeparator = QDir::separator();
         for (const auto& line : lines) {
-            auto textLine = line.trimmed();
+            const auto textLine = line.trimmed().toString();
             if (textLine.startsWith(QLatin1String("#define "))) {
                 QStringList items = textLine.split(QLatin1Char(' '));
                 if (items.length() > 1)
@@ -103,7 +109,7 @@ std::pair<Path::List, QHash<QString, QString>>
             if (!textLine.isEmpty()) {
                 QFileInfo pathInfo(textLine);
                 if (pathInfo.isRelative()) {
-                    includes << Path(dir.canonicalPath() + QDir::separator() + textLine);
+                    includes << Path(dir.canonicalPath() + dirSeparator + textLine);
                 } else {
                     includes << Path(textLine);
                 }
@@ -117,12 +123,12 @@ std::pair<Path::List, QHash<QString, QString>>
 bool NoProjectIncludePathsManager::writeIncludePaths(const QString& storageDirectory, const QStringList& includePaths)
 {
     QDir dir(storageDirectory);
-    QFileInfo customIncludePaths(dir, includePathsFile);
+    QFileInfo customIncludePaths(dir, includePathsFile());
     QFile f(customIncludePaths.filePath());
     if (f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
         QTextStream out(&f);
         for (const auto& customPath : includePaths) {
-            out << customPath << endl;
+            out << customPath << QLatin1Char('\n');
         }
         if (includePaths.isEmpty()) {
             removeSettings(storageDirectory);

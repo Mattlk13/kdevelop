@@ -2,6 +2,7 @@
  * This file is part of KDevelop
  *
  * Copyright 2009 David Nolden <david.nolden.kdevelop@art-master.de>
+ * Copyright 2020 Igor Kushnir <igorkuo@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU Library General Public License as
@@ -20,118 +21,73 @@
  */
 
 #include "referencecounting.h"
-#include <QMutex>
-#include <QMap>
+#include "itemrepository.h"
+
 #include <QAtomicInt>
-#include "serialization/itemrepository.h"
+
+#include <algorithm>
 
 namespace KDevelop {
-bool doReferenceCounting = false;
-
-//Protects the reference-counting data through a spin-lock
-QMutex refCountingLock;
-
-QMap<void*, QPair<uint, uint>>* refCountingRanges = new QMap<void*, QPair<uint, uint>>();     //ptr, <size, count>, leaked intentionally!
-bool refCountingHasAdditionalRanges = false;   //Whether 'refCountingRanges' is non-empty
-
-//Speedup: In most cases there is only exactly one reference-counted range active,
-//so the first reference-counting range can be marked here.
-void* refCountingFirstRangeStart = nullptr;
-QPair<uint, uint> refCountingFirstRangeExtent = qMakePair(0u, 0u);
+void DUChainReferenceCounting::Interval::assign(Pointer newStart, unsigned newSize) noexcept
+{
+    start = newStart;
+    size = newSize;
+    refCount = 1;
 }
 
-void KDevelop::disableDUChainReferenceCounting(void* start)
+auto DUChainReferenceCounting::findInterval(Pointer start, unsigned size) noexcept -> Interval*
 {
-    QMutexLocker lock(&refCountingLock);
-
-    if (refCountingFirstRangeStart && (( char* )refCountingFirstRangeStart) <= ( char* )start &&
-        ( char* )start < (( char* )refCountingFirstRangeStart) + refCountingFirstRangeExtent.first) {
-        Q_ASSERT(refCountingFirstRangeExtent.second > 0);
-        --refCountingFirstRangeExtent.second;
-        if (refCountingFirstRangeExtent.second == 0) {
-            refCountingFirstRangeExtent = qMakePair<uint, uint>(0, 0);
-            refCountingFirstRangeStart = nullptr;
-        }
-    } else if (refCountingHasAdditionalRanges) {
-        QMap<void*, QPair<uint, uint>>::iterator it = refCountingRanges->upperBound(start);
-        if (it != refCountingRanges->begin()) {
-            --it;
-            if ((( char* )it.key()) <= ( char* )start && ( char* )start < (( char* )it.key()) + it.value().first) {
-                //Contained
-            } else {
-                Q_ASSERT(0);
-            }
-        }
-        Q_ASSERT(it.value().second > 0);
-        --it.value().second;
-        if (it.value().second == 0)
-            refCountingRanges->erase(it);
-        refCountingHasAdditionalRanges = !refCountingRanges->isEmpty();
-    } else {
-        Q_ASSERT(0);
-    }
-
-    if (!refCountingFirstRangeStart && !refCountingHasAdditionalRanges)
-        doReferenceCounting = false;
+    return std::find_if(intervals, intervals + count, [start, size](Interval interval) {
+        return interval.start == start && interval.size == size;
+    });
 }
 
-void KDevelop::enableDUChainReferenceCounting(void* start, unsigned int size)
+void DUChainReferenceCounting::enable(Pointer start, unsigned size)
 {
-    QMutexLocker lock(&refCountingLock);
-
-    doReferenceCounting = true;
-
-    if (refCountingFirstRangeStart && (( char* )refCountingFirstRangeStart) <= ( char* )start &&
-        ( char* )start < (( char* )refCountingFirstRangeStart) + refCountingFirstRangeExtent.first) {
-        //Increase the count for the first range
-        ++refCountingFirstRangeExtent.second;
-    } else if (refCountingHasAdditionalRanges || refCountingFirstRangeStart) {
-        //There is additional ranges in the ranges-structure. Add any new ranges there as well.
-        QMap<void*, QPair<uint, uint>>::iterator it = refCountingRanges->upperBound(start);
-        if (it != refCountingRanges->begin()) {
-            --it;
-            if ((( char* )it.key()) <= ( char* )start && ( char* )start < (( char* )it.key()) + it.value().first) {
-                //Contained, count up
-            } else {
-                it = refCountingRanges->end(); //Insert own item
-            }
-        } else if (it != refCountingRanges->end() && it.key() > start) {
-            //The item is behind
-            it = refCountingRanges->end();
+    auto* const interval = findInterval(start, size);
+    if (interval == intervals + count) {
+        if (count == maxIntervalCount) {
+            qFatal("DUChainReferenceCounting interval count limit of %zu exceeded!", count);
         }
-
-        if (it == refCountingRanges->end()) {
-            QMap<void*, QPair<uint, uint>>::iterator inserted = refCountingRanges->insert(start, qMakePair(size, 1u));
-            //Merge following ranges
-            QMap<void*, QPair<uint, uint>>::iterator it = inserted;
-            ++it;
-            while (it != refCountingRanges->end() && it.key() < (( char* )start) + size) {
-                inserted.value().second += it.value().second; //Accumulate count
-                if ((( char* )start) + size < (( char* )inserted.key()) + it.value().first) {
-                    //Update end position
-                    inserted.value().first = ((( char* )inserted.key()) + it.value().first) - (( char* )start);
-                }
-
-                it = refCountingRanges->erase(it);
-            }
-        } else {
-            ++it.value().second;
-            if (it.value().first < size)
-                it.value().first = size;
-        }
-
-        refCountingHasAdditionalRanges = true;
+        // "push_back"
+        Q_ASSERT(count < maxIntervalCount);
+        interval->assign(start, size);
+        ++count;
     } else {
-        refCountingFirstRangeStart = start;
-        refCountingFirstRangeExtent.first = size;
-        refCountingFirstRangeExtent.second = 1;
+        Q_ASSERT(interval < intervals + count);
+        ++interval->refCount;
     }
 
-    Q_ASSERT(refCountingHasAdditionalRanges == (refCountingRanges && !refCountingRanges->isEmpty()));
 #ifdef TEST_REFERENCE_COUNTING
-    Q_ASSERT(shouldDoDUChainReferenceCounting(start));
-    Q_ASSERT(shouldDoDUChainReferenceCounting((( char* )start + (size - 1))));
+    Q_ASSERT(shouldDo(start));
+    Q_ASSERT(shouldDo(start + size - 1));
 #endif
+}
+
+void DUChainReferenceCounting::disable(Pointer start, unsigned size)
+{
+    auto* const interval = findInterval(start, size);
+    Q_ASSERT(interval < intervals + count);
+
+    if (interval->refCount == 1) {
+        // "erase" interval
+        std::move(interval + 1, intervals + count, interval);
+        --count;
+    } else {
+        Q_ASSERT(interval->refCount > 1);
+        --interval->refCount;
+    }
+}
+
+void enableDUChainReferenceCounting(const void* start, unsigned size)
+{
+    DUChainReferenceCounting::instance().enable(reinterpret_cast<DUChainReferenceCounting::Pointer>(start), size);
+}
+
+void disableDUChainReferenceCounting(const void* start, unsigned size)
+{
+    DUChainReferenceCounting::instance().disable(reinterpret_cast<DUChainReferenceCounting::Pointer>(start), size);
+}
 }
 
 #ifdef TEST_REFERENCE_COUNTING

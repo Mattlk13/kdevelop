@@ -34,10 +34,11 @@
 #include <QFileInfo>
 #include <QDir>
 #include <QTemporaryDir>
+#include <QStandardPaths>
 
 #include <algorithm>
 
-QTEST_MAIN(TestQMakeFile)
+QTEST_GUILESS_MAIN(TestQMakeFile)
 
 using DefineHash = QHash<QString, QString>;
 
@@ -61,19 +62,19 @@ char* toString(const QStringList& list)
 template <>
 char* toString(const QMakeFile::VariableMap& variables)
 {
-    QByteArray ba = "VariableMap(";
+    QByteArray ba;
+    QTextStream out(&ba);
+    out << "VariableMap(";
     QMakeFile::VariableMap::const_iterator it = variables.constBegin();
     while (it != variables.constEnd()) {
-        ba += "[";
-        ba += it.key().toLocal8Bit();
-        ba += "] = ";
-        ba += toString(it.value());
+        out << "[" << it.key() << "] = " << it.value().join(", ");
         ++it;
         if (it != variables.constEnd()) {
-            ba += ", ";
+            out << ", ";
         }
     }
-    ba += ")";
+    out << ")";
+    out.flush();
     return qstrdup(ba.data());
 }
 }
@@ -88,11 +89,18 @@ QHash<QString, QString> setDefaultMKSpec(QMakeProjectFile& file)
         return {};
     }
 
-    QMakeMkSpecs* mkspecs = new QMakeMkSpecs(specFile, qmvars);
-    mkspecs->read();
-    file.setMkSpecs(mkspecs);
+    static QMakeMkSpecs mkspecs(specFile, qmvars);
+    if (!mkspecs.ast())
+        mkspecs.read();
+
+    file.setMkSpecs(&mkspecs);
 
     return qmvars;
+}
+
+void TestQMakeFile::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
 }
 
 void TestQMakeFile::varResolution()
@@ -104,7 +112,7 @@ void TestQMakeFile::varResolution()
     tmpfile.open();
     QTextStream stream(&tmpfile);
     stream << fileContents;
-    stream << flush;
+    stream.flush();
     tmpfile.close();
 
     QMakeFile file(tmpfile.fileName());
@@ -139,8 +147,9 @@ void TestQMakeFile::varResolution_data()
     {
         QMakeFile::VariableMap variables;
 
-        variables[QStringLiteral("VAR1")] = QStringList() << QProcessEnvironment::systemEnvironment().value(QStringLiteral("USER"));
-        QTest::newRow("qmakeshell") << "VAR1 = $$(USER)\n" << variables;
+        qputenv("BLA", "BLUB");
+        variables[QStringLiteral("VAR1")] = QStringList { QStringLiteral("BLUB") };
+        QTest::newRow("qmakeshell") << "VAR1 = $$(BLA)\n" << variables;
     }
     {
         QMakeFile::VariableMap variables;
@@ -184,7 +193,7 @@ void TestQMakeFile::libTarget()
     tmpfile.open();
     QTextStream stream(&tmpfile);
     stream << "TARGET = " << target << "\nTEMPLATE = lib\n";
-    stream << flush;
+    stream.flush();
     tmpfile.close();
 
     QMakeProjectFile file(tmpfile.fileName());
@@ -220,7 +229,7 @@ void TestQMakeFile::defines()
     tmpfile.open();
     QTextStream stream(&tmpfile);
     stream << fileContents;
-    stream << flush;
+    stream.flush();
     tmpfile.close();
 
     QMakeProjectFile file(tmpfile.fileName());

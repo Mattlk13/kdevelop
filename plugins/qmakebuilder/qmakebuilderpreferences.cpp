@@ -32,7 +32,6 @@
 #include "qmakebuilddirchooser.h"
 #include "qmakebuilddirchooserdialog.h"
 #include "qmakeconfig.h"
-#include "qmakebuilderconfig.h"
 #include <debug.h>
 
 #include <interfaces/iproject.h>
@@ -92,7 +91,7 @@ void QMakeBuilderPreferences::reset()
 
 QString QMakeBuilderPreferences::name() const
 {
-    return i18n("QMake");
+    return i18nc("@title:tab", "QMake");
 }
 
 void QMakeBuilderPreferences::apply()

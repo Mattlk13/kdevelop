@@ -34,7 +34,7 @@ namespace KDevelop
     class Path;
 }
 
-struct Test;
+struct CMakeTest;
 class ICMakeDocumentation;
 class CMakeCacheModel;
 
@@ -116,6 +116,11 @@ namespace CMake
     KDEVCMAKECOMMON_EXPORT KDevelop::Path currentCMakeExecutable(KDevelop::IProject* project, int builddir = -1);
 
     /**
+     * @returns the version string reported by the given CMake executable
+     */
+    KDEVCMAKECOMMON_EXPORT QString cmakeExecutableVersion(const QString& cmakeExecutable);
+
+    /**
      * @returns the current install dir for the given project or an empty string if none has been defined
      * (in that case, whatever default CMake sets for the platform will be used.)
      */
@@ -192,12 +197,6 @@ namespace CMake
     KDEVCMAKECOMMON_EXPORT QStringList allBuildDirs(KDevelop::IProject* project);
 
     /**
-     * Attempts to migrate the CMake configuration to per-builddir format.
-     * Silently returns if the migration has already been performed.
-     */
-    KDEVCMAKECOMMON_EXPORT void attemptMigrate( KDevelop::IProject* project );
-
-    /**
      * Attempts to update CMake configuration keys from the cache data (CMakeCache.txt)
      *
      * The model is created based on build directory path for the given index @p buildDirectory
@@ -262,7 +261,7 @@ namespace CMake
 
     KDEVCMAKECOMMON_EXPORT QString defaultGenerator();
 
-    KDEVCMAKECOMMON_EXPORT QVector<Test> importTestSuites(const KDevelop::Path &buildDir);
+    KDEVCMAKECOMMON_EXPORT QVector<CMakeTest> importTestSuites(const KDevelop::Path &buildDir);
 }
 
 #endif

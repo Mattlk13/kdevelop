@@ -46,11 +46,11 @@ static QString accessPolicyToString(Declaration::AccessPolicy accessPolicy)
     switch (accessPolicy) {
     case Declaration::DefaultAccess:
     case Declaration::Public:
-        return i18n("Public");
+        return i18nc("@item access policy", "Public");
     case Declaration::Protected:
-        return i18n("Protected");
+        return i18nc("@item access policy", "Protected");
     case Declaration::Private:
-        return i18n("Private");
+        return i18nc("@item access policy", "Private");
     }
     Q_UNREACHABLE();
 }
@@ -60,17 +60,17 @@ static QString functionPropertiesToString(ClassFunctionDeclaration* decl)
     Q_ASSERT(decl);
     QStringList properties;
     if (decl->isConstructor()) {
-        properties << i18n("Constructor");
+        properties << i18nc("@item function property", "Constructor");
     } else if (decl->isDestructor()) {
-        properties << i18n("Destructor");
+        properties << i18nc("@item function property", "Destructor");
     } else if (decl->isSignal()) {
-        properties << i18n("Signal");
+        properties << i18nc("@item function property", "Signal");
     } else if (decl->isSlot()) {
-        properties << i18n("Slot");
+        properties << i18nc("@item function property", "Slot");
     } else if (decl->isAbstract()) {
-        properties << i18n("Abstract function");
+        properties << i18nc("@item function property", "Abstract function");
     }
-    return properties.join(QStringLiteral(", "));
+    return properties.join(QLatin1String(", "));
 }
 
 struct KDevelop::OverridesPagePrivate
@@ -138,7 +138,7 @@ void OverridesPage::addBaseClasses(const QList<DeclarationPointer>& directBases,
     DUChainReadLocker lock;
 
     for (const DeclarationPointer& baseClass : allBases) {
-        QTreeWidgetItem* classItem = new QTreeWidgetItem(overrideTree(), QStringList() << baseClass->qualifiedIdentifier().toString());
+        auto* classItem = new QTreeWidgetItem(overrideTree(), QStringList() << baseClass->qualifiedIdentifier().toString());
         classItem->setIcon(ClassOrFunctionColumn, DUChainUtils::iconForDeclaration(baseClass.data()));
 
         DUContext* context = baseClass->internalContext();
@@ -205,7 +205,7 @@ void OverridesPage::addPotentialOverride(QTreeWidgetItem* classItem, const Decla
 
     d->overriddenFunctions.insert(childDeclaration->identifier(), childDeclaration);
 
-    QTreeWidgetItem* overrideItem = new QTreeWidgetItem(classItem, QStringList() << childDeclaration->toString());
+    auto* overrideItem = new QTreeWidgetItem(classItem, QStringList() << childDeclaration->toString());
     overrideItem->setFlags( Qt::ItemFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable) );
     overrideItem->setCheckState(ClassOrFunctionColumn, d->chosenOverrides.contains(childDeclaration) ? Qt::Checked : Qt::Unchecked);
     overrideItem->setIcon(ClassOrFunctionColumn, DUChainUtils::iconForDeclaration(childDeclaration.data()));
@@ -256,7 +256,7 @@ void OverridesPage::addCustomDeclarations (const QString& category, const QList<
     qCDebug(PLUGIN_FILETEMPLATES) << category << declarations.size();
     DUChainReadLocker lock(DUChain::lock());
 
-    QTreeWidgetItem* item = new QTreeWidgetItem(overrideTree(), QStringList() << category);
+    auto* item = new QTreeWidgetItem(overrideTree(), QStringList() << category);
     for (const DeclarationPointer& declaration : declarations)
     {
         addPotentialOverride(item, declaration);

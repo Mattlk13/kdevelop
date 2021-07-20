@@ -40,6 +40,7 @@
 #include <util/kdevstringhandler.h>
 
 #include "problemhighlighter.h"
+#include "probleminlinenoteprovider.h"
 #include "problemreportermodel.h"
 #include "language/assistant/staticassistantsmanager.h"
 #include <interfaces/context.h>
@@ -72,7 +73,10 @@ public:
         return v;
     }
 
-    Qt::DockWidgetArea defaultPosition() override { return Qt::BottomDockWidgetArea; }
+    Qt::DockWidgetArea defaultPosition() const override
+    {
+        return Qt::BottomDockWidgetArea;
+    }
 
     QString id() const override { return QStringLiteral("org.kdevelop.ProblemReporterView"); }
 };
@@ -84,7 +88,7 @@ ProblemReporterPlugin::ProblemReporterPlugin(QObject* parent, const QVariantList
 {
     KDevelop::ProblemModelSet* pms = core()->languageController()->problemModelSet();
     pms->addModel(QStringLiteral("Parser"), i18n("Parser"), m_model);
-    core()->uiController()->addToolView(i18n("Problems"), m_factory);
+    core()->uiController()->addToolView(i18nc("@title:window", "Problems"), m_factory);
     setXMLFile(QStringLiteral("kdevproblemreporter.rc"));
 
     connect(ICore::self()->documentController(), &IDocumentController::documentClosed, this,
@@ -104,6 +108,7 @@ ProblemReporterPlugin::ProblemReporterPlugin(QObject* parent, const QVariantList
 ProblemReporterPlugin::~ProblemReporterPlugin()
 {
     qDeleteAll(m_highlighters);
+    qDeleteAll(m_inlineNoteProviders);
 }
 
 ProblemReporterModel* ProblemReporterPlugin::model() const
@@ -126,14 +131,17 @@ void ProblemReporterPlugin::documentClosed(IDocument* doc)
 
     IndexedString url(doc->url());
     delete m_highlighters.take(url);
+    delete m_inlineNoteProviders.take(url);
     m_reHighlightNeeded.remove(url);
 }
 
 void ProblemReporterPlugin::textDocumentCreated(KDevelop::IDocument* document)
 {
     Q_ASSERT(document->textDocument());
-    m_highlighters.insert(IndexedString(document->url()), new ProblemHighlighter(document->textDocument()));
-    DUChain::self()->updateContextForUrl(IndexedString(document->url()),
+    IndexedString documentUrl(document->url());
+    m_highlighters.insert(documentUrl, new ProblemHighlighter(document->textDocument()));
+    m_inlineNoteProviders.insert(documentUrl, new ProblemInlineNoteProvider(document->textDocument()));
+    DUChain::self()->updateContextForUrl(documentUrl,
                                          KDevelop::TopDUContext::AllDeclarationsContextsAndUses, this);
 }
 
@@ -169,11 +177,12 @@ void ProblemReporterPlugin::updateHighlight(const KDevelop::IndexedString& url)
     }
 
     ph->setProblems(documentProblems);
+    m_inlineNoteProviders.value(url)->setProblems(documentProblems);
 }
 
 void ProblemReporterPlugin::showModel(const QString& id)
 {
-    auto w = qobject_cast<ProblemsView*>(core()->uiController()->findToolView(i18n("Problems"), m_factory));
+    auto w = qobject_cast<ProblemsView*>(core()->uiController()->findToolView(i18nc("@title:window", "Problems"), m_factory));
     if (w)
       w->showModel(id);
 }
@@ -214,9 +223,9 @@ KDevelop::ContextMenuExtension ProblemReporterPlugin::contextMenuExtension(KDeve
         if (!actions.isEmpty()) {
             QString text;
             if (title.isEmpty())
-                text = i18n("Solve Problem");
+                text = i18nc("@action:inmenu", "Solve Problem");
             else {
-                text = i18n("Solve: %1", KDevelop::htmlToPlainText(title));
+                text = i18nc("@action:inmenu", "Solve: %1", KDevelop::htmlToPlainText(title));
             }
 
             auto* menu = new QMenu(text, parent);

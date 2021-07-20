@@ -53,6 +53,7 @@ public:
      , shownToolViews(p.shownToolViews)
      , iconName(p.iconName)
      , workingSet(p.workingSet)
+     , workingSetPersists(p.workingSetPersists)
      , m_actions(p.m_actions)
     {
     }
@@ -95,6 +96,7 @@ public:
     QMap<Sublime::Position, QStringList> shownToolViews;
     QString iconName;
     QString workingSet;
+    bool workingSetPersists = true;
     QPointer<View> activeView;
     QList<QAction*> m_actions;
 };
@@ -113,8 +115,6 @@ Area::Area(Controller *controller, const QString &name, const QString &title)
     d->title = title;
     d->controller = controller;
     d->iconName = QStringLiteral("kdevelop");
-    d->workingSet.clear();
-    qCDebug(SUBLIME) << "initial working-set:" << d->workingSet;
     initialize();
 }
 
@@ -154,15 +154,17 @@ void Area::initialize()
     // Functor will be called after destructor has run -> capture controller pointer by value
     // otherwise we crash because we access the already freed pointer this->d
     auto controller = d->controller;
-    connect(this, &Area::destroyed, controller,
-            [controller] (QObject* obj) { controller->removeArea(static_cast<Area*>(obj)); });
+    connect(this, &Area::destroyed, controller, [this, controller](QObject* obj) {
+        Q_ASSERT(obj == this);
+        controller->removeArea(this);
+    });
 }
 
 Area::~Area() = default;
 
-View* Area::activeView()
+View* Area::activeView() const
 {
-    Q_D(Area);
+    Q_D(const Area);
 
     return d->activeView.data();
 }
@@ -348,7 +350,6 @@ void Area::save(KConfigGroup& group) const
     group.writeEntry("view on right", shownToolViews(Sublime::Right));
     group.writeEntry("view on top", shownToolViews(Sublime::Top));
     group.writeEntry("view on bottom", shownToolViews(Sublime::Bottom));
-    group.writeEntry("working set", d->workingSet);
 }
 
 void Area::load(const KConfigGroup& group)
@@ -379,7 +380,6 @@ void Area::load(const KConfigGroup& group)
     setShownToolViews(Sublime::Top, group.readEntry("view on top", QStringList()));
     setShownToolViews(Sublime::Bottom,
                      group.readEntry("view on bottom", QStringList()));
-    setWorkingSet(group.readEntry("working set", d->workingSet));
 }
 
 bool Area::wantToolView(const QString& id)
@@ -449,17 +449,27 @@ QString Area::workingSet() const
     return d->workingSet;
 }
 
+bool Area::workingSetPersistent() const
+{
+    Q_D(const Area);
 
-void Area::setWorkingSet(const QString& name)
+    return d->workingSetPersists;
+}
+
+void Area::setWorkingSet(const QString &name, bool persistent, Area *oldArea)
 {
     Q_D(Area);
 
-    if(name != d->workingSet) {
+    oldArea = oldArea ? oldArea : this;
+    if (oldArea != this || name != d->workingSet) {
         qCDebug(SUBLIME) << this << "setting new working-set" << name;
         QString oldName = d->workingSet;
-        emit changingWorkingSet(this, oldName, name);
+        emit changingWorkingSet(this, oldArea, oldName, name);
         d->workingSet = name;
-        emit changedWorkingSet(this, oldName, name);
+        d->workingSetPersists = persistent;
+        emit changedWorkingSet(this, oldArea, oldName, name);
+    } else if (name.isEmpty()) {
+        d->workingSetPersists = persistent;
     }
 }
 

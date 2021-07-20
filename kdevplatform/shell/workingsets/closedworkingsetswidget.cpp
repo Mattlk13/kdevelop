@@ -32,6 +32,9 @@
 #include "workingsettoolbutton.h"
 #include "debug.h"
 
+#include <QHBoxLayout>
+#include <QMenuBar>
+
 using namespace KDevelop;
 
 WorkingSet* workingSet(const QString& id)
@@ -45,8 +48,10 @@ ClosedWorkingSetsWidget::ClosedWorkingSetsWidget( MainWindow* window )
     connect(window, &MainWindow::areaChanged,
             this, &ClosedWorkingSetsWidget::areaChanged);
 
-    m_layout = new QHBoxLayout(this);
-    m_layout->setMargin(0);
+    auto l = new QHBoxLayout(this);
+    setLayout(l);
+    l->setContentsMargins(0, 0, 0, 0);
+    l->setDirection(QBoxLayout::RightToLeft);
 
     if (window->area()) {
         areaChanged(window->area());
@@ -62,12 +67,12 @@ ClosedWorkingSetsWidget::ClosedWorkingSetsWidget( MainWindow* window )
 void ClosedWorkingSetsWidget::areaChanged( Sublime::Area* area )
 {
     if (m_connectedArea) {
-        disconnect(area, &Sublime::Area::changedWorkingSet,
+        disconnect(m_connectedArea, &Sublime::Area::changedWorkingSet,
                    this, &ClosedWorkingSetsWidget::changedWorkingSet);
     }
 
     m_connectedArea = area;
-    connect(m_connectedArea.data(), &Sublime::Area::changedWorkingSet,
+    connect(m_connectedArea, &Sublime::Area::changedWorkingSet,
             this, &ClosedWorkingSetsWidget::changedWorkingSet);
 
     // clear layout
@@ -77,11 +82,13 @@ void ClosedWorkingSetsWidget::areaChanged( Sublime::Area* area )
     // add sets from new area
     const auto allWorkingSets = Core::self()->workingSetControllerInternal()->allWorkingSets();
     for (WorkingSet* set : allWorkingSets) {
-        addWorkingSet(set);
+        if (!set->hasConnectedArea(area) && set->isPersistent()) {
+            addWorkingSet(set);
+        }
     }
 }
 
-void ClosedWorkingSetsWidget::changedWorkingSet( Sublime::Area* area, const QString& from, const QString& to )
+void ClosedWorkingSetsWidget::changedWorkingSet(Sublime::Area *area, Sublime::Area*, const QString &from, const QString &to)
 {
     Q_ASSERT(area == m_connectedArea);
     Q_UNUSED(area);
@@ -100,19 +107,14 @@ void ClosedWorkingSetsWidget::changedWorkingSet( Sublime::Area* area, const QStr
 void ClosedWorkingSetsWidget::removeWorkingSet( WorkingSet* set )
 {
     delete m_buttons.take(set);
-    Q_ASSERT(m_buttons.size() == m_layout->count());
-    setVisible(!m_buttons.isEmpty());
+    Q_ASSERT(m_buttons.size() == layout()->count());
+    // Recalculate menu bar widget sizes after removing a working set button (not done automatically)
+    m_mainWindow->menuBar()->adjustSize();
 }
 
 void ClosedWorkingSetsWidget::addWorkingSet( WorkingSet* set )
 {
     if (m_buttons.contains(set)) {
-        return;
-    }
-
-    // Don't show working-sets that are active in an area belong to this main-window, as those
-    // can be activated directly through the icons in the tabs
-    if (set->hasConnectedAreas(m_mainWindow->areas())) {
         return;
     }
 
@@ -125,8 +127,7 @@ void ClosedWorkingSetsWidget::addWorkingSet( WorkingSet* set )
     auto* button = new WorkingSetToolButton(this, set);
     button->setSizePolicy(QSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored));
 
-    m_layout->addWidget(button);
+    layout()->addWidget(button);
     m_buttons[set] = button;
-    setVisible(!m_buttons.isEmpty());
 }
 

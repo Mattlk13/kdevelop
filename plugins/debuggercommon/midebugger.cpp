@@ -26,6 +26,11 @@
 #include "debuglog.h"
 #include "mi/micommand.h"
 
+#include <interfaces/icore.h>
+#include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
+
+#include <kcoreaddons_version.h>
 #include <KLocalizedString>
 #include <KMessageBox>
 
@@ -33,7 +38,7 @@
 #include <QString>
 #include <QStringList>
 
-#include <signal.h>
+#include <csignal>
 
 #include <memory>
 #include <stdexcept>
@@ -104,7 +109,11 @@ bool MIDebugger::isReady() const
 void MIDebugger::interrupt()
 {
 #ifndef Q_OS_WIN
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 78, 0)
     int pid = m_process->pid();
+#else
+    int pid = m_process->processId();
+#endif
     if (pid != 0) {
         ::kill(pid, SIGINT);
     }
@@ -127,6 +136,16 @@ void MIDebugger::kill()
 
 void MIDebugger::readyReadStandardOutput()
 {
+    auto* const core = KDevelop::ICore::self();
+    if (!core || !core->debugController()) {
+        const auto nullObject = core ? QLatin1String("the debug controller")
+                                     : QLatin1String("the KDevelop core");
+        qCDebug(DEBUGGERCOMMON).nospace().noquote()
+                << "Cannot process standard output without " << nullObject
+                << ". KDevelop must be exiting and " << nullObject << " already destroyed.";
+        return;
+    }
+
     m_process->setReadChannel(QProcess::StandardOutput);
 
     m_buffer += m_process->readAll();
@@ -153,7 +172,11 @@ void MIDebugger::readyReadStandardError()
 void MIDebugger::processLine(const QByteArray& line)
 {
     if (line != "(gdb) ") {
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 78, 0)
         qCDebug(DEBUGGERCOMMON) << "Debugger output (pid =" << m_process->pid() << "): " << line;
+#else
+        qCDebug(DEBUGGERCOMMON) << "Debugger output (pid =" << m_process->processId() << "): " << line;
+#endif
     }
 
     FileSymbol file;
@@ -323,7 +346,7 @@ void MIDebugger::processLine(const QByteArray& line)
             i18n("The exception is: %1\n"
                 "The MI response is: %2", QString::fromUtf8(e.what()),
                 QString::fromLatin1(line)),
-            i18n("Internal debugger error"));
+            i18nc("@title:window", "Internal Debugger Error"));
         emit exited(true, QString::fromUtf8(e.what()));
     }
     #endif
@@ -343,13 +366,13 @@ void MIDebugger::processErrored(QProcess::ProcessError error)
     qCWarning(DEBUGGERCOMMON) << "Debugger ERRORED" << error << m_process->errorString();
     if(error == QProcess::FailedToStart)
     {
-        KMessageBox::information(
-            qApp->activeWindow(),
+        const QString messageText =
             i18n("<b>Could not start debugger.</b>"
                  "<p>Could not run '%1'. "
                  "Make sure that the path name is specified correctly.",
-                 m_debuggerExecutable),
-            i18n("Could not start debugger"));
+                 m_debuggerExecutable);
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        KDevelop::ICore::self()->uiController()->postMessage(message);
 
         emit userCommandOutput(QStringLiteral("Process failed to start\n"));
         emit exited(true, i18n("Process failed to start"));
@@ -362,7 +385,7 @@ void MIDebugger::processErrored(QProcess::ProcessError error)
                  "Because of that the debug session has to be ended.<br>"
                  "Try to reproduce the crash without KDevelop and report a bug.<br>",
                  m_debuggerExecutable),
-            i18n("Debugger crashed"));
+            i18nc("@title:window", "Debugger Crashed"));
 
         emit userCommandOutput(QStringLiteral("Process crashed\n"));
         emit exited(true, i18n("Process crashed"));

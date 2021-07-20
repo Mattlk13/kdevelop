@@ -47,6 +47,8 @@
 #include <language/interfaces/editorcontext.h>
 #include <language/backgroundparser/backgroundparser.h>
 
+#include <util/foregroundlock.h>
+
 #include "core.h"
 #include "mainwindow.h"
 #include "uicontroller.h"
@@ -70,9 +72,7 @@ static void selectAndReveal( KTextEditor::View* view, const KTextEditor::Range& 
     Q_ASSERT(view);
     if (range.isValid()) {
         view->setCursorPosition(range.start());
-        if (!range.isEmpty()) {
-            view->setSelection(range);
-        }
+        view->setSelection(range);
     }
 }
 
@@ -117,7 +117,7 @@ public:
             }
 
         q->notifyStateChanged();
-        Core::self()->uiControllerInternal()->setStatusIcon(q, statusIcon);
+        q->setStatusIcon(statusIcon);
     }
 
     inline KConfigGroup katePartSettingsGroup() const
@@ -326,7 +326,7 @@ QWidget *TextDocument::createViewWidget(QWidget *parent)
         connect(d->document.data(), &KTextEditor::Document::reloaded,
                 this, [] (KTextEditor::Document* document) {
             ICore::self()->languageController()->backgroundParser()->addDocument(IndexedString(document->url()),
-                    (TopDUContext::Features) ( TopDUContext::AllDeclarationsContextsAndUses | TopDUContext::ForceUpdate ),
+                    TopDUContext::AllDeclarationsContextsAndUses | TopDUContext::ForceUpdate,
                     BackgroundParser::BestPriority, nullptr);
         });
 
@@ -395,7 +395,7 @@ KParts::Part *TextDocument::partForView(QWidget *view) const
 {
     Q_D(const TextDocument);
 
-    if (d->document && d->document->views().contains((KTextEditor::View*)view))
+    if (d->document && d->document->views().contains(qobject_cast<KTextEditor::View*>(view)))
         return d->document;
     return nullptr;
 }
@@ -505,7 +505,7 @@ void TextDocument::setCursorPosition(const KTextEditor::Cursor &cursor)
     // ie, starting from 0,0
 
     if (view)
-        view->setCursorPosition(cursor);
+        selectAndReveal(view, {cursor, cursor});
 }
 
 KTextEditor::Range TextDocument::textSelection() const
@@ -527,6 +527,7 @@ KTextEditor::Range TextDocument::textSelection() const
 
 QString TextDocument::text(const KTextEditor::Range &range) const
 {
+    VERIFY_FOREGROUND_LOCKED
     Q_D(const TextDocument);
 
     if (!d->document) {
@@ -538,6 +539,7 @@ QString TextDocument::text(const KTextEditor::Range &range) const
 
 QString TextDocument::textLine() const
 {
+    VERIFY_FOREGROUND_LOCKED
     Q_D(const TextDocument);
 
     if (!d->document) {
@@ -555,6 +557,7 @@ QString TextDocument::textLine() const
 
 QString TextDocument::textWord() const
 {
+    VERIFY_FOREGROUND_LOCKED
     Q_D(const TextDocument);
 
     if (!d->document) {

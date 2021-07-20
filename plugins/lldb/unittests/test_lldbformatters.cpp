@@ -26,16 +26,15 @@
 #include "controllers/variablecontroller.h"
 #include "debugsession.h"
 #include "stringhelpers.h"
+#include "tests/debuggers-tests-config.h"
 #include "tests/testhelper.h"
 
 #include <execute/iexecuteplugin.h>
 #include <interfaces/icore.h>
 #include <interfaces/iplugincontroller.h>
-#include <interfaces/ilaunchconfiguration.h>
 #include <tests/autotestshell.h>
 #include <tests/testcore.h>
 
-#include <KConfig>
 #include <KConfigGroup>
 #include <KSharedConfig>
 
@@ -47,26 +46,11 @@
 #include <algorithm>
 #include <vector>
 
-#define WAIT_FOR_STATE(session, state) \
-    do { if (!KDevMI::waitForState((session), (state), __FILE__, __LINE__)) return; } while (0)
-
-#define WAIT_FOR_STATE_AND_IDLE(session, state) \
-    do { if (!KDevMI::waitForState((session), (state), __FILE__, __LINE__, true)) return; } while (0)
-
 #define WAIT_FOR_A_WHILE_AND_IDLE(session, ms) \
     do { if (!KDevMI::waitForAWhile((session), (ms), __FILE__, __LINE__)) return; \
          if (!KDevMI::waitForState((session), DebugSession::PausedState, __FILE__, __LINE__, true)) \
              return; \
     } while (0)
-
-#define WAIT_FOR(session, condition) \
-    do { \
-        KDevMI::TestWaiter w((session), #condition, __FILE__, __LINE__); \
-        while (w.waitUnless((condition))) /* nothing */ ; \
-    } while(0)
-
-#define COMPARE_DATA(index, expected) \
-    do { if (!KDevMI::compareData((index), (expected), __FILE__, __LINE__)) return; } while (0)
 
 #define VERIFY_LOCAL(row, name, summary, children) \
     do { \
@@ -86,31 +70,7 @@ using KDevMI::findExecutable;
 using KDevMI::findSourceFile;
 using KDevMI::findFile;
 using KDevMI::compareData;
-
-class TestLaunchConfiguration : public ILaunchConfiguration
-{
-public:
-    explicit TestLaunchConfiguration(const QString& executable,
-                            const QUrl& workingDirectory = QUrl()) {
-        auto execPath = findExecutable(executable);
-        qDebug() << "FIND" << execPath;
-        c = KSharedConfig::openConfig();
-        c->deleteGroup("launch");
-        cfg = c->group("launch");
-        cfg.writeEntry("isExecutable", true);
-        cfg.writeEntry("Executable", execPath);
-        cfg.writeEntry("Working Directory", workingDirectory);
-    }
-    const KConfigGroup config() const override { return cfg; }
-    KConfigGroup config() override { return cfg; };
-    QString name() const override { return QStringLiteral("Test-Launch"); }
-    KDevelop::IProject* project() const override { return nullptr; }
-    KDevelop::LaunchConfigurationType* type() const override { return nullptr; }
-
-private:
-    KConfigGroup cfg;
-    KSharedConfigPtr c;
-};
+using KDevMI::TestLaunchConfiguration;
 
 class TestDebugSession : public DebugSession
 {
@@ -337,7 +297,7 @@ void LldbFormattersTest::testQString()
 
     QString expected = QStringLiteral("test最后一个不是特殊字符'\"\\u6211");
     QStringList children;
-    for (auto ch : expected) {
+    for (auto ch : qAsConst(expected)) {
         children << Utils::quote(ch, '\'');
     }
 
@@ -745,7 +705,7 @@ void LldbFormattersTest::testQHashInt()
     variableCollection()->expanded(localVariableIndexAt(0));
     WAIT_FOR_A_WHILE_AND_IDLE(m_session, 50);
 
-    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=2>"), {"(10, 100)", "(20, 200)"},
+    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=2>"), QStringList{"(10, 100)", "(20, 200)"},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -754,7 +714,7 @@ void LldbFormattersTest::testQHashInt()
     WAIT_FOR_STATE_AND_IDLE(m_session, DebugSession::PausedState);
     QCOMPARE(m_session->currentLine(), 7);
 
-    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=3>"), {"(10, 100)", "(20, 200)", "(30, 300)"},
+    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=3>"), QStringList{"(10, 100)", "(20, 200)", "(30, 300)"},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -774,7 +734,7 @@ void LldbFormattersTest::testQHashString()
     variableCollection()->expanded(localVariableIndexAt(0));
     WAIT_FOR_A_WHILE_AND_IDLE(m_session, 50);
 
-    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=2>"), {"(\"10\", \"100\")", "(\"20\", \"200\")"},
+    if (!verifyVariable(0, QStringLiteral("h"), QStringLiteral("<size=2>"), QStringList{"(\"10\", \"100\")", "(\"20\", \"200\")"},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -804,7 +764,7 @@ void LldbFormattersTest::testQSetInt()
     variableCollection()->expanded(localVariableIndexAt(0));
     WAIT_FOR_A_WHILE_AND_IDLE(m_session, 50);
 
-    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=2>"), {"10", "20"},
+    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=2>"), QStringList{"10", "20"},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -813,7 +773,7 @@ void LldbFormattersTest::testQSetInt()
     WAIT_FOR_STATE_AND_IDLE(m_session, DebugSession::PausedState);
     QCOMPARE(m_session->currentLine(), 7);
 
-    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=3>"), {"10", "20", "30"},
+    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=3>"), QStringList{"10", "20", "30"},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -833,7 +793,7 @@ void LldbFormattersTest::testQSetString()
     variableCollection()->expanded(localVariableIndexAt(0));
     WAIT_FOR_A_WHILE_AND_IDLE(m_session, 50);
 
-    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=2>"), {"\"10\"", "\"20\""},
+    if (!verifyVariable(0, QStringLiteral("s"), QStringLiteral("<size=2>"), QStringList{"\"10\"", "\"20\""},
                         __FILE__, __LINE__, true, false, true)) {
         return;
     }
@@ -912,7 +872,7 @@ void LldbFormattersTest::testQDateTime()
     WAIT_FOR_A_WHILE_AND_IDLE(m_session, 50);
 
     QList<QPair<QString, QString>> children;
-    children.append({QStringLiteral("toTime_t"), QStringLiteral("1264019473")});
+    children.append({QStringLiteral("toSecsSinceEpoch"), QStringLiteral("1264019473")});
     children.append({QStringLiteral("(ISO)"), QStringLiteral("\"2010-01-20 20:31:13\"")});
     children.append({QStringLiteral("(Locale)"), QStringLiteral("\".+\"")}); // (Locale), (UTC) and summary are locale dependent
     children.append({QStringLiteral("(UTC)"), QStringLiteral("\".+\"")});

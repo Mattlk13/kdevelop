@@ -34,6 +34,7 @@ class View;
 class Controller;
 class MainWindowOperator;
 class ViewBarContainer;
+class Message;
 class MainWindowPrivate;
 
 /**
@@ -103,6 +104,7 @@ public:
 
     /** Sets a @p w widget that will be shown when there are no opened documents.
      * This method takes the ownership of @p w.
+     * Pass @c nullptr for @p w for a blank background (default).
      */
     void setBackgroundCentralWidget(QWidget* w);
 
@@ -112,6 +114,8 @@ public:
 public Q_SLOTS:
     /**Shows the @p view and makes it active, focusing it by default).*/
     void activateView(Sublime::View *view, bool focus = true);
+    /** Shows the @p message in the message area */
+    void postMessage(Sublime::Message* message);
     /**Loads size/toolbar/menu/statusbar settings to the global configuration file.
     Reimplement in subclasses to load more and don't forget to call inherited method.*/
     virtual void loadSettings();

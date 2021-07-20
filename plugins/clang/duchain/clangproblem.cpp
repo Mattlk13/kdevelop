@@ -25,6 +25,7 @@
 
 #include "util/clangtypes.h"
 #include "util/clangdebug.h"
+#include "util/clangutils.h"
 
 #include <language/duchain/duchainlock.h>
 #include <language/codegen/documentchangeset.h>
@@ -66,7 +67,7 @@ inline QString prettyDiagnosticSpelling(const QString& str)
     return ret;
 }
 
-ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic)
+ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic, CXTranslationUnit unit)
 {
     ClangFixits fixits;
     auto numFixits = clang_getDiagnosticNumFixIts(diagnostic);
@@ -74,12 +75,8 @@ ClangFixits fixitsForDiagnostic(CXDiagnostic diagnostic)
     for (uint i = 0; i < numFixits; ++i) {
         CXSourceRange range;
         const QString replacementText = ClangString(clang_getDiagnosticFixIt(diagnostic, i, &range)).toString();
-
-        const auto docRange = ClangRange(range).toDocumentRange();
-        auto doc = KDevelop::ICore::self()->documentController()->documentForUrl(docRange.document.toUrl());
-        const QString original = doc ? doc->text(docRange) : QString{};
-
-        fixits << ClangFixit{replacementText, docRange, QString(), original};
+        const auto original = ClangUtils::getRawContents(unit, range);
+        fixits << ClangFixit{replacementText, ClangRange(range).toDocumentRange(), QString(), original};
     }
     return fixits;
 }
@@ -92,6 +89,7 @@ QDebug operator<<(QDebug debug, const ClangFixit& fixit)
         << "replacementText=" << fixit.replacementText
         << ", range=" << fixit.range
         << ", description=" << fixit.description
+        << ", currentText=" << fixit.currentText
         << "]";
     return debug;
 }
@@ -139,7 +137,9 @@ ClangProblem::ClangProblem(CXDiagnostic diagnostic, CXTranslationUnit unit)
     const uint numRanges = clang_getDiagnosticNumRanges(diagnostic);
     for (uint i = 0; i < numRanges; ++i) {
         auto range = ClangRange(clang_getDiagnosticRange(diagnostic, i)).toRange();
-        if(!range.isValid()){
+        // Note that the second condition is a workaround for seemingly wrong ranges that
+        // were observed sometimes. In principle, such a range should be valid.
+        if(!range.isValid() || (range.isEmpty() && range.start().line() == 0 && range.start().column() == 0)){
             continue;
         }
 
@@ -166,7 +166,7 @@ ClangProblem::ClangProblem(CXDiagnostic diagnostic, CXTranslationUnit unit)
         }
     }
 
-    setFixits(fixitsForDiagnostic(diagnostic));
+    setFixits(fixitsForDiagnostic(diagnostic, unit));
     setFinalLocation(docRange);
     setSource(IProblem::SemanticAnalysis);
 

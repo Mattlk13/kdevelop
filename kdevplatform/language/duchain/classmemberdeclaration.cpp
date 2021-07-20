@@ -27,14 +27,13 @@
 namespace KDevelop {
 ClassMemberDeclarationData::ClassMemberDeclarationData()
     : m_accessPolicy(Declaration::Public)
-    , m_alignOfExponent(ClassMemberDeclarationData::MaxAlignOfExponent)
     , m_isStatic(false)
     , m_isAuto(false)
     , m_isFriend(false)
     , m_isRegister(false)
     , m_isExtern(false)
     , m_isMutable(false)
-    , m_sizeOf(-1)
+    , m_bitWidth(-1)
     , m_bitOffsetOf(-1)
 {
 }
@@ -154,16 +153,6 @@ void ClassMemberDeclaration::setStorageSpecifiers(StorageSpecifiers specifiers)
     d->m_isMutable = specifiers & MutableSpecifier;
 }
 
-int64_t ClassMemberDeclaration::sizeOf() const
-{
-    return d_func()->m_sizeOf;
-}
-
-void ClassMemberDeclaration::setSizeOf(int64_t sizeOf)
-{
-    d_func_dynamic()->m_sizeOf = sizeOf;
-}
-
 int64_t ClassMemberDeclaration::bitOffsetOf() const
 {
     return d_func()->m_bitOffsetOf;
@@ -174,25 +163,13 @@ void ClassMemberDeclaration::setBitOffsetOf(int64_t bitOffsetOf)
     d_func_dynamic()->m_bitOffsetOf = bitOffsetOf;
 }
 
-int64_t ClassMemberDeclaration::alignOf() const
+int ClassMemberDeclaration::bitWidth() const
 {
-    if (d_func()->m_alignOfExponent == ClassMemberDeclarationData::MaxAlignOfExponent) {
-        return -1;
-    } else {
-        return 1 << d_func()->m_alignOfExponent;
-    }
+    return d_func()->m_bitWidth;
 }
 
-void ClassMemberDeclaration::setAlignOf(int64_t alignedTo)
+void ClassMemberDeclaration::setBitWidth(int bitWidth)
 {
-    if (alignedTo <= 0) {
-        d_func_dynamic()->m_alignOfExponent = ClassMemberDeclarationData::MaxAlignOfExponent;
-        return;
-    }
-
-    unsigned int alignOfExponent = 0;
-    while (alignedTo >>= 1)
-        alignOfExponent++;
-    d_func_dynamic()->m_alignOfExponent = alignOfExponent;
+    d_func_dynamic()->m_bitWidth = bitWidth;
 }
 }

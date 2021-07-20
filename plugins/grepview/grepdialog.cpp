@@ -41,6 +41,7 @@
 #include <interfaces/isession.h>
 
 #include <util/path.h>
+#include <util/wildcardhelpers.h>
 
 #include "grepviewplugin.h"
 #include "grepoutputview.h"
@@ -52,8 +53,8 @@ using namespace KDevelop;
 
 namespace {
 
-inline QString allOpenFilesString() { return i18n("All Open Files"); }
-inline QString allOpenProjectsString() { return i18n("All Open Projects"); }
+inline QString allOpenFilesString() { return i18nc("@item:inlistbox", "All Open Files"); }
+inline QString allOpenProjectsString() { return i18nc("@item:inlistbox", "All Open Projects"); }
 
 inline QStringList template_desc()
 {
@@ -181,9 +182,10 @@ GrepDialog::GrepDialog(GrepViewPlugin *plugin, QWidget *parent, bool show)
         return;
     }
 
-    setWindowTitle( i18n("Find/Replace in Files") );
+    setWindowTitle(i18nc("@title:window", "Find/Replace in Files"));
 
     setupUi(this);
+    patternCombo->lineEdit()->setClearButtonEnabled(true);
     adjustSize();
 
     auto searchButton = buttonBox->button(QDialogButtonBox::Ok);
@@ -246,7 +248,11 @@ GrepDialog::GrepDialog(GrepViewPlugin *plugin, QWidget *parent, bool show)
     patternComboEditTextChanged( patternCombo->currentText() );
     patternCombo->setFocus();
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    connect(searchPaths, &KComboBox::textActivated,
+#else
     connect(searchPaths, QOverload<const QString&>::of(&KComboBox::activated),
+#endif
             this, &GrepDialog::setSearchLocations);
 
     directorySelector->setIcon(QIcon::fromTheme(QStringLiteral("document-open")));
@@ -256,7 +262,7 @@ GrepDialog::GrepDialog(GrepViewPlugin *plugin, QWidget *parent, bool show)
 void GrepDialog::selectDirectoryDialog()
 {
     const QString dirName = QFileDialog::getExistingDirectory(
-        this, i18nc("@title:window", "Select directory to search in"),
+        this, i18nc("@title:window", "Select Directory to Search in"),
         searchPaths->lineEdit()->text());
     if (!dirName.isEmpty()) {
         setSearchLocations(dirName);
@@ -489,7 +495,7 @@ void GrepDialog::startSearch()
         if (doc->state() != IDocument::Clean &&
             isPartOfChoice(docUrl) &&
             QDir::match(include, docUrl.fileName()) &&
-            !QDir::match(exclude, docUrl.toLocalFile())
+            !WildcardHelpers::match(exclude, docUrl.toLocalFile())
         ) {
             unsavedFiles << doc;
         }
@@ -519,18 +525,18 @@ void GrepDialog::startSearch()
     }
 
     GrepOutputView *toolView =
-        (GrepOutputView*)ICore::self()->uiController()->findToolView(
-            i18n("Find/Replace in Files"), m_plugin->toolViewFactory(),
-            m_settings.fromHistory ? IUiController::Create : IUiController::CreateAndRaise);
+        static_cast<GrepOutputView*>(ICore::self()->uiController()->findToolView(
+            i18nc("@title:window", "Find/Replace in Files"), m_plugin->toolViewFactory(),
+            m_settings.fromHistory ? IUiController::Create : IUiController::CreateAndRaise));
 
     if (m_settings.fromHistory) {
         // when restored from history, only display the parameters
-        toolView->renewModel(m_settings, i18n("Search \"%1\" in %2", m_settings.pattern, description));
+        toolView->renewModel(m_settings, i18nc("@item search result", "Search \"%1\" in %2", m_settings.pattern, description));
         emit m_plugin->grepJobFinished(true);
     } else {
         GrepOutputModel* outputModel =
             toolView->renewModel(m_settings,
-                                i18n("Search \"%1\" in %2 (at time %3)", m_settings.pattern, description,
+                                i18nc("@item search result", "Search \"%1\" in %2 (at time %3)", m_settings.pattern, description,
                                     QTime::currentTime().toString(QStringLiteral("hh:mm"))));
 
         GrepJob* job = m_plugin->newGrepJob();

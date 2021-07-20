@@ -40,10 +40,11 @@
 #include <interfaces/icore.h>
 #include <interfaces/idebugcontroller.h>
 #include <interfaces/ilaunchconfiguration.h>
+#include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
 #include <util/environmentprofilelist.h>
 
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KShell>
 
 #include <QApplication>
@@ -51,6 +52,8 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QGuiApplication>
+#include <QRegularExpression>
+#include <QVersionNumber>
 
 using namespace KDevMI::GDB;
 using namespace KDevMI::MI;
@@ -202,24 +205,22 @@ bool DebugSession::execInferior(KDevelop::ILaunchConfiguration *cfg, IExecutePlu
 
     // handle remote debug
     if (configGdbScript.isValid()) {
-        addCommand(MI::NonMI, QLatin1String("source ") + KShell::quoteArg(configGdbScript.toLocalFile()));
+        addCommand(MI::NonMI, QLatin1String("source ") + configGdbScript.toLocalFile());
     }
 
     // FIXME: have a check box option that controls remote debugging
     if (runShellScript.isValid()) {
         // Special for remote debug, the remote inferior is started by this shell script
-        QByteArray tty(m_tty->getSlave().toLatin1());
-        QByteArray options = QByteArray(">") + tty + QByteArray("  2>&1 <") + tty;
+        const auto tty = m_tty->getSlave();
+        const auto options = QString(QLatin1String(">") + tty + QLatin1String("  2>&1 <") + tty);
 
-        auto *proc = new QProcess;
-        const QStringList arguments{
+        const QStringList arguments {
             QStringLiteral("-c"),
-            KShell::quoteArg(runShellScript.toLocalFile()) + QLatin1Char(' ') + KShell::quoteArg(executable) + QString::fromLatin1(options),
+            KShell::quoteArg(runShellScript.toLocalFile()) + QLatin1Char(' ') + KShell::quoteArg(executable) + options,
         };
 
         qCDebug(DEBUGGERGDB) << "starting sh" << arguments;
-        proc->start(QStringLiteral("sh"), arguments);
-        //PORTING TODO QProcess::DontCare);
+        QProcess::startDetached(QStringLiteral("sh"), arguments);
     }
 
     if (runGdbScript.isValid()) {
@@ -239,7 +240,7 @@ bool DebugSession::execInferior(KDevelop::ILaunchConfiguration *cfg, IExecutePlu
             breakpointController()->setDeleteDuplicateBreakpoints(true);
             qCDebug(DEBUGGERGDB) << "Running gdb script " << KShell::quoteArg(runGdbScript.toLocalFile());
 
-            addCommand(MI::NonMI, QLatin1String("source ") + KShell::quoteArg(runGdbScript.toLocalFile()),
+            addCommand(MI::NonMI, QLatin1String("source ") + runGdbScript.toLocalFile(),
                        [this](const MI::ResultRecord&) {
                            breakpointController()->setDeleteDuplicateBreakpoints(false);
                        },
@@ -277,22 +278,22 @@ bool DebugSession::loadCoreFile(KDevelop::ILaunchConfiguration*,
 
 void DebugSession::handleVersion(const QStringList& s)
 {
-    qCDebug(DEBUGGERGDB) << s.first();
+    const auto response = s.value(0);
+    qCDebug(DEBUGGERGDB) << response;
     // minimal version is 7.0,0
-    QRegExp rx(QStringLiteral("([7-9]+)\\.([0-9]+)(\\.([0-9]+))?"));
-    int idx = rx.indexIn(s.first());
-    if (idx == -1)
-    {
+    QRegularExpression rx(QStringLiteral("([0-9]+)\\.([0-9]+)(\\.([0-9]+))?"));
+    const auto match = rx.match(response);
+    if (!match.hasMatch() || QVersionNumber::fromString(match.capturedRef(0).toString()) < QVersionNumber(7, 0, 0)) {
         if (!qobject_cast<QGuiApplication*>(qApp))  {
             //for unittest
             qFatal("You need a graphical application.");
         }
 
-        KMessageBox::error(
-            qApp->activeWindow(),
-            i18n("<b>You need gdb 7.0.0 or higher.</b><br />"
-            "You are using: %1", s.first()),
-            i18n("gdb error"));
+        const QString messageText = i18n("<b>You need gdb 7.0.0 or higher.</b><br />"
+                                         "You are using: %1",
+                                         response);
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -300,11 +301,11 @@ void DebugSession::handleVersion(const QStringList& s)
 void DebugSession::handleFileExecAndSymbols(const ResultRecord& r)
 {
     if (r.reason == QLatin1String("error")) {
-        KMessageBox::error(
-            qApp->activeWindow(),
+        const QString messageText =
             i18n("<b>Could not start debugger:</b><br />")+
-            r[QStringLiteral("msg")].literal(),
-            i18n("Startup error"));
+                 r[QStringLiteral("msg")].literal();
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -314,13 +315,13 @@ void DebugSession::handleCoreFile(const ResultRecord& r)
     if (r.reason != QLatin1String("error")) {
         setDebuggerStateOn(s_programExited | s_core);
     } else {
-        KMessageBox::error(
-            qApp->activeWindow(),
+        const QString messageText =
             i18n("<b>Failed to load core file</b>"
                  "<p>Debugger reported the following error:"
                  "<p><tt>%1",
-            r[QStringLiteral("msg")].literal()),
-            i18n("Startup error"));
+                 r[QStringLiteral("msg")].literal());
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }

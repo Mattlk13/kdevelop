@@ -30,6 +30,8 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QRegularExpression>
 #include <QRegExp>
 
@@ -140,7 +142,9 @@ void PathResolutionResult::mergeWith(const PathResolutionResult& rhs)
     mergePaths(paths, rhs.paths);
     mergePaths(frameworkDirectories, rhs.frameworkDirectories);
     includePathDependency += rhs.includePathDependency;
-    defines.unite(rhs.defines);
+    for (auto it = rhs.defines.begin(), end = rhs.defines.end(); it != end; ++it) {
+        defines.insert(it.key(), it.value());
+    }
 }
 
 PathResolutionResult::PathResolutionResult(bool success, const QString& errorMessage, const QString& longErrorMessage)
@@ -314,17 +318,19 @@ PathResolutionResult MakeFileResolver::resolveIncludePath(const QString& file, c
           return ret;
         } else {
           //We have a cached failed result. We should use that for some time but then try again. Return the failed result if: (there were too many tries within this folder OR this file was already tried) AND The last tries have not expired yet
-          if (/*(it->failedFiles.size() > 3 || it->failedFiles.find(file) != it->failedFiles.end()) &&*/ it->failTime.secsTo(QDateTime::currentDateTime()) < CACHE_FAIL_FOR_SECONDS) {
-            PathResolutionResult ret(false); //Fake that the result is ok
-            ret.errorMessage = i18n("Cached: %1", it->errorMessage);
-            ret.longErrorMessage = it->longErrorMessage;
-            ret.paths = it->paths;
-            ret.frameworkDirectories = it->frameworkDirectories;
-            ret.defines = it->defines;
-            ret.mergeWith(resultOnFail);
-            return ret;
+          if (/*(it->failedFiles.size() > 3 || it->failedFiles.find(file) != it->failedFiles.end()) &&*/ it->failTime
+                  .secsTo(QDateTime::currentDateTimeUtc())
+              < CACHE_FAIL_FOR_SECONDS) {
+              PathResolutionResult ret(false); // Fake that the result is ok
+              ret.errorMessage = i18n("Cached: %1", it->errorMessage);
+              ret.longErrorMessage = it->longErrorMessage;
+              ret.paths = it->paths;
+              ret.frameworkDirectories = it->frameworkDirectories;
+              ret.defines = it->defines;
+              ret.mergeWith(resultOnFail);
+              return ret;
           } else {
-            //Try getting a correct result again
+              // Try getting a correct result again
           }
         }
       }
@@ -396,7 +402,7 @@ PathResolutionResult MakeFileResolver::resolveIncludePath(const QString& file, c
       ce.failed = true;
       ce.errorMessage = res.errorMessage;
       ce.longErrorMessage = res.longErrorMessage;
-      ce.failTime = QDateTime::currentDateTime();
+      ce.failTime = QDateTime::currentDateTimeUtc();
       ce.failedFiles[file] = true;
     } else {
       ce.failed = false;
@@ -457,7 +463,7 @@ PathResolutionResult MakeFileResolver::resolveIncludePathInternal(const QString&
     QRegExp makeRx(QStringLiteral("\\bmake\\s"));
     int offset = 0;
     while ((offset = makeRx.indexIn(firstLine, offset)) != -1) {
-      QString prefix = firstLine.left(offset).trimmed();
+      QString prefix = firstLine.leftRef(offset).trimmed().toString();
       if (prefix.endsWith(QLatin1String("&&")) || prefix.endsWith(QLatin1Char(';')) || prefix.isEmpty()) {
         QString newWorkingDirectory = workingDirectory;
         ///Extract the new working-directory
@@ -531,7 +537,7 @@ PathResolutionResult MakeFileResolver::resolveIncludePathInternal(const QString&
 QRegularExpression MakeFileResolver::defineRegularExpression()
 {
   static const QRegularExpression pattern(
-    QStringLiteral("-D([^\\s=]+)(?:=(?:\"(.*?)(?<!\\\\)\"|([^\\s]*)))?")
+    QStringLiteral("-(D|U)([^\\s=]+)(?:=(?:\"(.*?)(?<!\\\\)\"|([^\\s]*)))?")
   );
   Q_ASSERT(pattern.isValid());
   return pattern;
@@ -542,8 +548,7 @@ static QString unescape(const QStringRef& input)
   QString output;
   output.reserve(input.length());
   bool isEscaped = false;
-  for (auto it = input.data(), end = it + input.length(); it != end; ++it) {
-    QChar c = *it;
+  for (const QChar c : input) {
     if (!isEscaped && c == QLatin1Char('\\')) {
       isEscaped = true;
     } else {
@@ -552,6 +557,27 @@ static QString unescape(const QStringRef& input)
     }
   }
   return output;
+}
+
+QHash<QString, QString> MakeFileResolver::extractDefinesFromCompileFlags(const QString& compileFlags, StringInterner& stringInterner, QHash<QString, QString> defines)
+{
+  const auto& defineRx = defineRegularExpression();
+  auto it = defineRx.globalMatch(compileFlags);
+  while (it.hasNext()) {
+    const auto match = it.next();
+    const auto isUndefine = match.capturedRef(1) == QLatin1String("U");
+    const auto key = stringInterner.internString(match.captured(2));
+    if (isUndefine) {
+      defines.remove(key);
+      continue;
+    }
+    QString value;
+    if (match.lastCapturedIndex() > 2) {
+      value = unescape(match.capturedRef(match.lastCapturedIndex()));
+    }
+    defines[key] = stringInterner.internString(value);
+  }
+  return defines;
 }
 
 PathResolutionResult MakeFileResolver::processOutput(const QString& fullOutput, const QString& workingDirectory) const
@@ -575,8 +601,8 @@ PathResolutionResult MakeFileResolver::processOutput(const QString& fullOutput, 
       }
       if (QDir::isRelativePath(path))
         path = workingDirectory + QLatin1Char('/') + path;
-      const auto& internedPath = internPath(path);
-      const auto& type = match.captured(1);
+      const auto& internedPath = m_pathInterner.internPath(path);
+      const auto type = match.capturedRef(1);
       const auto isFramework = type.startsWith(QLatin1String("-iframework"))
         || type.startsWith(QLatin1String("-F"));
       if (isFramework) {
@@ -587,18 +613,7 @@ PathResolutionResult MakeFileResolver::processOutput(const QString& fullOutput, 
     }
   }
 
-  {
-    const auto& defineRx = defineRegularExpression();
-    auto it = defineRx.globalMatch(fullOutput);
-    while (it.hasNext()) {
-      const auto match = it.next();
-      QString value;
-      if (match.lastCapturedIndex() > 1) {
-        value = unescape(match.capturedRef(match.lastCapturedIndex()));
-      }
-      ret.defines[internString(match.captured(1))] = internString(value);
-    }
-  }
+  ret.defines = extractDefinesFromCompileFlags(fullOutput, m_stringInterner, ret.defines);
 
   return ret;
 }
@@ -619,16 +634,21 @@ void MakeFileResolver::setOutOfSourceBuildSystem(const QString& source, const QS
   m_build = QDir::cleanPath(m_build);
 }
 
-Path MakeFileResolver::internPath(const QString& path) const
+PathInterner::PathInterner(const Path& base)
+  : m_base(base)
+{
+}
+
+Path PathInterner::internPath(const QString& path)
 {
     Path& ret = m_pathCache[path];
     if (ret.isEmpty() != path.isEmpty()) {
-        ret = Path(path);
+        ret = Path(m_base, path);
     }
     return ret;
 }
 
-QString MakeFileResolver::internString(const QString& path) const
+QString StringInterner::internString(const QString& path)
 {
     auto it = m_stringCache.constFind(path);
     if (it != m_stringCache.constEnd()) {

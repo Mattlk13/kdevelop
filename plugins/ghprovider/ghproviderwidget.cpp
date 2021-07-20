@@ -40,8 +40,6 @@
 #include <KLocalizedString>
 #include <KMessageBox>
 
-#include <qtcompat_p.h>
-
 using namespace KDevelop;
 namespace gh
 {
@@ -49,7 +47,10 @@ namespace gh
 ProviderWidget::ProviderWidget(QWidget *parent)
     : IProjectProviderWidget(parent)
 {
-    setLayout(new QVBoxLayout());
+    auto* widgetLayout = new QVBoxLayout;
+    widgetLayout->setContentsMargins(0, 0, 0, 0);
+    setLayout(widgetLayout);
+
     m_projects = new QListView(this);
     connect(m_projects, &QListView::clicked, this, &ProviderWidget::projectIndexChanged);
 
@@ -66,8 +67,8 @@ ProviderWidget::ProviderWidget(QWidget *parent)
 
     auto *topLayout = new QHBoxLayout();
     m_edit = new LineEdit(this);
-    m_edit->setPlaceholderText(i18n("Search"));
-    m_edit->setToolTip(i18n("You can press the Return key if you do not want to wait"));
+    m_edit->setPlaceholderText(i18nc("@info:placeholder", "Search..."));
+    m_edit->setToolTip(i18nc("@info:tooltip", "You can press the Return key if you do not want to wait."));
     connect(m_edit, &LineEdit::returnPressed, this, &ProviderWidget::searchRepo);
     topLayout->addWidget(m_edit);
 
@@ -77,9 +78,9 @@ ProviderWidget::ProviderWidget(QWidget *parent)
     fillCombo();
     topLayout->addWidget(m_combo);
 
-    QPushButton *settings = new QPushButton(QIcon::fromTheme(QStringLiteral("configure")), QString(), this);
+    auto* settings = new QPushButton(QIcon::fromTheme(QStringLiteral("configure")), QString(), this);
     settings->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-    settings->setToolTip(i18n("Click this button to configure your GitHub account"));
+    settings->setToolTip(i18nc("@info:tooltip", "Configure your GitHub account"));
     connect(settings, &QPushButton::clicked, this, &ProviderWidget::showSettings);
     topLayout->addWidget(settings);
 
@@ -96,7 +97,7 @@ KDevelop::VcsJob * ProviderWidget::createWorkingCopy(const QUrl &dest)
 
     auto plugin = ICore::self()->pluginController()->pluginForExtension(QStringLiteral("org.kdevelop.IBasicVersionControl"), QStringLiteral("kdevgit"));
     if (!plugin) {
-        KMessageBox::error(nullptr, i18n("The Git plugin could not be loaded which is required to import a GitHub project."), i18n("GitHub Provider Error"));
+        KMessageBox::error(nullptr, i18n("The Git plugin could not be loaded which is required to import a GitHub project."), i18nc("@title:window", "GitHub Provider Error"));
         return nullptr;
     }
 
@@ -114,8 +115,8 @@ KDevelop::VcsJob * ProviderWidget::createWorkingCopy(const QUrl &dest)
 void ProviderWidget::fillCombo()
 {
     m_combo->clear();
-    m_combo->addItem(i18n("User"), 1);
-    m_combo->addItem(i18n("Organization"), 3);
+    m_combo->addItem(i18nc("@item:inlistbox", "User"), 1);
+    m_combo->addItem(i18nc("@item:inlistbox", "Organization"), 3);
     if (m_account->validAccount()) {
         m_combo->addItem(m_account->name(), 0);
         m_combo->setCurrentIndex(2);

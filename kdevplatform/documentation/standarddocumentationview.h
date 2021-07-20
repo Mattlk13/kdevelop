@@ -72,6 +72,8 @@ public:
 
 Q_SIGNALS:
     void linkClicked(const QUrl &link);
+    void browseForward();
+    void browseBack();
 
 public Q_SLOTS:
     /**
@@ -97,8 +99,7 @@ private Q_SLOTS:
     void updateZoomFactor(double zoomFactor);
 
 private:
-    void keyPressEvent(QKeyEvent* event) override;
-    void wheelEvent(QWheelEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
     const QScopedPointer<class StandardDocumentationViewPrivate> d_ptr;

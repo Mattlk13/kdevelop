@@ -24,20 +24,28 @@
 // plugin
 #include "clangtidyconfig.h"
 #include "ui_clangtidypreferences.h"
+#include "checksetselectionmanager.h"
 
 using KDevelop::IPlugin;
 using KDevelop::ConfigPage;
+using namespace ClangTidy;
 
-ClangTidyPreferences::ClangTidyPreferences(IPlugin* plugin, QWidget* parent)
+ClangTidyPreferences::ClangTidyPreferences(CheckSetSelectionManager* checkSetSelectionManager,
+                                           const CheckSet* checkSet,
+                                           IPlugin* plugin, QWidget* parent)
     : ConfigPage(plugin, ClangTidySettings::self(), parent)
+    , m_checkSetSelectionManager(checkSetSelectionManager)
 {
     ui = new Ui::ClangTidyPreferences();
     ui->setupUi(this);
+    ui->checksets->setCheckSetSelectionManager(checkSetSelectionManager, checkSet);
 
     connect(ui->kcfg_parallelJobsEnabled, &QCheckBox::toggled,
             this, &ClangTidyPreferences::updateJobCountEnabledState);
     connect(ui->kcfg_parallelJobsAutoCount, &QCheckBox::toggled,
             this, &ClangTidyPreferences::updateJobCountEnabledState);
+    connect(ui->checksets, &CheckSetManageWidget::changed,
+            this, &ClangTidyPreferences::changed);
 
     updateJobCountEnabledState();
 }
@@ -66,15 +74,33 @@ ConfigPage::ConfigPageType ClangTidyPreferences::configPageType() const
 
 QString ClangTidyPreferences::name() const
 {
-    return i18n("Clang-Tidy");
+    return i18nc("@title:tab", "Clang-Tidy");
 }
 
 QString ClangTidyPreferences::fullName() const
 {
-    return i18n("Configure Clang-Tidy Settings");
+    return i18nc("@title:tab", "Configure Clang-Tidy Settings");
 }
 
 QIcon ClangTidyPreferences::icon() const
 {
     return QIcon::fromTheme(QStringLiteral("dialog-ok"));
+}
+
+void ClangTidyPreferences::apply()
+{
+    ConfigPage::apply();
+    ui->checksets->store();
+}
+
+void ClangTidyPreferences::defaults()
+{
+    ConfigPage::defaults();
+    ui->checksets->reload();
+}
+
+void ClangTidyPreferences::reset()
+{
+    ConfigPage::reset();
+    ui->checksets->reload();
 }

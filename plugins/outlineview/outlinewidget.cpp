@@ -24,9 +24,14 @@
 #include <QLineEdit>
 #include <QIcon>
 #include <QWidgetAction>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#include <QSortFilterProxyModel>
+#endif
 
 #include <KLocalizedString>
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
 #include <KRecursiveFilterProxyModel>
+#endif
 
 #include "outlineviewplugin.h"
 #include "outlinemodel.h"
@@ -38,14 +43,20 @@ OutlineWidget::OutlineWidget(QWidget* parent, OutlineViewPlugin* plugin)
     , m_plugin(plugin)
     , m_model(new OutlineModel(this))
     , m_tree(new QTreeView(this))
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    , m_proxy(new QSortFilterProxyModel(this))
+#else
     , m_proxy(new KRecursiveFilterProxyModel(this))
+#endif
     , m_filter(new QLineEdit(this))
 {
     setObjectName(QStringLiteral("Outline View"));
-    setWindowTitle(i18n("Outline"));
-    setWhatsThis(i18n("Outline View"));
+    setWindowTitle(i18nc("@title:window", "Outline"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("code-class"), windowIcon())); //TODO: better icon?
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    m_proxy->setRecursiveFilteringEnabled(true);
+#endif
     m_proxy->setSourceModel(m_model);
     m_proxy->setFilterCaseSensitivity(Qt::CaseInsensitive);
     m_proxy->setSortCaseSensitivity(Qt::CaseInsensitive);
@@ -56,8 +67,8 @@ OutlineWidget::OutlineWidget(QWidget* parent, OutlineViewPlugin* plugin)
 
     // sort action
     m_sortAlphabeticallyAction = new QAction(QIcon::fromTheme(QStringLiteral("view-sort-ascending")),
-                                             i18n("Sort Alphabetically"), this);
-    m_sortAlphabeticallyAction->setToolTip(i18n("Sort items alphabetically"));
+                                             i18nc("@action", "Sort Alphabetically"), this);
+    m_sortAlphabeticallyAction->setToolTip(i18nc("@info:tooltip", "Sort items alphabetically"));
     m_sortAlphabeticallyAction->setCheckable(true);
     connect(m_sortAlphabeticallyAction, &QAction::triggered, this, [this](bool sort) {
         // calling sort with -1 will restore the original order
@@ -67,9 +78,9 @@ OutlineWidget::OutlineWidget(QWidget* parent, OutlineViewPlugin* plugin)
     addAction(m_sortAlphabeticallyAction);
 
     // filter
-    connect(m_filter, &QLineEdit::textChanged, m_proxy, &KRecursiveFilterProxyModel::setFilterFixedString);
+    connect(m_filter, &QLineEdit::textChanged, m_proxy, &QSortFilterProxyModel::setFilterFixedString);
     connect(m_tree, &QTreeView::activated, this, &OutlineWidget::activated);
-    m_filter->setPlaceholderText(i18n("Filter..."));
+    m_filter->setPlaceholderText(i18nc("@info:placeholder", "Filter..."));
     auto filterAction = new QWidgetAction(this);
     filterAction->setDefaultWidget(m_filter);
     addAction(filterAction);
@@ -77,7 +88,7 @@ OutlineWidget::OutlineWidget(QWidget* parent, OutlineViewPlugin* plugin)
     setFocusProxy(m_filter);
 
     auto* vbox = new QVBoxLayout(this);
-    vbox->setMargin(0);
+    vbox->setContentsMargins(0, 0, 0, 0);
     vbox->addWidget(m_tree);
     setLayout(vbox);
     expandFirstLevel();

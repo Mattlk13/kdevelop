@@ -23,8 +23,8 @@
 
 #include <QPair>
 
+#include <cstdlib>
 #include <iostream>
-#include <stdlib.h>
 #include <limits>
 
 //Uncomment this to search for tree-inconsistencies, however it's very expensive
@@ -310,7 +310,7 @@ public:
         //Create a new list where the items from m_items are put into newItems, with the free items evenly
         //distributed, and a clean balanced free-tree.
         uint newFreeCount = newCount - currentRealCount;
-        volatile uint freeItemRaster;
+        uint freeItemRaster;
         if (newFreeCount)
             freeItemRaster = newCount / newFreeCount;
         else {
@@ -810,7 +810,7 @@ public:
     {
         uint maxFreeItems = ((m_itemCount / increaseFraction) * 3) / 2 + 1;
         //First we approximate the count of free items using the insertion depth
-        if ((1u << m_insertedAtDepth) >= maxFreeItems) {
+        if (m_insertedAtDepth >= 32 || (1u << m_insertedAtDepth) >= maxFreeItems) {
             uint freeCount = countFreeItems(*m_centralFreeItem);
             if (freeCount > maxFreeItems || freeCount == m_itemCount) {
                 return m_itemCount - freeCount;

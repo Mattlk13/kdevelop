@@ -25,7 +25,7 @@
 
 #include <KAboutData>
 
-
+#include <tests/testhelpers.h>
 #include <tests/autotestshell.h>
 #include <tests/testcore.h>
 
@@ -38,8 +38,6 @@
 #include <shell/project.h>
 
 using namespace KDevelop;
-
-Q_DECLARE_METATYPE(KDevelop::IProject*)
 
 namespace {
 
@@ -68,12 +66,12 @@ class FakeFileManager : public IPlugin, public IProjectFileManager
     Q_INTERFACES(KDevelop::IProjectFileManager)
 public:
     FakeFileManager(QObject*, const QVariantList&)
-        : IPlugin(ICore::self()->aboutData().componentName(), Core::self())
+        : IPlugin(QStringLiteral("FakeFileManager"), Core::self())
     {
     }
 
     FakeFileManager()
-        : IPlugin(ICore::self()->aboutData().componentName(), Core::self())
+        : IPlugin(QStringLiteral("FakeFileManager"), Core::self())
     {
     }
 
@@ -121,7 +119,7 @@ public:
 
     ProjectFolderItem *import(IProject *project) override
     {
-        ProjectFolderItem* it = new ProjectFolderItem(project, project->path());
+        auto* it = new ProjectFolderItem(project, project->path());
         return it;
     }
 
@@ -216,14 +214,13 @@ void TestProjectController::cleanup()
 
 void TestProjectController::openProject()
 {
-    QSignalSpy* spy = createOpenedSpy();
+    auto spy = createOpenedSpy();
     QVERIFY(!m_projCtrl->isProjectNameUsed(m_projName));
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
     QCOMPARE(m_projCtrl->projectCount(), 1);
-    IProject* proj;
-    assertProjectOpened(m_projName, proj);QVERIFY(proj);
-    assertSpyCaughtProject(spy, proj);
+    auto* proj = assertProjectOpened(m_projName);
+    assertSpyCaughtProject(spy.get(), proj);
     QCOMPARE(proj->projectFile(), m_projFilePath);
     QCOMPARE(proj->path(), Path(m_scratchDir.absolutePath()+'/'));
     QVERIFY(m_projCtrl->isProjectNameUsed(m_projName));
@@ -236,31 +233,30 @@ void TestProjectController::closeProject()
     IProject* proj = m_projCtrl->findProjectByName(m_projName);
     Q_ASSERT(proj);
 
-    QSignalSpy* spy1 = createClosedSpy();
-    QSignalSpy* spy2 = createClosingSpy();
+    auto spy1 = createClosedSpy();
+    auto spy2 = createClosingSpy();
     m_projCtrl->closeProject(proj);
 
     QVERIFY(!m_projCtrl->isProjectNameUsed(m_projName));
     QCOMPARE(m_projCtrl->projectCount(), 0);
     assertProjectClosed(proj);
-    assertSpyCaughtProject(spy1, proj);
-    assertSpyCaughtProject(spy2, proj);
+    assertSpyCaughtProject(spy1.get(), proj);
+    assertSpyCaughtProject(spy2.get(), proj);
 }
 
 void TestProjectController::openCloseOpen()
 {
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    IProject* proj;
-    assertProjectOpened(m_projName, proj);
+    auto* proj = assertProjectOpened(m_projName);
     m_projCtrl->closeProject(proj);
-    QSignalSpy* spy = createOpenedSpy();
+    auto spy = createOpenedSpy();
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
     QVERIFY(m_projCtrl->isProjectNameUsed(m_projName));
     QCOMPARE(m_projCtrl->projectCount(), 1);
-    assertProjectOpened(m_projName, proj);
-    assertSpyCaughtProject(spy, proj);
+    proj = assertProjectOpened(m_projName);
+    assertSpyCaughtProject(spy.get(), proj);
 }
 
 void TestProjectController::reopen()
@@ -268,14 +264,13 @@ void TestProjectController::reopen()
     m_projCtrl->setDialogProvider(new DialogProviderFake);
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    QSignalSpy* spy = createOpenedSpy();
+    auto spy = createOpenedSpy();
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
     QCOMPARE(m_projCtrl->projectCount(), 1);
     QVERIFY(m_projCtrl->isProjectNameUsed(m_projName));
-    IProject* proj;
-    assertProjectOpened(m_projName, proj);
-    assertSpyCaughtProject(spy, proj);
+    auto* proj = assertProjectOpened(m_projName);
+    assertSpyCaughtProject(spy.get(), proj);
 }
 
 void TestProjectController::reopenWhileLoading()
@@ -283,7 +278,7 @@ void TestProjectController::reopenWhileLoading()
     // Open the same project again while the first is still
     // loading. The second open request should be blocked.
     m_projCtrl->setDialogProvider(new DialogProviderFake);
-    QSignalSpy* spy = createOpenedSpy();
+    auto spy = createOpenedSpy();
     m_projCtrl->openProject(m_projFilePath.toUrl());
     //m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
@@ -291,25 +286,23 @@ void TestProjectController::reopenWhileLoading()
     QSignalSpy signal(m_projCtrl, SIGNAL(projectOpened(KDevelop::IProject*)));
     QVERIFY2(!signal.wait(100), "Received 2 projectOpened signals.");
     QCOMPARE(m_projCtrl->projectCount(), 1);
-    IProject* proj;
-    assertProjectOpened(m_projName, proj);
-    assertSpyCaughtProject(spy, proj);
+    auto* proj = assertProjectOpened(m_projName);
+    assertSpyCaughtProject(spy.get(), proj);
 }
 
 void TestProjectController::openMultiple()
 {
     QString secondProj(QStringLiteral("bar"));
     Path secondCfgUrl = writeProjectConfig(secondProj);
-    QSignalSpy* spy = createOpenedSpy();
+    auto spy = createOpenedSpy();
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
     m_projCtrl->openProject(secondCfgUrl.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
 
     QCOMPARE(m_projCtrl->projectCount(), 2);
-    IProject *proj1, *proj2;
-    assertProjectOpened(m_projName, proj1);
-    assertProjectOpened(secondProj, proj2);
+    auto* proj1 = assertProjectOpened(m_projName);
+    auto* proj2 = assertProjectOpened(secondProj);
 
     QVERIFY(m_projCtrl->isProjectNameUsed(m_projName));
     QVERIFY(m_projCtrl->isProjectNameUsed(QStringLiteral("bar")));
@@ -370,8 +363,7 @@ void TestProjectController::emptyProject()
 
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    Project* proj;
-    assertProjectOpened(m_projName, (KDevelop::IProject*&)proj);
+    auto* proj = assertProjectOpened(m_projName);
 
     FakeFileManager* fileMng = createFileManager();
     Q_ASSERT(fileMng);
@@ -397,8 +389,7 @@ void TestProjectController::singleFile()
 
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    Project* proj;
-    assertProjectOpened(m_projName, (KDevelop::IProject*&)proj);
+    auto* proj = assertProjectOpened(m_projName);
 
     FakeFileManager* fileMng = createFileManager();
     proj->setManagerPlugin(fileMng);
@@ -427,8 +418,7 @@ void TestProjectController::singleDirectory()
 
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    Project* proj;
-    assertProjectOpened(m_projName, (KDevelop::IProject*&)proj);
+    auto* proj = assertProjectOpened(m_projName);
 
     Path folderPath = Path(m_projFolder, QStringLiteral("foobar/"));
     FakeFileManager* fileMng = createFileManager();
@@ -455,8 +445,7 @@ void TestProjectController::fileInSubdirectory()
 
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    Project* proj;
-    assertProjectOpened(m_projName, (KDevelop::IProject*&)proj);
+    auto* proj = assertProjectOpened(m_projName);
 
     Path folderPath = Path(m_projFolder, QStringLiteral("foobar/"));
     FakeFileManager* fileMng = createFileManager();
@@ -497,8 +486,7 @@ void TestProjectController::prettyFileName()
 
     m_projCtrl->openProject(m_projFilePath.toUrl());
     WAIT_FOR_OPEN_SIGNAL;
-    Project* proj;
-    assertProjectOpened(m_projName, (KDevelop::IProject*&)proj);
+    auto* proj = assertProjectOpened(m_projName);
 
     FakeFileManager* fileMng = createFileManager();
     proj->setManagerPlugin(fileMng);
@@ -525,10 +513,15 @@ Path TestProjectController::writeProjectConfig(const QString& name)
 
 ////////////////// Custom assertions /////////////////////////////////////////
 
-void TestProjectController::assertProjectOpened(const QString& name, IProject*& proj)
+KDevelop::Project* TestProjectController::assertProjectOpened(const QString& name)
 {
-    QVERIFY(proj = m_projCtrl->findProjectByName(name));
-    QVERIFY(m_projCtrl->projects().contains(proj));
+    auto* projRaw = m_projCtrl->findProjectByName(name);
+    QVERIFY_RETURN(projRaw, nullptr);
+    QVERIFY_RETURN(m_projCtrl->projects().contains(projRaw), nullptr);
+
+    auto proj = dynamic_cast<KDevelop::Project*>(projRaw);
+    QVERIFY_RETURN(projRaw, nullptr);
+    return proj;
 }
 
 void TestProjectController::assertSpyCaughtProject(QSignalSpy* spy, IProject* proj)
@@ -554,19 +547,19 @@ void TestProjectController::assertEmptyProjectModel()
 
 ///////////////////// Creation stuff /////////////////////////////////////////
 
-QSignalSpy* TestProjectController::createOpenedSpy()
+std::unique_ptr<QSignalSpy> TestProjectController::createOpenedSpy()
 {
-    return new QSignalSpy(m_projCtrl, SIGNAL(projectOpened(KDevelop::IProject*)));
+    return std::make_unique<QSignalSpy>(m_projCtrl, SIGNAL(projectOpened(KDevelop::IProject*)));
 }
 
-QSignalSpy* TestProjectController::createClosedSpy()
+std::unique_ptr<QSignalSpy> TestProjectController::createClosedSpy()
 {
-    return new QSignalSpy(m_projCtrl, SIGNAL(projectClosed(KDevelop::IProject*)));
+    return std::make_unique<QSignalSpy>(m_projCtrl, SIGNAL(projectClosed(KDevelop::IProject*)));
 }
 
-QSignalSpy* TestProjectController::createClosingSpy()
+std::unique_ptr<QSignalSpy> TestProjectController::createClosingSpy()
 {
-    return new QSignalSpy(m_projCtrl, SIGNAL(projectClosing(KDevelop::IProject*)));
+    return std::make_unique<QSignalSpy>(m_projCtrl, SIGNAL(projectClosing(KDevelop::IProject*)));
 }
 
 FakeFileManager* TestProjectController::createFileManager()

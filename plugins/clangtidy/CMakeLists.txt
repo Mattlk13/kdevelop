@@ -20,11 +20,13 @@ declare_qt_logging_category(kdevclangtidy_LOG_SRCS
 set(kdevclangtidy_PART_SRCS
     ${kdevclangtidy_LOG_SRCS}
 
+    analyzer.cpp
     job.cpp
     plugin.cpp
     checkset.cpp
-    problemmodel.cpp
-    utils.cpp
+    checksetselection.cpp
+    checksetselectionlock.cpp
+    checksetselectionmanager.cpp
 
     config/clangtidyprojectconfigpage.cpp
     config/clangtidypreferences.cpp
@@ -33,6 +35,10 @@ set(kdevclangtidy_PART_SRCS
     config/checklistitemproxystyle.cpp
     config/checklistmodel.cpp
     config/checkgroup.cpp
+    config/checksetselectioncombobox.cpp
+    config/checksetselectionlistmodel.cpp
+    config/checksetmanagewidget.cpp
+    config/customchecksetconfigproxywidget.cpp
 
     parsers/clangtidyparser.cpp
 # disable for now:
@@ -41,6 +47,7 @@ set(kdevclangtidy_PART_SRCS
 )
 
 ki18n_wrap_ui(kdevclangtidy_PART_SRCS
+    config/checksetmanagewidget.ui
     config/clangtidypreferences.ui
     config/clangtidyprojectconfigpage.ui
 )
@@ -55,11 +62,11 @@ kconfig_add_kcfg_files(kdevclangtidy_PART_SRCS
 )
 
 kdevplatform_add_plugin(kdevclangtidy
-    JSON kdevclangtidy.json
     SOURCES ${kdevclangtidy_PART_SRCS}
 )
 
 target_link_libraries(kdevclangtidy
+    KDevCompileAnalyzerCommon
     KDev::Interfaces
     KDev::Project
     KDev::Language

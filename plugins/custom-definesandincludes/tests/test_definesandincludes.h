@@ -24,6 +24,7 @@
 namespace KDevelop
 {
 class TestCore;
+class IProject;
 }
 
 class TestDefinesAndIncludes : public QObject
@@ -37,6 +38,8 @@ private Q_SLOTS:
     void loadMultiPathProject();
     void testNoProjectIncludeDirectories();
     void testEmptyProject();
+private:
+    KDevelop::IProject* m_currentProject = nullptr;
 };
 
 #endif

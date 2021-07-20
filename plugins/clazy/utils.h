@@ -21,14 +21,13 @@
 #ifndef KDEVCLAZY_UTILS_H
 #define KDEVCLAZY_UTILS_H
 
-#include <QStringList>
+#include <QString>
+class QUrl;
 
 namespace Clazy
 {
 
-QString prettyPathName(const QString& path);
-
-QStringList compileCommandsFiles(const QString& jsonFilePath, QString& error);
+QString prettyPathName(const QUrl& path);
 
 QString markdown2html(const QByteArray& markdown);
 

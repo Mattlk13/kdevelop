@@ -182,7 +182,7 @@ void MesonRewriterPage::checkStatus()
         }
 
         QPalette pal = m_ui->l_status->palette();
-        pal.setColor(QPalette::Foreground, scheme.foreground(role).color());
+        pal.setColor(QPalette::WindowText, scheme.foreground(role).color());
         m_ui->l_status->setPalette(pal);
         m_ui->l_status->setText(i18n("Status: %1", msg));
     };
@@ -225,7 +225,7 @@ void MesonRewriterPage::checkStatus()
     }
 
     QPalette pal = m_ui->l_changed->palette();
-    pal.setColor(QPalette::Foreground, scheme.foreground(role).color());
+    pal.setColor(QPalette::WindowText, scheme.foreground(role).color());
     m_ui->l_changed->setPalette(pal);
 }
 
@@ -416,8 +416,8 @@ void MesonRewriterPage::newOption()
 
     dialog.setOption(QInputDialog::UseListViewForComboBoxItems, true);
     dialog.setInputMode(QInputDialog::TextInput);
-    dialog.setWindowTitle(i18n("Select meson option to add"));
-    dialog.setLabelText(i18n("Select one new meson option to add"));
+    dialog.setWindowTitle(i18nc("@title:window", "Select Additional Meson Option"));
+    dialog.setLabelText(i18nc("@label:listbox", "Meson option to add:"));
     dialog.setComboBoxItems(total);
 
     if (dialog.exec() != QDialog::Accepted) {
@@ -448,12 +448,12 @@ void MesonRewriterPage::emitChanged()
 
 QString MesonRewriterPage::name() const
 {
-    return i18n("Project");
+    return i18nc("@title:tab", "Project");
 }
 
 QString MesonRewriterPage::fullName() const
 {
-    return i18n("Meson project settings");
+    return i18nc("@title:tab", "Meson Project Settings");
 }
 
 QIcon MesonRewriterPage::icon() const

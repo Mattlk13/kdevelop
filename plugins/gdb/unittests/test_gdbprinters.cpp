@@ -20,11 +20,13 @@
 
 #include "tests/debuggers-tests-config.h"
 
+#include <QCoreApplication>
 #include <QTest>
 #include <QProcess>
 #include <QDebug>
 #include <QFileInfo>
 #include <QDir>
+#include <QStandardPaths>
 
 const QString BINARY_PATH(DEBUGGEE_BIN_DIR);
 
@@ -99,6 +101,15 @@ public:
     }
 };
 
+void QtPrintersTest::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
+
+    // Prevent SIGPIPE, then "ICE default IO error handler doing an exit(), pid = <PID>, errno = 32"
+    // crash when the test runs for at least 60 seconds. This is a workaround for QTBUG-58709.
+    QCoreApplication::processEvents();
+}
+
 void QtPrintersTest::testQString()
 {
     GdbProcess gdb(QStringLiteral("debuggee_qstring"));
@@ -145,24 +156,29 @@ void QtPrintersTest::testQListContainer()
     gdb.execute("run");
     gdb.execute(QStringLiteral("break 'doStuff<%1>()'").arg(container).toLocal8Bit());
     gdb.execute("cont");
+
+    auto runToLine = [&](int line) {
+        gdb.execute("tbreak qlistcontainer.cpp:" + QByteArray::number(line));
+        gdb.execute("cont");
+    };
+
     { // <int>
-    gdb.execute("break qlistcontainer.cpp:34");
-    gdb.execute("cont");
-    QByteArray out = gdb.execute("print intList");
-    qWarning() << "FOO" << out;
-    QVERIFY(out.contains(QString("%1<int> (size = 0)").arg(container).toLocal8Bit()));
-    gdb.execute("next");
-    out = gdb.execute("print intList");
-    QVERIFY(out.contains(QString("%1<int> (size = 2)").arg(container).toLocal8Bit()));
-    if (container != QLatin1String("QSet")) {
-        QVERIFY(out.contains("[0] = 10"));
-        QVERIFY(out.contains("[1] = 20"));
-        QVERIFY(!out.contains("[2] = 30"));
-    } else { // QSet order is undefined
-        QVERIFY(out.contains("] = 10"));
-        QVERIFY(out.contains("] = 20"));
-        QVERIFY(!out.contains("] = 30"));
-    }
+        runToLine(34);
+        QByteArray out = gdb.execute("print intList");
+        qWarning() << "FOO" << out;
+        QVERIFY(out.contains(QString("%1<int> (size = 0)").arg(container).toLocal8Bit()));
+        gdb.execute("next");
+        out = gdb.execute("print intList");
+        QVERIFY(out.contains(QString("%1<int> (size = 2)").arg(container).toLocal8Bit()));
+        if (container != QLatin1String("QSet")) {
+            QVERIFY(out.contains("[0] = 10"));
+            QVERIFY(out.contains("[1] = 20"));
+            QVERIFY(!out.contains("[2] = 30"));
+        } else { // QSet order is undefined
+            QVERIFY(out.contains("] = 10"));
+            QVERIFY(out.contains("] = 20"));
+            QVERIFY(!out.contains("] = 30"));
+        }
     gdb.execute("next");
     out = gdb.execute("print intList");
     QVERIFY(out.contains(QString("%1<int> (size = 3)").arg(container).toLocal8Bit()));
@@ -177,21 +193,21 @@ void QtPrintersTest::testQListContainer()
     }
     }
     { // <QString>
-    gdb.execute("next");
-    QByteArray out = gdb.execute("print stringList");
-    QVERIFY(out.contains(QString("%1<QString> (size = 0)").arg(container).toLocal8Bit()));
-    gdb.execute("next");
-    out = gdb.execute("print stringList");
-    QVERIFY(out.contains(QString("%1<QString> (size = 2)").arg(container).toLocal8Bit()));
-    if (container != QLatin1String("QSet")) {
-        QVERIFY(out.contains("[0] = \"a\""));
-        QVERIFY(out.contains("[1] = \"bc\""));
-        QVERIFY(!out.contains("[2] = \"d\""));
-    } else { // QSet order is undefined
-        QVERIFY(out.contains("] = \"a\""));
-        QVERIFY(out.contains("] = \"bc\""));
-        QVERIFY(!out.contains("] = \"d\""));
-    }
+        runToLine(38);
+        QByteArray out = gdb.execute("print stringList");
+        QVERIFY(out.contains(QString("%1<QString> (size = 0)").arg(container).toLocal8Bit()));
+        gdb.execute("next");
+        out = gdb.execute("print stringList");
+        QVERIFY(out.contains(QString("%1<QString> (size = 2)").arg(container).toLocal8Bit()));
+        if (container != QLatin1String("QSet")) {
+            QVERIFY(out.contains("[0] = \"a\""));
+            QVERIFY(out.contains("[1] = \"bc\""));
+            QVERIFY(!out.contains("[2] = \"d\""));
+        } else { // QSet order is undefined
+            QVERIFY(out.contains("] = \"a\""));
+            QVERIFY(out.contains("] = \"bc\""));
+            QVERIFY(!out.contains("] = \"d\""));
+        }
     gdb.execute("next");
     out = gdb.execute("print stringList");
     QVERIFY(out.contains(QString("%1<QString> (size = 3)").arg(container).toLocal8Bit()));
@@ -206,66 +222,65 @@ void QtPrintersTest::testQListContainer()
     }
     }
     { // <struct A>
-    gdb.execute("next");
-    QByteArray out = gdb.execute("print structList");
-    QVERIFY(out.contains(QString("%1<A> (size = 0)").arg(container).toLocal8Bit()));
-    gdb.execute("next");
-    out = gdb.execute("print structList");
-    QVERIFY(out.contains(QString("%1<A> (size = 1)").arg(container).toLocal8Bit()));
-    QVERIFY(out.contains("[0] = {"));
-    QVERIFY(out.contains("a = \"a\""));
-    QVERIFY(out.contains("b = \"b\""));
-    QVERIFY(out.contains("c = 100"));
-    QVERIFY(out.contains("d = -200"));
-    gdb.execute("next");
-    out = gdb.execute("print structList");
-    QVERIFY(out.contains(QString("%1<A> (size = 2)").arg(container).toLocal8Bit()));
-    QVERIFY(out.contains("[1] = {"));
+        runToLine(42);
+        QByteArray out = gdb.execute("print structList");
+        QVERIFY(out.contains(QString("%1<A> (size = 0)").arg(container).toLocal8Bit()));
+        gdb.execute("next");
+        out = gdb.execute("print structList");
+        QVERIFY(out.contains(QString("%1<A> (size = 1)").arg(container).toLocal8Bit()));
+        QVERIFY(out.contains("[0] = {"));
+        QVERIFY(out.contains("a = \"a\""));
+        QVERIFY(out.contains("b = \"b\""));
+        QVERIFY(out.contains("c = 100"));
+        QVERIFY(out.contains("d = -200"));
+        gdb.execute("next");
+        out = gdb.execute("print structList");
+        QVERIFY(out.contains(QString("%1<A> (size = 2)").arg(container).toLocal8Bit()));
+        QVERIFY(out.contains("[1] = {"));
     }
     { // <int*>
-    gdb.execute("next");
-    QByteArray out = gdb.execute("print pointerList");
-    QVERIFY(out.contains(QString("%1<int *> (size = 0)").arg(container).toLocal8Bit()));
-    gdb.execute("next");
-    out = gdb.execute("print pointerList");
-    QVERIFY(out.contains(QString("%1<int *> (size = 2)").arg(container).toLocal8Bit()));
-    QVERIFY(out.contains("[0] = 0x"));
-    QVERIFY(out.contains("[1] = 0x"));
-    QVERIFY(!out.contains("[2] = 0x"));
-    gdb.execute("next");
-    out = gdb.execute("print pointerList");
-    QVERIFY(out.contains(QString("%1<int *> (size = 3)").arg(container).toLocal8Bit()));
-    QVERIFY(out.contains("[0] = 0x"));
-    QVERIFY(out.contains("[1] = 0x"));
-    QVERIFY(out.contains("[2] = 0x"));
-	gdb.execute("next");
+        runToLine(46);
+        QByteArray out = gdb.execute("print pointerList");
+        QVERIFY(out.contains(QString("%1<int *> (size = 0)").arg(container).toLocal8Bit()));
+        gdb.execute("next");
+        out = gdb.execute("print pointerList");
+        QVERIFY(out.contains(QString("%1<int *> (size = 2)").arg(container).toLocal8Bit()));
+        QVERIFY(out.contains("[0] = 0x"));
+        QVERIFY(out.contains("[1] = 0x"));
+        QVERIFY(!out.contains("[2] = 0x"));
+        gdb.execute("next");
+        out = gdb.execute("print pointerList");
+        QVERIFY(out.contains(QString("%1<int *> (size = 3)").arg(container).toLocal8Bit()));
+        QVERIFY(out.contains("[0] = 0x"));
+        QVERIFY(out.contains("[1] = 0x"));
+        QVERIFY(out.contains("[2] = 0x"));
     }
     { // <QPair<int, int> >
-    gdb.execute("next");
-    QByteArray out = gdb.execute("print pairList");
-    QVERIFY(out.contains(QString("%1<QPair<int, int>> (size = 0)").arg(container).toLocal8Bit()));
-    gdb.execute("next");
-    out = gdb.execute("print pairList");
-    QVERIFY(out.contains(QString("%1<QPair<int, int>> (size = 2)").arg(container).toLocal8Bit()));
-    if (container != QLatin1String("QSet")) {
-        QVERIFY(out.contains("[0] = {\n    first = 1, \n    second = 2\n  }"));
-        QVERIFY(out.contains("[1] = {\n    first = 2, \n    second = 3\n  }"));
-    } else { // order is undefined in QSet
-        QVERIFY(out.contains("] = {\n    first = 1, \n    second = 2\n  }"));
-        QVERIFY(out.contains("] = {\n    first = 2, \n    second = 3\n  }"));
-    }
+        runToLine(51);
+        QByteArray out = gdb.execute("print pairList");
+        QVERIFY(out.contains(QString("%1<QPair<int, int>> (size = 0)").arg(container).toLocal8Bit()));
+        gdb.execute("next");
+        out = gdb.execute("print pairList");
+        QVERIFY(out.contains(QString("%1<QPair<int, int>> (size = 2)").arg(container).toLocal8Bit()));
+        if (container != QLatin1String("QSet")) {
+            QVERIFY(out.contains("[0] = {\n    first = 1,\n    second = 2\n  }"));
+            QVERIFY(out.contains("[1] = {\n    first = 2,\n    second = 3\n  }"));
+        } else { // order is undefined in QSet
+            QVERIFY(out.contains("] = {\n    first = 1,\n    second = 2\n  }"));
+            QVERIFY(out.contains("] = {\n    first = 2,\n    second = 3\n  }"));
+        }
     QVERIFY(!out.contains("[2] = "));
     gdb.execute("next");
     out = gdb.execute("print pairList");
     QVERIFY(out.contains(QString("%1<QPair<int, int>> (size = 3)").arg(container).toLocal8Bit()));
     if (container != QLatin1String("QSet")) {
-        QVERIFY(out.contains("[0] = {\n    first = 1, \n    second = 2\n  }"));
-        QVERIFY(out.contains("[1] = {\n    first = 2, \n    second = 3\n  }"));
-        QVERIFY(out.contains("[2] = {\n    first = 4, \n    second = 5\n  }"));
+        QVERIFY(out.contains("[0] = {\n    first = 1,\n    second = 2\n  }"));
+        QVERIFY(out.contains("[1] = {\n    first = 2,\n    second = 3\n  }"));
+        QVERIFY(out.contains("[2] = {\n    first = 4,\n    second = 5\n  }"));
     } else { // order is undefined in QSet
-        QVERIFY(out.contains("] = {\n    first = 1, \n    second = 2\n  }"));
-        QVERIFY(out.contains("] = {\n    first = 2, \n    second = 3\n  }"));
-        QVERIFY(out.contains("] = {\n    first = 4, \n    second = 5\n  }"));
+        QVERIFY(out.contains("] = {\n    first = 1,\n    second = 2\n  }"));
+        QVERIFY(out.contains("] = {\n    first = 2,\n    second = 3\n  }"));
+        QVERIFY(out.contains("] = {\n    first = 4,\n    second = 5\n  }"));
     }
     }
 }
@@ -449,6 +464,36 @@ void QtPrintersTest::testQUuid()
     QVERIFY(data.contains("{9ec3b70b-d105-42bf-b3b4-656e44d2e223}"));
 }
 
+void QtPrintersTest::testQVariant()
+{
+    GdbProcess gdb(QStringLiteral("debuggee_qvariant"));
+
+    auto printNext = [&]() {
+        gdb.execute("next");
+        return gdb.execute("print v");
+    };
+
+    gdb.execute("break qvariant.cpp:13");
+    gdb.execute("run");
+
+    QVERIFY(printNext().contains("QVariant(NULL)"));
+    QVERIFY(printNext().contains("QVariant(QString, \"KDevelop (QString)\")"));
+    QVERIFY(printNext().contains("QVariant(QByteArray, \"KDevelop (QByteArray)\" = {"));
+    QVERIFY(printNext().contains("QVariant(signed char, -8"));
+    QVERIFY(printNext().contains("QVariant(uchar, 8"));
+    QVERIFY(printNext().contains("QVariant(short, -16)"));
+    QVERIFY(printNext().contains("QVariant(ushort, 16)"));
+    QVERIFY(printNext().contains("QVariant(int, -32)"));
+    QVERIFY(printNext().contains("QVariant(uint, 32)"));
+    QVERIFY(printNext().contains("QVariant(qlonglong, -64)"));
+    QVERIFY(printNext().contains("QVariant(qulonglong, 64)"));
+    QVERIFY(printNext().contains("QVariant(bool, true)"));
+    QVERIFY(printNext().contains("QVariant(float, 4.5)"));
+    QVERIFY(printNext().contains("QVariant(double, 42.5)"));
+    QVERIFY(printNext().contains("QVariant(QObject*, 0x"));
+    QVERIFY(printNext().contains("QVariant(SomeCustomType, {\n  foo = 42\n})"));
+}
+
 void QtPrintersTest::testKTextEditorTypes()
 {
     GdbProcess gdb(QStringLiteral("debuggee_ktexteditortypes"));
@@ -465,7 +510,9 @@ void QtPrintersTest::testKDevelopTypes()
 {
     GdbProcess gdb(QStringLiteral("debuggee_kdeveloptypes"));
     gdb.execute("break kdeveloptypes.cpp:12");
-    gdb.execute("run");
+    const auto runMessage = gdb.execute("run");
+    if (runMessage.contains("ASan runtime does not come first"))
+        QSKIP("cannot run this test in an ASan build configuration");
 
     QVERIFY(gdb.execute("print path1").contains("(\"tmp\", \"foo\")"));
     QVERIFY(gdb.execute("print path2").contains("(\"http://www.test.com\", \"tmp\", \"asdf.txt\")"));

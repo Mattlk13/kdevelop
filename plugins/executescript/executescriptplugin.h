@@ -39,21 +39,17 @@ class ExecuteScriptPlugin : public KDevelop::IPlugin, public IExecuteScriptPlugi
     explicit ExecuteScriptPlugin(QObject *parent, const QVariantList & = QVariantList() );
     ~ExecuteScriptPlugin() override;
 
-    static QString _scriptAppConfigTypeId;
-    static QString interpreterEntry;
-    static QString workingDirEntry;
-    static QString executableEntry;
-    static QString executeOnRemoteHostEntry;
-    static QString remoteHostEntry;
-    static QString runCurrentFileEntry;
-    static QString argumentsEntry;
-    static QString isExecutableEntry;
-    static QString environmentProfileEntry;
-    //static QString useTerminalEntry;
-    static QString userIdToRunEntry;
-    static QString projectTargetEntry;
-    static QString outputFilteringEntry;
-    
+    static constexpr const char* interpreterEntry = "Interpreter";
+    static constexpr const char* runCurrentFileEntry = "Run current file";
+    static constexpr const char* executableEntry = "Executable";
+    static constexpr const char* argumentsEntry = "Arguments";
+    static constexpr const char* workingDirEntry = "Working Directory";
+    // TODO: migrate to more consistent key term "EnvironmentProfile"
+    static constexpr const char* environmentProfileEntry = "EnvironmentGroup";
+    static constexpr const char* outputFilteringEntry = "Output Filtering Mode";
+    static constexpr const char* executeOnRemoteHostEntry = "Execute on Remote Host";
+    static constexpr const char* remoteHostEntry = "Remote Host";
+
     void unload() override;
     
     QString interpreter( KDevelop::ILaunchConfiguration*, QString& err ) const override;
@@ -62,7 +58,6 @@ class ExecuteScriptPlugin : public KDevelop::IPlugin, public IExecuteScriptPlugi
     QStringList arguments( KDevelop::ILaunchConfiguration*, QString& err ) const override;
     QUrl workingDirectory( KDevelop::ILaunchConfiguration* ) const override;
     QString environmentProfileName(KDevelop::ILaunchConfiguration*) const override;
-    //bool useTerminal( KDevelop::ILaunchConfiguration* ) const;
     QString scriptAppConfigTypeId() const override;
     int outputFilterModeId( KDevelop::ILaunchConfiguration* ) const override;
     bool runCurrentFile(KDevelop::ILaunchConfiguration*) const override;

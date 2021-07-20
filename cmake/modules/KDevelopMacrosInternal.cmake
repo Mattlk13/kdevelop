@@ -9,9 +9,11 @@
 #                               TYPE LIBRARY|PLUGIN|APP [IDENTIFIER <id>] [CATEGORY_BASENAME <name>]
 #                               [HEADER <filename>] [DESCRIPTION <desc>])
 #   install_qt_logging_categories(TYPE LIBRARY|APP_PLUGIN)
+#   kdevelop_add_private_library(<target> SOURCES <source1> [<source2> [...]])
 #
 #=============================================================================
-# Copyright 2018 Friedrich W. H. Kossebau <kossebau@kde.org>
+# Copyright 2018, 2020 Friedrich W. H. Kossebau <kossebau@kde.org>
+#           2007 Andreas Pakulat <apaku@gmx.de>
 #
 # Distributed under the OSI-approved BSD License (the "License");
 # see accompanying file Copyright.txt for details.
@@ -21,6 +23,7 @@
 # See the License for more information.
 #=============================================================================
 
+include(CMakeParseArguments)
 
 # helper method to ensure consistent cache var names
 function(_varname_for_compile_flag_check_result _varname _flag )
@@ -102,21 +105,10 @@ macro(_declare_qt_logging_category sources)
         CATEGORY_NAME ${ARGS_CATEGORY_NAME}
     )
 
-    # Nasty hack: we create a target just to store all the category data in some build-system global object
-    # which then can be accessed from other places like _install_qt_logging_categories().
-    # we also create it here on first usage, to spare some additional call.
-    # Better idea how to solve that welcome
-    set(_targetname "qt_logging_category_${ARGS_EXPORT}")
-    if (NOT TARGET ${_targetname})
-        add_custom_target(${_targetname})
-        set(_categories ${ARGS_CATEGORY_NAME})
-    else()
-        get_target_property(_value ${_targetname} CATEGORIES)
-        set(_categories "${_value};${ARGS_CATEGORY_NAME}")
-    endif()
-    set_property(TARGET ${_targetname} PROPERTY CATEGORIES "${_categories}")
-    set_property(TARGET ${_targetname} PROPERTY "IDENTIFIER_${ARGS_CATEGORY_NAME}" "${ARGS_IDENTIFIER}")
-    set_property(TARGET ${_targetname} PROPERTY "DESCRIPTION_${ARGS_CATEGORY_NAME}" "${ARGS_DESCRIPTION}")
+    set(_propertyprefix "KDEV_QT_LOGGING_CATEGORY_${ARGS_EXPORT}")
+    set_property(GLOBAL APPEND PROPERTY "${_propertyprefix}_CATEGORIES" ${ARGS_CATEGORY_NAME})
+    set_property(GLOBAL PROPERTY "${_propertyprefix}_IDENTIFIER_${ARGS_CATEGORY_NAME}" "${ARGS_IDENTIFIER}")
+    set_property(GLOBAL PROPERTY "${_propertyprefix}_DESCRIPTION_${ARGS_CATEGORY_NAME}" "${ARGS_DESCRIPTION}")
 endmacro()
 
 
@@ -228,12 +220,14 @@ function(_install_qt_logging_categories)
         message(FATAL_ERROR "MACRONAME needs to be defined when calling _install_qt_logging_categories().")
     endif()
 
-    set(_targetname "qt_logging_category_${ARGS_EXPORT}")
-    if (NOT TARGET ${_targetname})
+    set(_propertyprefix "KDEV_QT_LOGGING_CATEGORY_${ARGS_EXPORT}")
+    get_property(has_category GLOBAL PROPERTY "${_propertyprefix}_CATEGORIES" SET)
+
+    if (NOT has_category)
         message(FATAL_ERROR "${ARGS_EXPORT} is an unknown qt logging category export name.")
     endif()
 
-    get_target_property(_categories ${_targetname} CATEGORIES)
+    get_property(_categories GLOBAL PROPERTY "${_propertyprefix}_CATEGORIES")
     list(SORT _categories)
 
     set(_content
@@ -243,8 +237,8 @@ function(_install_qt_logging_categories)
 ")
 
     foreach(_category IN LISTS _categories)
-        get_target_property(_description ${_targetname} "DESCRIPTION_${_category}")
-        get_target_property(_identifier ${_targetname} "IDENTIFIER_${_category}")
+        get_property(_description GLOBAL PROPERTY "${_propertyprefix}_DESCRIPTION_${_category}")
+        get_property(_identifier GLOBAL PROPERTY "${_propertyprefix}_IDENTIFIER_${_category}")
 
         # kdebugsettings >= 18.12 supports/pushes for some newer, not backward-compatible format.
         # In case of no presence of kdebugsettings at build time, we have to make a guess anyway,
@@ -312,4 +306,35 @@ function(install_qt_logging_categories)
     else()
         message(FATAL_ERROR "Unknown \"${ARGS_TYPE}\" with TYPE when calling declare_qt_logging_category().")
     endif()
+endfunction()
+
+# kdevelop_add_private_library(<target> SOURCES <source1> [<source2> [...]])
+function(kdevelop_add_private_library target)
+    set(options)
+    set(oneValueArgs)
+    set(multiValueArgs SOURCES)
+
+    cmake_parse_arguments(ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+    string(REPLACE "KDev" "" shortTargetName ${target})
+    if (${shortTargetName} STREQUAL ${target})
+        message(FATAL_ERROR "Target passed to kdevelop_add_private_library needs to start with \"KDev\", was \"${target}\"")
+    endif()
+
+    string(TOLOWER ${shortTargetName} shortTargetNameToLower)
+
+    add_library(${target} SHARED ${ARGS_SOURCES})
+    add_library(KDev::${shortTargetName} ALIAS ${target})
+
+    generate_export_header(${target} EXPORT_FILE_NAME ${shortTargetNameToLower}export.h)
+
+    target_include_directories(${target}
+        INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>" # useful for the "something.export.h" includes
+    )
+    set_target_properties(${target} PROPERTIES
+        VERSION ${KDEV_PLUGIN_VERSION}
+        SOVERSION ${KDEV_PLUGIN_VERSION}
+    )
+
+    install(TARGETS ${target} ${KDE_INSTALL_TARGETS_DEFAULT_ARGS} LIBRARY NAMELINK_SKIP)
 endfunction()

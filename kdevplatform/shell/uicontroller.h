@@ -51,7 +51,7 @@ public:
     no sublime mainwindow is active.*/
     Sublime::Area *activeArea() override;
     /** @return active sublime mainwindow or 0 if no such mainwindow is active.*/
-    virtual Sublime::MainWindow *activeSublimeWindow();
+    Sublime::MainWindow *activeSublimeWindow();
     /** @return active sublime mainwindow or 0 if no such mainwindow is active.*/
     KParts::MainWindow *activeMainWindow() override;
 
@@ -86,6 +86,7 @@ public:
     void registerStatus(QObject* status) override;
 
     void showErrorMessage(const QString& message, int timeout) override;
+    void postMessage(Sublime::Message* message) override;
 
     /// Returns list of available view factories together with their ToolDocuments.
     /// @see addToolView(), removeToolView(), findToolView()

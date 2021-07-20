@@ -85,7 +85,8 @@ public:
 
     QuickOpenLineEdit* createQuickOpenLineWidget();
 
-    KDevelop::IQuickOpenLine* createQuickOpenLine(const QStringList& scopes, const QStringList& type, QuickOpenType kind) override;
+    QLineEdit* createQuickOpenLine(const QStringList& scopes, const QStringList& type, QuickOpenType kind) override;
+
 public Q_SLOTS:
     void quickOpen();
     void quickOpenFile();
@@ -133,8 +134,7 @@ private:
 
 class QuickOpenWidgetCreator;
 
-class QuickOpenLineEdit
-    : public KDevelop::IQuickOpenLine
+class QuickOpenLineEdit : public QLineEdit
 {
     Q_OBJECT
 public:
@@ -144,11 +144,6 @@ public:
     bool insideThis(QObject* object);
     void showWithWidget(QuickOpenWidget* widget);
 
-    void setDefaultText(const QString& text) override
-    {
-        m_defaultText = text;
-        setPlaceholderText(m_defaultText);
-    }
 private Q_SLOTS:
     void activate();
     void deactivate();
@@ -161,7 +156,6 @@ private:
 
     QPointer<QuickOpenWidget> m_widget;
     bool m_forceUpdate;
-    QString m_defaultText;
     QuickOpenWidgetCreator* m_widgetCreator;
 };
 

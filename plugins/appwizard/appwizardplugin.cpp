@@ -47,6 +47,7 @@
 #include <interfaces/context.h>
 #include <interfaces/contextmenuextension.h>
 #include <util/scopeddialog.h>
+#include <sublime/message.h>
 #include <vcs/vcsjob.h>
 #include <vcs/interfaces/icentralizedversioncontrol.h>
 #include <vcs/interfaces/idistributedversioncontrol.h>
@@ -63,16 +64,15 @@ K_PLUGIN_FACTORY_WITH_JSON(AppWizardFactory, "kdevappwizard.json", registerPlugi
 
 AppWizardPlugin::AppWizardPlugin(QObject *parent, const QVariantList &)
     : KDevelop::IPlugin(QStringLiteral("kdevappwizard"), parent)
-    , m_templatesModel(nullptr)
 {
     setXMLFile(QStringLiteral("kdevappwizard.rc"));
 
     m_newFromTemplate = actionCollection()->addAction(QStringLiteral("project_new"));
     m_newFromTemplate->setIcon(QIcon::fromTheme(QStringLiteral("project-development-new-template")));
-    m_newFromTemplate->setText(i18n("New From Template..."));
+    m_newFromTemplate->setText(i18nc("@action", "New from Template..."));
     connect(m_newFromTemplate, &QAction::triggered, this, &AppWizardPlugin::slotNewProject);
-    m_newFromTemplate->setToolTip( i18n("Generate a new project from a template") );
-    m_newFromTemplate->setWhatsThis( i18n("This starts KDevelop's application wizard. "
+    m_newFromTemplate->setToolTip( i18nc("@info:tooltip", "Generate a new project from a template") );
+    m_newFromTemplate->setWhatsThis( i18nc("@info:whatsthis", "This starts KDevelop's application wizard. "
                                           "It helps you to generate a skeleton for your "
                                           "application from a set of templates.") );
 }
@@ -96,7 +96,11 @@ void AppWizardPlugin::slotNewProject()
 
             KConfig templateConfig(dlg->appInfo().appTemplate);
             KConfigGroup general(&templateConfig, "General");
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+            const QStringList fileArgs = general.readEntry("ShowFilesAfterGeneration").split(QLatin1Char(','), Qt::SkipEmptyParts);
+#else
             const QStringList fileArgs = general.readEntry("ShowFilesAfterGeneration").split(QLatin1Char(','), QString::SkipEmptyParts);
+#endif
             for (const auto& fileArg : fileArgs) {
                 QString file = KMacroExpander::expandMacros(fileArg.trimmed(), m_variables);
                 if (QDir::isRelativePath(file)) {
@@ -105,8 +109,10 @@ void AppWizardPlugin::slotNewProject()
                 core()->documentController()->openDocument(QUrl::fromUserInput(file));
             }
         } else {
-            KMessageBox::error( ICore::self()->uiController()->activeMainWindow(), i18n("Could not create project from template\n"), i18n("Failed to create project") );
-        }
+            const QString messageText = i18n("Could not create project from template.");
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
+       }
     }
 }
 
@@ -133,7 +139,7 @@ void vcsError(const QString &errorMsg, QTemporaryDir &tmpdir, const QUrl &dest, 
     {
         displayDetails = i18n("Please see the Version Control tool view.");
     }
-    KMessageBox::detailedError(nullptr, errorMsg, displayDetails, i18n("Version Control System Error"));
+    KMessageBox::detailedError(nullptr, errorMsg, displayDetails, i18nc("@title:window", "Version Control System Error"));
     KIO::del(dest, KIO::HideProgressInfo)->exec();
     tmpdir.remove();
 }
@@ -154,12 +160,27 @@ bool initializeDVCS(IDistributedVersionControl* dvcs, const ApplicationInfo& inf
     }
     qCDebug(PLUGIN_APPWIZARD) << "Initializing DVCS repository:" << dest;
 
+    qCDebug(PLUGIN_APPWIZARD) << "Checking for valid files in the DVCS repository:" << dest;
+    job = dvcs->status({dest}, KDevelop::IBasicVersionControl::Recursive);
+    if (!job || !job->exec() || job->status() != VcsJob::JobSucceeded)
+    {
+        vcsError(i18n("Could not check status of the DVCS repository"), scratchArea, dest);
+        return false;
+    }
+
+    if (job->fetchResults().toList().isEmpty())
+    {
+        qCDebug(PLUGIN_APPWIZARD) << "No files to add, skipping commit in the DVCS repository:" << dest;
+        return true;
+    }
+
     job = dvcs->add({dest}, KDevelop::IBasicVersionControl::Recursive);
     if (!job || !job->exec() || job->status() != VcsJob::JobSucceeded)
     {
         vcsError(i18n("Could not add files to the DVCS repository"), scratchArea, dest);
         return false;
     }
+
     job = dvcs->commit(info.importCommitMessage, {dest},
                             KDevelop::IBasicVersionControl::Recursive);
     if (!job || !job->exec() || job->status() != VcsJob::JobSucceeded)
@@ -238,7 +259,7 @@ QString AppWizardPlugin::createProject(const ApplicationInfo& info)
     //prepare variable substitution hash
     m_variables.clear();
     m_variables[QStringLiteral("APPNAME")] = info.name;
-    m_variables[QStringLiteral("APPNAMEUC")] = info.name.toUpper();
+    m_variables[QStringLiteral("APPNAMEUC")] = generateIdentifier(info.name.toUpper());
     m_variables[QStringLiteral("APPNAMELC")] = info.name.toLower();
     m_variables[QStringLiteral("APPNAMEID")] = generateIdentifier(info.name);
     m_variables[QStringLiteral("PROJECTDIR")] = dest.toLocalFile();
@@ -516,14 +537,16 @@ KDevelop::ContextMenuExtension AppWizardPlugin::contextMenuExtension(KDevelop::C
     return ext;
 }
 
-ProjectTemplatesModel* AppWizardPlugin::model()
+ProjectTemplatesModel* AppWizardPlugin::model() const
 {
-    if(!m_templatesModel)
-        m_templatesModel = new ProjectTemplatesModel(this);
+    if(!m_templatesModel) {
+        auto* self = const_cast<AppWizardPlugin*>(this);
+        m_templatesModel = new ProjectTemplatesModel(self);
+    }
     return m_templatesModel;
 }
 
-QAbstractItemModel* AppWizardPlugin::templatesModel()
+QAbstractItemModel* AppWizardPlugin::templatesModel() const
 {
     return model();
 }

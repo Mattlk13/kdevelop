@@ -69,14 +69,7 @@ public:
         if (!url.isValid()) {
             return;
         }
-
-        activeLanguages.clear();
-
-        const QList<ILanguageSupport*> languages = m_controller->languagesForUrl(url);
-        activeLanguages.reserve(languages.size());
-        for (const auto lang : languages) {
-            activeLanguages << lang;
-        }
+        activeLanguages = m_controller->languagesForUrl(url);
     }
 
     QList<ILanguageSupport*> activeLanguages;
@@ -251,17 +244,6 @@ ILanguageSupport* LanguageController::language(const QString &name) const
     return nullptr;
 }
 
-bool isNumeric(const QString& str)
-{
-    int len = str.length();
-    if(len == 0)
-        return false;
-    for(int a = 0; a < len; ++a)
-        if(!str[a].isNumber())
-            return false;
-    return true;
-}
-
 QList<ILanguageSupport*> LanguageController::languagesForUrl(const QUrl &url)
 {
     Q_D(LanguageController);
@@ -302,9 +284,6 @@ QList<ILanguageSupport*> LanguageController::languagesForUrl(const QUrl &url)
             }
         }
     }
-
-    if(!languages.isEmpty())
-        return languages;
 
     //Never use findByUrl from within a background thread, and never load a language support
     //from within the backgruond thread. Both is unsafe, and can lead to crashes

@@ -68,6 +68,11 @@ void QMakeProjectFile::setMkSpecs(QMakeMkSpecs* mkspecs)
     m_mkspecs = mkspecs;
 }
 
+void QMakeProjectFile::setOwnMkSpecs(bool own)
+{
+    m_ownMkSpecs = own;
+}
+
 bool QMakeProjectFile::read()
 {
     // default values
@@ -202,12 +207,14 @@ QStringList QMakeProjectFile::includeDirectories() const
             QString pattern = module;
 
             bool isPrivate = false;
-            if (module.endsWith(QLatin1String("-private"))) {
-                pattern.chop(qstrlen("-private"));
+            const QLatin1String dashPrivateLineEnd("-private");
+            const QLatin1String underscorePrivateLineEnd("_private");
+            if (module.endsWith(dashPrivateLineEnd)) {
+                pattern.chop(dashPrivateLineEnd.size());
                 isPrivate = true;
-            } else if (module.endsWith(QLatin1String("_private"))) {
+            } else if (module.endsWith(underscorePrivateLineEnd)) {
                 // _private is less common, but still a valid suffix
-                pattern.chop(qstrlen("_private"));
+                pattern.chop(underscorePrivateLineEnd.size());
                 isPrivate = true;
             }
 
@@ -296,7 +303,7 @@ QStringList QMakeProjectFile::extraArguments() const
     QStringList args;
     for (const auto& var : variablesToCheck) {
         foreach (const auto& arg, variableValues(var)) {
-            auto argHasPrefix = [arg](const char* prefix) {
+            auto argHasPrefix = [&arg](const char* prefix) {
                 return arg.startsWith(QLatin1String(prefix));
             };
             if ( !std::any_of(prefixes.begin(), prefixes.end(), argHasPrefix)) {
@@ -378,6 +385,8 @@ QStringList QMakeProjectFile::targets() const
 QMakeProjectFile::~QMakeProjectFile()
 {
     // TODO: delete cache, specs, ...?
+    if (m_ownMkSpecs)
+        delete m_mkspecs;
 }
 
 QStringList QMakeProjectFile::resolveVariable(const QString& variable, VariableInfo::VariableType type) const

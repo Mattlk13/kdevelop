@@ -29,9 +29,12 @@ using namespace KDevelop;
 StandardVcsLocationWidget::StandardVcsLocationWidget(QWidget* parent, Qt::WindowFlags f)
     : VcsLocationWidget(parent, f)
 {
-    setLayout(new QVBoxLayout(this));
+    auto* widgetLayout = new QVBoxLayout;
+    widgetLayout->setContentsMargins(0, 0, 0, 0);
+    setLayout(widgetLayout);
+
     m_urlWidget = new KUrlRequester(this);
-    m_urlWidget->setPlaceholderText(i18n("Enter the repository URL..."));
+    m_urlWidget->setPlaceholderText(i18nc("@info:placeholder", "Enter the repository URL..."));
     layout()->addWidget(m_urlWidget);
     
     connect(m_urlWidget, &KUrlRequester::textChanged, this, &StandardVcsLocationWidget::textChanged);

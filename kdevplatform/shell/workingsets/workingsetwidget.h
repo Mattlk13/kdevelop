@@ -30,9 +30,6 @@ class Area;
 
 namespace KDevelop {
 
-class WorkingSetController;
-class WorkingSet;
-
 /**
  * One instance of this widget is created per area switcher tab, showing
  * the currently opened working set for this area.
@@ -45,7 +42,7 @@ public:
     void setVisible( bool visible ) override;
 
 private Q_SLOTS:
-    void changingWorkingSet(Sublime::Area* area, const QString& from, const QString& to);
+    void changingWorkingSet(Sublime::Area* area, Sublime::Area* oldArea, const QString& from, const QString& to);
     void setChangedSignificantly();
 
 private:

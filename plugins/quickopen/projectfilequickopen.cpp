@@ -18,11 +18,9 @@
 
 #include "projectfilequickopen.h"
 
-#include <QApplication>
 #include <QIcon>
 #include <QTextBrowser>
 
-#include <KIconLoader>
 #include <KLocalizedString>
 
 #include <interfaces/iprojectcontroller.h>
@@ -35,12 +33,20 @@
 #include <language/duchain/duchainlock.h>
 #include <serialization/indexedstring.h>
 #include <language/duchain/parsingenvironment.h>
+#include <util/algorithm.h>
 #include <util/texteditorhelpers.h>
 
 #include <project/projectmodel.h>
 #include <project/projectutils.h>
 
 #include "../openwith/iopenwith.h"
+
+#include <timsort/timsort.hpp>
+
+#include <algorithm>
+#include <iterator>
+#include <utility>
+#include <vector>
 
 using namespace KDevelop;
 
@@ -68,6 +74,14 @@ QString iconNameForUrl(const IndexedString& url)
     }
     return QStringLiteral("unknown");
 }
+}
+
+ProjectFile::ProjectFile(const ProjectFileItem* fileItem)
+    : path{fileItem->path()}
+    , projectPath{fileItem->project()->path()}
+    , indexedPath{fileItem->indexedPath()}
+    , outsideOfProject{!projectPath.isParentOf(path)}
+{
 }
 
 ProjectFileData::ProjectFileData(const ProjectFile& file)
@@ -164,24 +178,7 @@ QWidget* ProjectFileData::expandingWidget() const
 
 QIcon ProjectFileData::icon() const
 {
-    const QString& iconName = iconNameForUrl(m_file.indexedPath);
-
-    /**
-     * FIXME: Move this cache into a more central place and reuse it elsewhere.
-     *        The project model e.g. could reuse this as well.
-     *
-     * Note: We cache here since otherwise displaying and esp. scrolling
-     *       in a large list of quickopen items becomes very slow.
-     */
-    static QHash<QString, QPixmap> iconCache;
-    QHash<QString, QPixmap>::const_iterator it = iconCache.constFind(iconName);
-    if (it != iconCache.constEnd()) {
-        return it.value();
-    }
-
-    const QPixmap& pixmap = KIconLoader::global()->loadIcon(iconName, KIconLoader::Small);
-    iconCache.insert(iconName, pixmap);
-    return pixmap;
+    return QIcon::fromTheme(iconNameForUrl(m_file.indexedPath));
 }
 
 QString ProjectFileData::project() const
@@ -190,7 +187,7 @@ QString ProjectFileData::project() const
     if (project) {
         return project->name();
     } else {
-        return i18n("none");
+        return i18nc("@item no project", "none");
     }
 }
 
@@ -215,7 +212,11 @@ void BaseFileDataProvider::setFilterText(const QString& text)
             path = Path(Path(doc->url()).parent(), path).pathOrUrl();
         }
     }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    setFilter(path.split(QLatin1Char('/'), Qt::SkipEmptyParts));
+#else
     setFilter(path.split(QLatin1Char('/'), QString::SkipEmptyParts));
+#endif
 }
 
 uint BaseFileDataProvider::itemCount() const
@@ -248,42 +249,75 @@ ProjectFileDataProvider::ProjectFileDataProvider()
 
 void ProjectFileDataProvider::projectClosing(IProject* project)
 {
-    const auto files = KDevelop::allFiles(project->projectItem());
-    for (ProjectFileItem* file : files) {
-        fileRemovedFromSet(file);
+    // Once we remove all project's files from set, there is no need to listen
+    // to &IProject::fileRemovedFromSet signal from this project and waste time
+    // searching in m_projectFiles. No need to listen to &IProject::fileAddedToSet
+    // signal from this project either - we are not interested in hypothetical
+    // file additions to the project that is about to be closed and destroyed.
+    disconnect(project, nullptr, this, nullptr);
+
+    if (ICore::self()->projectController()->projectCount() == 0) {
+        // No open projects left => just remove all files. This is a little faster
+        // than the algorithm below. Releasing the memory here would slow down the
+        // next call to projectOpened() => keep the capacity of m_projectFiles.
+        m_projectFiles.clear();
+        return;
     }
+
+    const Path projectPath = project->path();
+    const auto logicalEnd = std::remove_if(m_projectFiles.begin(), m_projectFiles.end(),
+                                           [&projectPath](const ProjectFile& f) {
+                                               return f.projectPath == projectPath;
+                                           });
+    m_projectFiles.erase(logicalEnd, m_projectFiles.end());
 }
 
 void ProjectFileDataProvider::projectOpened(IProject* project)
 {
-    const int processAfter = 1000;
-    int processed = 0;
-    const auto files = KDevelop::allFiles(project->projectItem());
-    for (ProjectFileItem* file : files) {
-        fileAddedToSet(file);
-        if (++processed == processAfter) {
-            // prevent UI-lockup when a huge project was imported
-            QApplication::processEvents();
-            processed = 0;
-        }
-    }
-
     connect(project, &IProject::fileAddedToSet,
             this, &ProjectFileDataProvider::fileAddedToSet);
     connect(project, &IProject::fileRemovedFromSet,
             this, &ProjectFileDataProvider::fileRemovedFromSet);
+
+    // Collect the opened project's files.
+    const auto oldSize = m_projectFiles.size();
+    KDevelop::forEachFile(project->projectItem(), [this](ProjectFileItem* fileItem) {
+        m_projectFiles.emplace_back(fileItem);
+    });
+    const auto justAddedBegin = m_projectFiles.begin() + oldSize;
+
+    // Sort the opened project's files.
+    // Sorting stability is not useful here, but timsort vastly outperforms all
+    // std and boost sorting algorithms (boost::sort::flat_stable_sort is the
+    // second best) on the files of large real-life projects, because
+    // KDevelop::forEachFile() collects files in an almost sorted order.
+    gfx::timsort(justAddedBegin, m_projectFiles.end());
+
+    // Merge the sorted ranges of files belonging to previously opened projects
+    // and to the just opened project.
+    // Since the file sets from different projects usually don't overlap or overlap
+    // very little, timmerge is the perfect merge algorithm. Furthermore, the
+    // comparison of ProjectFile objects is expensive and cache-unfriendly. This
+    // aspect lets timmerge outperform std::inplace_merge even more here. This same
+    // aspect also helps timsort outperform other sorting algorithms.
+    gfx::timmerge(m_projectFiles.begin(), justAddedBegin, m_projectFiles.end());
+
+    // Remove duplicates across all open projects. Usually different projects have no
+    // common files. But since a file can belong to multiple targets within one project,
+    // a single call to KDevelop::forEachFile() often produces many duplicates.
+    const auto equalFiles = [](const ProjectFile& a, const ProjectFile& b) {
+        return a.indexedPath == b.indexedPath;
+    };
+    m_projectFiles.erase(std::unique(m_projectFiles.begin(), m_projectFiles.end(), equalFiles),
+                         m_projectFiles.end());
 }
 
-void ProjectFileDataProvider::fileAddedToSet(ProjectFileItem* file)
+void ProjectFileDataProvider::fileAddedToSet(ProjectFileItem* fileItem)
 {
-    ProjectFile f;
-    f.projectPath = file->project()->path();
-    f.path = file->path();
-    f.indexedPath = file->indexedPath();
-    f.outsideOfProject = !f.projectPath.isParentOf(f.path);
+    ProjectFile f(fileItem);
     auto it = std::lower_bound(m_projectFiles.begin(), m_projectFiles.end(), f);
-    if (it == m_projectFiles.end() || it->path != f.path) {
-        m_projectFiles.insert(it, f);
+    if (it == m_projectFiles.end() || it->indexedPath != f.indexedPath) {
+        m_projectFiles.insert(it, std::move(f));
     }
 }
 
@@ -291,12 +325,13 @@ void ProjectFileDataProvider::fileRemovedFromSet(ProjectFileItem* file)
 {
     ProjectFile item;
     item.path = file->path();
+    item.indexedPath = file->indexedPath();
 
     // fast-path for non-generated files
     // NOTE: figuring out whether something is generated is expensive... and since
     // generated files are rare we apply this two-step algorithm here
     auto it = std::lower_bound(m_projectFiles.begin(), m_projectFiles.end(), item);
-    if (it != m_projectFiles.end() && !(item < *it)) {
+    if (it != m_projectFiles.end() && it->indexedPath == item.indexedPath) {
         m_projectFiles.erase(it);
         return;
     }
@@ -304,7 +339,7 @@ void ProjectFileDataProvider::fileRemovedFromSet(ProjectFileItem* file)
     // last try: maybe it was generated
     item.outsideOfProject = true;
     it = std::lower_bound(m_projectFiles.begin(), m_projectFiles.end(), item);
-    if (it != m_projectFiles.end() && !(item < *it)) {
+    if (it != m_projectFiles.end() && it->indexedPath == item.indexedPath) {
         m_projectFiles.erase(it);
         return;
     }
@@ -312,57 +347,67 @@ void ProjectFileDataProvider::fileRemovedFromSet(ProjectFileItem* file)
 
 void ProjectFileDataProvider::reset()
 {
-    clearFilter();
+    updateItems([this](QVector<ProjectFile>& closedFiles) {
+        const auto open = openFiles();
+        // Don't "optimize" by assigning m_projectFiles to closedFiles and
+        // returning early if there are no open files. Such an optimization may
+        // speed up this call to reset() sometimes - if the destruction of the
+        // previous data of closedFiles doesn't take long for some reason. But
+        // this "optimization" will discard the current elements and capacity of
+        // closedFiles, eventually will trigger an extra allocation and
+        // construction of many ProjectFile objects: when a project is opened or
+        // closed, when a file is added to/removed from a project, or when a
+        // file is opened and reset() is called again. See also the
+        // documentation of PathFilter::updateItems().
 
-    QVector<ProjectFile> projectFiles = m_projectFiles;
-
-    const auto& open = openFiles();
-    for (QVector<ProjectFile>::iterator it = projectFiles.begin();
-         it != projectFiles.end(); ) {
-        if (open.contains(it->indexedPath)) {
-            it = projectFiles.erase(it);
-        } else {
-            ++it;
-        }
-    }
-
-    setItems(projectFiles);
+        closedFiles.resize(m_projectFiles.size());
+        const auto logicalEnd = std::remove_copy_if(
+                m_projectFiles.cbegin(), m_projectFiles.cend(),
+                closedFiles.begin(), [&open](const ProjectFile& f) {
+                                         return open.contains(f.indexedPath);
+                                     });
+        closedFiles.erase(logicalEnd, closedFiles.end());
+    });
 }
 
 QSet<IndexedString> ProjectFileDataProvider::files() const
 {
-    QSet<IndexedString> ret;
-
     const auto projects = ICore::self()->projectController()->projects();
-    for (IProject* project : projects) {
-        ret += project->fileSet();
+    if (projects.empty()) {
+        return {}; // don't call openFiles() needlessly
     }
 
-    return ret - openFiles();
+    std::vector<QSet<IndexedString>> sets;
+    sets.reserve(projects.size());
+    std::transform(projects.cbegin(), projects.cend(), std::back_inserter(sets),
+                   [](const IProject* project) {
+                       return project->fileSet();
+                   });
+
+    auto result = Algorithm::unite(std::move(sets));
+    result.subtract(openFiles());
+    return result;
 }
 
 void OpenFilesDataProvider::reset()
 {
-    clearFilter();
-    IProjectController* projCtrl = ICore::self()->projectController();
-    IDocumentController* docCtrl = ICore::self()->documentController();
-    const QList<IDocument*>& docs = docCtrl->openDocuments();
+    updateItems([](QVector<ProjectFile>& currentFiles) {
+        const auto* const projCtrl = ICore::self()->projectController();
+        const auto docs = ICore::self()->documentController()->openDocuments();
 
-    QVector<ProjectFile> currentFiles;
-    currentFiles.reserve(docs.size());
-    for (IDocument* doc : docs) {
-        ProjectFile f;
-        f.path = Path(doc->url());
-        IProject* project = projCtrl->findProjectForUrl(doc->url());
-        if (project) {
-            f.projectPath = project->path();
-        }
-        currentFiles << f;
-    }
-
-    std::sort(currentFiles.begin(), currentFiles.end());
-
-    setItems(currentFiles);
+        currentFiles.resize(docs.size());
+        std::transform(docs.cbegin(), docs.cend(), currentFiles.begin(),
+                       [projCtrl](const IDocument* doc) {
+                           ProjectFile f;
+                           const QUrl docUrl = doc->url();
+                           f.path = Path(docUrl);
+                           if (const IProject* project = projCtrl->findProjectForUrl(docUrl)) {
+                               f.projectPath = project->path();
+                           }
+                           return f;
+                       });
+        std::sort(currentFiles.begin(), currentFiles.end());
+    });
 }
 
 QSet<IndexedString> OpenFilesDataProvider::files() const

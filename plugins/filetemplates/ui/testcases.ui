@@ -11,6 +11,18 @@
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
    <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
@@ -20,7 +32,7 @@
       <item row="0" column="0">
        <widget class="QLabel" name="identifierLabel">
         <property name="text">
-         <string>&amp;Identifier:</string>
+         <string comment="@label:textbox">&amp;Identifier:</string>
         </property>
         <property name="buddy">
          <cstring>identifierLineEdit</cstring>
@@ -33,7 +45,7 @@
       <item row="1" column="0">
        <widget class="QLabel" name="testCasesLabel">
         <property name="text">
-         <string>&amp;Test cases:</string>
+         <string comment="@label:listbox">&amp;Test cases:</string>
         </property>
        </widget>
       </item>
@@ -56,7 +68,7 @@
   <customwidget>
    <class>KEditListWidget</class>
    <extends>QWidget</extends>
-   <header>keditlistwidget.h</header>
+   <header>KEditListWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

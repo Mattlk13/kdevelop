@@ -48,7 +48,7 @@ public:
 
         const QString title = dock->view()->document()->title();
         setIcon(dock->windowIcon());
-        setToolTip(i18n("Toggle '%1' tool view.", title));
+        setToolTip(i18nc("@info:tooltip", "Toggle '%1' tool view", title));
         setText(title);
 
         //restore tool view shortcut config
@@ -86,7 +86,7 @@ private:
             refreshText();
         }
 
-        return QObject::eventFilter(watched, event);
+        return QAction::eventFilter(watched, event);
     }
 
     void refreshText()
@@ -116,7 +116,7 @@ IdealButtonBarWidget::IdealButtonBarWidget(Qt::DockWidgetArea area,
     if (area == Qt::BottomDockWidgetArea)
     {
         auto *statusLayout = new QBoxLayout(QBoxLayout::LeftToRight, this);
-        statusLayout->setMargin(0);
+        statusLayout->setContentsMargins(0, 0, 0, 0);
 
         statusLayout->addLayout(m_buttonsLayout);
 
@@ -124,12 +124,12 @@ IdealButtonBarWidget::IdealButtonBarWidget(Qt::DockWidgetArea area,
 
         m_corner = new QWidget(this);
         auto *cornerLayout = new QBoxLayout(QBoxLayout::LeftToRight, m_corner);
-        cornerLayout->setMargin(0);
+        cornerLayout->setContentsMargins(0, 0, 0, 0);
         cornerLayout->setSpacing(0);
         statusLayout->addWidget(m_corner);
     } else {
         auto *superLayout = new QBoxLayout(QBoxLayout::TopToBottom, this);
-        superLayout->setMargin(0);
+        superLayout->setContentsMargins(0, 0, 0, 0);
 
         superLayout->addLayout(m_buttonsLayout);
         superLayout->addStretch(1);
@@ -140,7 +140,7 @@ QAction* IdealButtonBarWidget::addWidget(IdealDockWidget *dock,
                                          Area *area, View *view)
 {
     if (m_area == Qt::BottomDockWidgetArea || m_area == Qt::TopDockWidgetArea)
-        dock->setFeatures( dock->features() | IdealDockWidget::DockWidgetVerticalTitleBar );
+        dock->setFeatures( dock->features() | QDockWidget::DockWidgetVerticalTitleBar );
 
     dock->setArea(area);
     dock->setView(view);
@@ -290,6 +290,7 @@ void IdealButtonBarWidget::applyOrderToLayout()
         if (auto button = qobject_cast<IdealToolButton*>(m_buttonsLayout->itemAt(i)->widget())) {
             addButtonToOrder(button);
             m_buttonsLayout->removeWidget(button);
+            --i;
         }
     }
 

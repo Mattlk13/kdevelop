@@ -70,7 +70,7 @@ StatusbarProgressWidget::StatusbarProgressWidget( ProgressDialog* progressDialog
     int w = fontMetrics().width( QStringLiteral(" 999.9 kB/s 00:00:01 ") ) + 8;
 #endif
     box = new QHBoxLayout( this );
-    box->setMargin(0);
+    box->setContentsMargins(0, 0, 0, 0);
     box->setSpacing(0);
     stack = new QStackedWidget( this );
 
@@ -125,7 +125,7 @@ StatusbarProgressWidget::StatusbarProgressWidget( ProgressDialog* progressDialog
     m_pButton->setIconSize( iconSize );
     box->addWidget( m_pButton  );
 
-    m_pButton->setToolTip( i18n("Open detailed progress dialog") );
+    m_pButton->setToolTip( i18nc("@info:tooltip", "Open detailed progress dialog") );
 
     box->addWidget( stack );
 
@@ -217,20 +217,16 @@ void StatusbarProgressWidget::slotProgressItemCompleted( ProgressItem *item )
         return; // we are only interested in top level items
     }
 
-    bool itemUsesBusyIndicator = item->usesBusyIndicator();
     item->deleteLater();
     item = nullptr;
 
     connectSingleItem(); // if going back to 1 item
     if ( ProgressManager::instance()->isEmpty() ) { // No item
-        // If completed item uses busy indicator and progress manager doesn't have any
-        // other items, then we should set it progress to 100% to indicate finishing.
-        // Without this fix we will show busy indicator for already finished item
-        // for next 5s.
-        if ( itemUsesBusyIndicator ) {
-            activateSingleItemMode( 100 );
-        }
-
+        // If the progress manager doesn't have other progress items, set the progress to 100%
+        // to indicate completion. Otherwise, if @p item uses a busy indicator, or had been running
+        // for less than a second and was preceded by a different item that uses a busy indicator,
+        // we could be showing a busy indicator for 5 seconds without any task in progress.
+        activateSingleItemMode( 100 );
         // Done. In 5s the progress-widget will close, then we can clean up the statusbar
         mCleanTimer->start();
     } else if ( mCurrentItem ) { // Exactly one item
@@ -240,12 +236,17 @@ void StatusbarProgressWidget::slotProgressItemCompleted( ProgressItem *item )
 
 void StatusbarProgressWidget::connectSingleItem()
 {
+    auto* const singleItem = ProgressManager::instance()->singleItem();
+    if ( singleItem == mCurrentItem ) {
+        return; // No need to waste time reconnecting the same signal/slot pair.
+    }
+
     if ( mCurrentItem ) {
         disconnect ( mCurrentItem, &ProgressItem::progressItemProgress,
                      this, &StatusbarProgressWidget::slotProgressItemProgress );
         mCurrentItem = nullptr;
     }
-    mCurrentItem = ProgressManager::instance()->singleItem();
+    mCurrentItem = singleItem;
     if ( mCurrentItem ) {
         connect ( mCurrentItem, &ProgressItem::progressItemProgress,
                   this, &StatusbarProgressWidget::slotProgressItemProgress );
@@ -345,7 +346,7 @@ void StatusbarProgressWidget::slotClean()
 bool StatusbarProgressWidget::eventFilter(QObject* object, QEvent* ev)
 {
     if ( ev->type() == QEvent::MouseButtonPress ) {
-        auto *e = (QMouseEvent*)ev;
+        auto* e = static_cast<QMouseEvent*>(ev);
 
         if ( e->button() == Qt::LeftButton && mode != None ) {    // toggle view on left mouse button
             // Consensus seems to be that we should show/hide the fancy dialog when the user
@@ -362,11 +363,11 @@ void StatusbarProgressWidget::slotProgressDialogVisible( bool b )
     // Update the hide/show button when the detailed one is shown/hidden
     if ( b ) {
         m_pButton->setIcon( QIcon::fromTheme( QStringLiteral("go-down") ) );
-        m_pButton->setToolTip( i18n("Hide detailed progress window") );
+        m_pButton->setToolTip( i18nc("@info:tooltip", "Hide detailed progress window") );
         setMode();
     } else {
         m_pButton->setIcon( QIcon::fromTheme( QStringLiteral("go-up") ) );
-        m_pButton->setToolTip( i18n("Show detailed progress window") );
+        m_pButton->setToolTip( i18nc("@info:tooltip", "Show detailed progress window") );
     }
 }
 

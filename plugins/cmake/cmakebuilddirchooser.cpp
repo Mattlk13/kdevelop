@@ -29,7 +29,6 @@
 #include <interfaces/iruntime.h>
 #include <interfaces/iruntimecontroller.h>
 
-#include <KColorScheme>
 #include <KLocalizedString>
 
 #include <QDir>
@@ -41,7 +40,7 @@ using namespace KDevelop;
 CMakeBuildDirChooser::CMakeBuildDirChooser(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle(i18n("Configure a build directory - %1", ICore::self()->runtimeController()->currentRuntime()->name()));
+    setWindowTitle(i18nc("@title:window", "Configure a Build Directory - %1", ICore::self()->runtimeController()->currentRuntime()->name()));
 
     m_buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
     m_buttonBox->button(QDialogButtonBox::Ok)->setDefault(true);
@@ -99,7 +98,7 @@ void CMakeBuildDirChooser::setProject( IProject* project )
     m_srcFolder = folder;
 
     m_chooserUi->buildFolder->setUrl(KDevelop::proposedBuildFolder(m_srcFolder).toUrl());
-    setWindowTitle(i18n("Configure a build directory for %1", project->name()));
+    setWindowTitle(i18nc("@title:window", "Configure a Build Directory for %1", project->name()));
     update();
 }
 
@@ -129,7 +128,12 @@ void CMakeBuildDirChooser::buildDirSettings(
     int cnt = 0;
     while (cnt != 3 && !file.atEnd())
     {
-        const auto rawLine = file.readLine();
+        auto rawLine = file.readLine();
+
+        if (rawLine.endsWith('\n'))
+            rawLine.chop(1);
+        if (rawLine.endsWith('\r'))
+            rawLine.chop(1);
 
         auto match = [&rawLine](const QByteArray& prefix, QString* target) -> bool
         {
@@ -283,14 +287,8 @@ void CMakeBuildDirChooser::setExtraArguments(const QString& args)
 
 void CMakeBuildDirChooser::setStatus(const QString& message, bool canApply)
 {
-    KColorScheme scheme(QPalette::Normal);
-    KColorScheme::ForegroundRole role;
-    if (canApply) {
-        role = KColorScheme::PositiveText;
-    } else {
-        role = KColorScheme::NegativeText;
-    }
-    m_chooserUi->status->setText(QStringLiteral("<i><font color='%1'>%2</font></i>").arg(scheme.foreground(role).color().name(), message));
+    m_chooserUi->status->setMessageType(canApply ? KMessageWidget::Positive : KMessageWidget::Warning);
+    m_chooserUi->status->setText(message);
 
     auto okButton = m_buttonBox->button(QDialogButtonBox::Ok);
     okButton->setEnabled(canApply);

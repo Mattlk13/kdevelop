@@ -118,15 +118,15 @@ static QWidget* createPasteStatsWidget(QWidget *parent, const QVector<TaskInfo>&
         QString iconName;
         switch (task.m_status) {
             case TaskStatus::SUCCESS:
-                tooltip = i18n("Suboperation succeeded");
+                tooltip = i18nc("@info:tooltip", "Suboperation succeeded");
                 iconName = QStringLiteral("dialog-ok");
                 break;
             case TaskStatus::FAILURE:
-                tooltip = i18n("Suboperation failed");
+                tooltip = i18nc("@info:tooltip", "Suboperation failed");
                 iconName = QStringLiteral("dialog-error");
                 break;
             case TaskStatus::SKIPPED:
-                tooltip = i18n("Suboperation skipped to prevent data loss");
+                tooltip = i18nc("@info:tooltip", "Suboperation skipped to prevent data loss");
                 iconName = QStringLiteral("dialog-warning");
                 break;
         }
@@ -199,7 +199,7 @@ static ClassifiedPaths classifyPaths(const Path::List& paths, KDevelop::ProjectM
 {
     ClassifiedPaths result;
     for (const Path& path : paths) {
-        QList<ProjectBaseItem*> items = projectModel->itemsForPath(IndexedString(path.path()));
+        const QList<ProjectBaseItem*> items = projectModel->itemsForPath(IndexedString(path.path()));
         if (!items.empty()) {
             for (ProjectBaseItem* item : items) {
                 IProject* project = item->project();
@@ -295,7 +295,7 @@ QVector<TaskInfo> copyMoveItems(const Path::List& paths, ProjectBaseItem* destIt
 
 void showWarningDialogForFailedPaste(QWidget* parent, const QVector<TaskInfo>& tasks)
 {
-    QDialog* dialog = new QDialog(parent);
+    auto* dialog = new QDialog(parent);
 
     dialog->setWindowTitle(i18nc("@title:window", "Paste Failed"));
 
@@ -306,18 +306,18 @@ void showWarningDialogForFailedPaste(QWidget* parent, const QVector<TaskInfo>& t
     dialog->setWindowModality(Qt::WindowModal);
     dialog->setModal(true);
 
-    QWidget* mainWidget = new QWidget(dialog);
+    auto* mainWidget = new QWidget(dialog);
     auto* mainLayout = new QVBoxLayout(mainWidget);
-    const int spacingHint = mainWidget->style()->pixelMetric(QStyle::PM_DefaultLayoutSpacing);
+    const int spacingHint = mainWidget->style()->pixelMetric(QStyle::PM_LayoutVerticalSpacing);
     mainLayout->setSpacing(spacingHint * 2); // provide extra spacing
-    mainLayout->setMargin(0);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
 
     auto* hLayout = new QHBoxLayout;
-    hLayout->setMargin(0);
+    hLayout->setContentsMargins(0, 0, 0, 0);
     hLayout->setSpacing(-1); // use default spacing
     mainLayout->addLayout(hLayout, 0);
 
-    QLabel* iconLabel = new QLabel(mainWidget);
+    auto* iconLabel = new QLabel(mainWidget);
 
     // Icon
     QStyleOption option;
@@ -334,7 +334,7 @@ void showWarningDialogForFailedPaste(QWidget* parent, const QVector<TaskInfo>& t
     hLayout->addSpacing(spacingHint);
 
     const QString text = i18n("Failed to paste. Below is a list of suboperations that have been attempted.");
-    QLabel* messageLabel = new QLabel(text, mainWidget);
+    auto* messageLabel = new QLabel(text, mainWidget);
     messageLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     hLayout->addWidget(messageLabel, 5);
 

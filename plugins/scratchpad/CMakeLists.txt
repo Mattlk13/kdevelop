@@ -16,12 +16,12 @@ declare_qt_logging_category(scratchpad_SRCS
 )
 
 kdevplatform_add_plugin(kdevscratchpad
-    JSON scratchpad.json
     SOURCES ${scratchpad_SRCS}
 )
 
 target_link_libraries(kdevscratchpad
     KDev::Interfaces
+    KDev::Sublime
     KDev::Util
     KDev::OutputView
 )

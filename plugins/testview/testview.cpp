@@ -40,7 +40,9 @@
 #include <KActionCollection>
 #include <KJob>
 #include <KLocalizedString>
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
 #include <KRecursiveFilterProxyModel>
+#endif
 
 #include <QAction>
 #include <QHeaderView>
@@ -50,6 +52,9 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 #include <QWidgetAction>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#include <QSortFilterProxyModel>
+#endif
 
 using namespace KDevelop;
 
@@ -63,10 +68,14 @@ TestView::TestView(TestViewPlugin* plugin, QWidget* parent)
 : QWidget(parent)
 , m_plugin(plugin)
 , m_tree(new QTreeView(this))
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+, m_filter(new QSortFilterProxyModel(this))
+#else
 , m_filter(new KRecursiveFilterProxyModel(this))
+#endif
 {
     setWindowIcon(QIcon::fromTheme(QStringLiteral("preflight-verifier"), windowIcon()));
-    setWindowTitle(i18n("Unit Tests"));
+    setWindowTitle(i18nc("@title:window", "Unit Tests"));
 
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -78,28 +87,31 @@ TestView::TestView(TestViewPlugin* plugin, QWidget* parent)
     m_tree->setIndentation(10);
     m_tree->setEditTriggers(QTreeView::NoEditTriggers);
     m_tree->setSelectionBehavior(QTreeView::SelectRows);
-    m_tree->setSelectionMode(QTreeView::SingleSelection);
+    m_tree->setSelectionMode(QTreeView::ExtendedSelection);
     m_tree->setExpandsOnDoubleClick(false);
     m_tree->sortByColumn(0, Qt::AscendingOrder);
-    connect(m_tree, &QTreeView::activated, this, &TestView::doubleClicked);
+    connect(m_tree, &QTreeView::doubleClicked, this, &TestView::doubleClicked);
 
     m_model = new QStandardItemModel(this);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+    m_filter->setRecursiveFilteringEnabled(true);
+#endif
     m_filter->setSourceModel(m_model);
     m_tree->setModel(m_filter);
 
-    QAction* showSource = new QAction( QIcon::fromTheme(QStringLiteral("code-context")), i18n("Show Source"), this );
+    auto* showSource = new QAction( QIcon::fromTheme(QStringLiteral("code-context")), i18nc("@action:inmenu", "Show Source"), this );
     connect (showSource, &QAction::triggered, this, &TestView::showSource);
     m_contextMenuActions << showSource;
 
     addAction(plugin->actionCollection()->action(QStringLiteral("run_all_tests")));
     addAction(plugin->actionCollection()->action(QStringLiteral("stop_running_tests")));
 
-    QAction* runSelected = new QAction( QIcon::fromTheme(QStringLiteral("system-run")), i18n("Run Selected Tests"), this );
+    auto* runSelected = new QAction( QIcon::fromTheme(QStringLiteral("system-run")), i18nc("@action", "Run Selected Tests"), this );
     connect (runSelected, &QAction::triggered, this, &TestView::runSelectedTests);
     addAction(runSelected);
 
     auto* edit = new QLineEdit(parent);
-    edit->setPlaceholderText(i18n("Filter..."));
+    edit->setPlaceholderText(i18nc("@info:placeholder", "Filter..."));
     edit->setClearButtonEnabled(true);
     auto* widgetAction = new QWidgetAction(this);
     widgetAction->setDefaultWidget(edit);
@@ -359,12 +371,12 @@ void TestView::addTestSuite(ITestSuite* suite)
     QStandardItem* projectItem = itemForProject(suite->project());
     Q_ASSERT(projectItem);
 
-    QStandardItem* suiteItem = new QStandardItem(QIcon::fromTheme(QStringLiteral("view-list-tree")), suite->name());
+    auto* suiteItem = new QStandardItem(QIcon::fromTheme(QStringLiteral("view-list-tree")), suite->name());
 
     suiteItem->setData(suite->name(), SuiteRole);
     const auto caseNames = suite->cases();
     for (const QString& caseName : caseNames) {
-        QStandardItem* caseItem = new QStandardItem(iconForTestResult(TestResult::NotRun), caseName);
+        auto* caseItem = new QStandardItem(iconForTestResult(TestResult::NotRun), caseName);
         caseItem->setData(caseName, CaseRole);
         suiteItem->appendRow(caseItem);
     }
@@ -379,7 +391,7 @@ void TestView::removeTestSuite(ITestSuite* suite)
 
 QStandardItem* TestView::addProject(IProject* project)
 {
-    QStandardItem* projectItem = new QStandardItem(QIcon::fromTheme(QStringLiteral("project-development")), project->name());
+    auto* projectItem = new QStandardItem(QIcon::fromTheme(QStringLiteral("project-development")), project->name());
     projectItem->setData(project->name(), ProjectRole);
     m_model->appendRow(projectItem);
     return projectItem;

@@ -37,8 +37,8 @@
 #include <interfaces/iruncontroller.h>
 #include <interfaces/iuicontroller.h>
 #include <language/interfaces/editorcontext.h>
+#include <sublime/message.h>
 #include <isession.h>
-#include <qtcompat_p.h>
 
 #include <KActionCollection>
 #include <KLocalizedString>
@@ -51,6 +51,7 @@
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
+#include <QDBusServiceWatcher>
 #include <QPointer>
 #include <QTimer>
 
@@ -122,8 +123,9 @@ void MIDebuggerPlugin::setupActions()
 
     auto * action = new QAction(this);
     action->setIcon(QIcon::fromTheme(QStringLiteral("core")));
-    action->setText(i18n("Examine Core File with %1", m_displayName));
-    action->setWhatsThis(i18n("<b>Examine core file</b>"
+    action->setText(i18nc("@action", "Examine Core File with %1", m_displayName));
+    action->setWhatsThis(i18nc("@info:whatsthis",
+                              "<b>Examine core file</b>"
                               "<p>This loads a core file, which is typically created "
                               "after the application has crashed, e.g. with a "
                               "segmentation fault. The core file contains an "
@@ -132,11 +134,12 @@ void MIDebuggerPlugin::setupActions()
     connect(action, &QAction::triggered, this, &MIDebuggerPlugin::slotExamineCore);
     ac->addAction(QStringLiteral("debug_core"), action);
 
-#if KF5SysGuard_FOUND
+#if HAVE_KSYSGUARD
     action = new QAction(this);
     action->setIcon(QIcon::fromTheme(QStringLiteral("connect_creating")));
-    action->setText(i18n("Attach to Process with %1", m_displayName));
-    action->setWhatsThis(i18n("<b>Attach to process</b>"
+    action->setText(i18nc("@action", "Attach to Process with %1", m_displayName));
+    action->setWhatsThis(i18nc("@info:whatsthis",
+                              "<b>Attach to process</b>"
                               "<p>Attaches the debugger to a running process.</p>"));
     connect(action, &QAction::triggered, this, &MIDebuggerPlugin::slotAttachProcess);
     ac->addAction(QStringLiteral("debug_attach"), action);
@@ -145,31 +148,9 @@ void MIDebuggerPlugin::setupActions()
 
 void MIDebuggerPlugin::setupDBus()
 {
-    QDBusConnectionInterface* dbusInterface = QDBusConnection::sessionBus().interface();
-    const auto& registeredServiceNames = dbusInterface->registeredServiceNames().value();
-    for (const auto& service : registeredServiceNames) {
-        slotDBusOwnerChanged(service, QString(), QStringLiteral("n"));
-    }
-
-    connect(dbusInterface, &QDBusConnectionInterface::serviceOwnerChanged,
-            this, &MIDebuggerPlugin::slotDBusOwnerChanged);
-}
-
-void MIDebuggerPlugin::unload()
-{
-    unloadToolViews();
-}
-
-MIDebuggerPlugin::~MIDebuggerPlugin()
-{
-}
-
-void MIDebuggerPlugin::slotDBusOwnerChanged(const QString& service, const QString& oldOwner, const QString& newOwner)
-{
-    if (oldOwner.isEmpty() && service.startsWith(QLatin1String("org.kde.drkonqi"))) {
-        if (m_drkonqis.contains(service)) {
+    auto serviceRegistered = [this](const QString& service) {
+        if (m_drkonqis.contains(service))
             return;
-        }
         // New registration
         const QString name = i18n("KDevelop (%1) - %2", m_displayName, core()->activeSession()->name());
         auto drkonqiProxy = new DBusProxy(service, name, this);
@@ -180,17 +161,39 @@ void MIDebuggerPlugin::slotDBusOwnerChanged(const QString& service, const QStrin
                 this, &MIDebuggerPlugin::slotDebugExternalProcess);
 
         drkonqiProxy->interface()->call(QStringLiteral("registerDebuggingApplication"), name, QCoreApplication::applicationPid());
-    } else if (newOwner.isEmpty() && service.startsWith(QLatin1String("org.kde.drkonqi"))) {
+    };
+    auto serviceUnregistered = [this](const QString& service) {
         // Deregistration
-        const auto proxyIt = m_drkonqis.find(service);
-        if (proxyIt != m_drkonqis.end()) {
-            auto proxy = *proxyIt;
-            m_drkonqis.erase(proxyIt);
+        if (auto* proxy = m_drkonqis.take(service)) {
             proxy->Invalidate();
             delete proxy;
         }
+    };
+
+    m_watcher = new QDBusServiceWatcher(QStringLiteral("org.kde.drkonqi*"), QDBusConnection::sessionBus(),
+                                        QDBusServiceWatcher::WatchForOwnerChange, this);
+    connect(m_watcher, &QDBusServiceWatcher::serviceRegistered, this, serviceRegistered);
+    connect(m_watcher, &QDBusServiceWatcher::serviceUnregistered, this, serviceUnregistered);
+
+    auto registeredServiceNames = QDBusConnection::sessionBus().interface()->registeredServiceNames();
+    if (!registeredServiceNames.isValid()) {
+        return;
+    }
+    for (const auto &serviceName : registeredServiceNames.value()) {
+        if (serviceName.startsWith(QStringLiteral("org.kde.drkonqi."))) {
+            serviceRegistered(serviceName);
+        }
     }
 }
+
+void MIDebuggerPlugin::unload()
+{
+    qDeleteAll(m_drkonqis.values());
+    m_drkonqis.clear();
+    unloadToolViews();
+}
+
+MIDebuggerPlugin::~MIDebuggerPlugin() { }
 
 void MIDebuggerPlugin::slotDebugExternalProcess(DBusProxy* proxy)
 {
@@ -200,7 +203,9 @@ void MIDebuggerPlugin::slotDebugExternalProcess(DBusProxy* proxy)
                 proxy, &DBusProxy::debuggingFinished);
     }
 
-    core()->uiController()->activeMainWindow()->raise();
+    if (auto* mainWindow = core()->uiController()->activeMainWindow()) {
+        mainWindow->raise();
+    }
 }
 
 ContextMenuExtension MIDebuggerPlugin::contextMenuExtension(Context* context, QWidget* parent)
@@ -221,8 +226,9 @@ ContextMenuExtension MIDebuggerPlugin::contextMenuExtension(Context* context, QW
         QString squeezed = KStringHandler::csqueeze(contextIdent, 30);
 
         auto* action = new QAction(parent);
-        action->setText(i18n("Evaluate: %1", squeezed));
-        action->setWhatsThis(i18n("<b>Evaluate expression</b>"
+        action->setText(i18nc("@action:inmenu", "Evaluate: %1", squeezed));
+        action->setWhatsThis(i18nc("@info:whatsthis",
+                                  "<b>Evaluate expression</b>"
                                   "<p>Shows the value of the expression under the cursor.</p>"));
         connect(action, &QAction::triggered, this, [this, contextIdent](){
             emit addWatchVariable(contextIdent);
@@ -230,8 +236,9 @@ ContextMenuExtension MIDebuggerPlugin::contextMenuExtension(Context* context, QW
         menuExt.addAction(ContextMenuExtension::DebugGroup, action);
 
         action = new QAction(parent);
-        action->setText(i18n("Watch: %1", squeezed));
-        action->setWhatsThis(i18n("<b>Watch expression</b>"
+        action->setText(i18nc("@action:inmenu", "Watch: %1", squeezed));
+        action->setWhatsThis(i18nc("@info:whatsthis",
+                                  "<b>Watch expression</b>"
                                   "<p>Adds the expression under the cursor to the Variables/Watch list.</p>"));
         connect(action, &QAction::triggered, this, [this, contextIdent](){
             emit evaluateExpression(contextIdent);
@@ -259,7 +266,7 @@ void MIDebuggerPlugin::slotExamineCore()
     // job->start() is called in registerJob
 }
 
-#if KF5SysGuard_FOUND
+#if HAVE_KSYSGUARD
 void MIDebuggerPlugin::slotAttachProcess()
 {
     showStatusMessage(i18n("Choose a process to attach to..."), 1000);
@@ -282,9 +289,12 @@ void MIDebuggerPlugin::slotAttachProcess()
     // TODO: move check into process selection dialog
     int pid = dlg->pidSelected();
     delete dlg;
-    if (QApplication::applicationPid() == pid)
-        KMessageBox::error(core()->uiController()->activeMainWindow(),
-                           i18n("Not attaching to process %1: cannot attach the debugger to itself.", pid));
+    if (QApplication::applicationPid() == pid) {
+        const QString messageText =
+            i18n("Not attaching to process %1: cannot attach the debugger to itself.", pid);
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
+    }
     else
         attachProcess(pid);
 }

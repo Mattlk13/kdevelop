@@ -23,6 +23,7 @@
 #include <QIcon>
 #include <KConfigGroup>
 #include <QPointer>
+#include <QSet>
 
 namespace Sublime {
 class Area;
@@ -84,18 +85,20 @@ public:
 
     QStringList fileList() const;
 
+    QSet<QString> fileSet() const;
+
     bool isEmpty() const;
 
-    ///Updates this working-set from the given area and area-index
-    void saveFromArea(Sublime::Area* area, Sublime::AreaIndex * areaIndex);
+    ///Updates this working-set from the given area
+    void saveFromArea(Sublime::Area* area);
 
     ///Loads this working-set directly from the configuration file, and stores it in the given area
     ///Does not ask the user, this should be done beforehand.
-    void loadToArea(Sublime::Area* area, Sublime::AreaIndex* areaIndex);
+    void loadToArea(Sublime::Area* area);
 
     bool hasConnectedAreas() const;
 
-    bool hasConnectedAreas(const QList<Sublime::Area*>& areas) const;
+    bool hasConnectedArea(Sublime::Area *area) const;
 
     void connectArea(Sublime::Area* area);
 
@@ -113,9 +116,6 @@ Q_SIGNALS:
 
 private:
     void changed(Sublime::Area* area);
-
-    void saveFromArea(Sublime::Area* area, Sublime::AreaIndex *areaIndex, KConfigGroup setGroup, KConfigGroup areaGroup);
-    void loadToArea(Sublime::Area* area, Sublime::AreaIndex *areaIndex, const KConfigGroup& setGroup, const KConfigGroup& areaGroup, QMultiMap<QString, Sublime::View*>& recycle);
 
     const QString m_id;
     const QIcon m_icon;

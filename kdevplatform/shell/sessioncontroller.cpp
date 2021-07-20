@@ -24,7 +24,7 @@ Boston, MA 02110-1301, USA.
 #include <QHash>
 #include <QStringList>
 #include <QAction>
-#include <QApplication>
+#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QInputDialog>
 #include <QLabel>
@@ -123,8 +123,10 @@ public:
 
     void newSession()
     {
-        qsrand(QDateTime::currentDateTimeUtc().toTime_t());
-        Session* session = new Session( QUuid::createUuid().toString() );
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+        qsrand(static_cast<uint>(QDateTime::currentDateTimeUtc().toSecsSinceEpoch()));
+#endif
+        auto* session = new Session(QUuid::createUuid().toString());
 
         KProcess::startDetached(ShellExtension::getInstance()->executableFilePath(), QStringList() << QStringLiteral("-s") << session->id().toString() << standardArguments());
         delete session;
@@ -152,7 +154,7 @@ public:
     {
         bool ok;
         auto newSessionName = QInputDialog::getText(Core::self()->uiController()->activeMainWindow(),
-                                                    i18n("Rename Session"), i18n("New Session Name:"),
+                                                    i18nc("@title:window", "Rename Session"), i18nc("@label:textbox", "New session name:"),
                                                     QLineEdit::Normal, q->activeSession()->name(), &ok);
         if (ok) {
             static_cast<Session*>(q->activeSession())->setName(newSessionName);
@@ -235,7 +237,7 @@ public:
     static QString sessionBaseDirectory()
     {
         return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
-            + QLatin1Char('/') + qApp->applicationName() + QLatin1String("/sessions/");
+            + QLatin1Char('/') + QCoreApplication::applicationName() + QLatin1String("/sessions/");
     }
 
     QString ownSessionDirectory() const
@@ -278,17 +280,17 @@ SessionController::SessionController( QObject *parent )
     action = actionCollection()->addAction(QStringLiteral("rename_session"));
     connect(action, &QAction::triggered,
             this, [this] { Q_D(SessionController); d->renameSession(); });
-    action->setText( i18n("Rename Current Session...") );
+    action->setText( i18nc("@action", "Rename Current Session...") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("edit-rename")));
 
     action = actionCollection()->addAction(QStringLiteral("delete_session"));
     connect(action, &QAction::triggered,
             this, [this] { Q_D(SessionController); d->deleteCurrentSession(); });
-    action->setText( i18n("Delete Current Session...") );
+    action->setText( i18nc("@action", "Delete Current Session...") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete")));
 
     action = actionCollection()->addAction( QStringLiteral("quit"), this, SIGNAL(quitSession()) );
-    action->setText( i18n("Quit") );
+    action->setText( i18nc("@action", "Quit") );
     action->setMenuRole( QAction::NoRole ); // OSX: prevent QT from hiding this due to conflict with 'Quit KDevelop...'
     actionCollection()->setDefaultShortcut( action, Qt::CTRL | Qt::Key_Q );
     action->setIcon(QIcon::fromTheme(QStringLiteral("application-exit")));
@@ -337,7 +339,7 @@ void SessionController::initialize( const QString& session )
         if( id.isNull() )
             continue;
         // Only create sessions for directories that represent proper uuid's
-        Session* ses = new Session( id.toString(), this );
+        auto* ses = new Session(id.toString(), this);
 
         //Delete sessions that have no name and are empty
         if( ses->containedProjects().isEmpty() && ses->name().isEmpty()
@@ -415,7 +417,9 @@ Session* SessionController::createSession( const QString& name )
     if(name.startsWith(QLatin1Char('{'))) {
         s = new Session( QUuid(name).toString(), this );
     }else{
-        qsrand(QDateTime::currentDateTimeUtc().toTime_t());
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+        qsrand(static_cast<uint>(QDateTime::currentDateTimeUtc().toSecsSinceEpoch()));
+#endif
         s = new Session( QUuid::createUuid().toString(), this );
         s->setName( name );
     }
@@ -502,14 +506,16 @@ QString SessionController::cloneSession( const QString& nameOrid )
     Q_D(SessionController);
 
     Session* origSession = session( nameOrid );
-    qsrand(QDateTime::currentDateTimeUtc().toTime_t());
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+    qsrand(static_cast<uint>(QDateTime::currentDateTimeUtc().toSecsSinceEpoch()));
+#endif
     QUuid id = QUuid::createUuid();
     auto copyJob = KIO::copy(QUrl::fromLocalFile(sessionDirectory(origSession->id().toString())),
                              QUrl::fromLocalFile(sessionDirectory( id.toString())));
     KJobWidgets::setWindow(copyJob, Core::self()->uiController()->activeMainWindow());
     copyJob->exec();
 
-    Session* newSession = new Session( id.toString() );
+    auto* newSession = new Session(id.toString(), this);
     newSession->setName( i18n( "Copy of %1", origSession->name() ) );
     d->addSession(newSession);
     updateXmlGuiActionList();
@@ -577,7 +583,7 @@ QString SessionController::showSessionChooserDialog(const QString& headerText, b
     auto* view = new QListView;
     auto* filter = new QLineEdit;
     filter->setClearButtonEnabled( true );
-    filter->setPlaceholderText(i18n("Search"));
+    filter->setPlaceholderText(i18nc("@info:placeholder", "Search..."));
 
     auto* model = new QStandardItemModel(view);
 
@@ -592,7 +598,7 @@ QString SessionController::showSessionChooserDialog(const QString& headerText, b
 
     QVBoxLayout layout(dialog.mainWidget());
     if(!headerText.isEmpty()) {
-        QLabel* heading = new QLabel(headerText);
+        auto* heading = new QLabel(headerText);
         QFont font = heading->font();
         font.setBold(true);
         heading->setFont(font);
@@ -600,16 +606,16 @@ QString SessionController::showSessionChooserDialog(const QString& headerText, b
     }
 
     model->setColumnCount(4);
-    model->setHeaderData(0, Qt::Horizontal,i18n("Identity"));
-    model->setHeaderData(1, Qt::Horizontal,i18n("Contents"));
-    model->setHeaderData(2, Qt::Horizontal,i18n("State"));
-    model->setHeaderData(3, Qt::Horizontal,i18n("Name"));
+    model->setHeaderData(0, Qt::Horizontal,i18nc("@title:column", "Identity"));
+    model->setHeaderData(1, Qt::Horizontal,i18nc("@title:column", "Contents"));
+    model->setHeaderData(2, Qt::Horizontal,i18nc("@title:column", "State"));
+    model->setHeaderData(3, Qt::Horizontal,i18nc("@title:column", "Name"));
 
     view->setModel(proxy);
     view->setModelColumn(1);
 
     auto* filterLayout = new QHBoxLayout();
-    filterLayout->addWidget(new QLabel(i18n("Filter:")));
+    filterLayout->addWidget(new QLabel(i18nc("@label:textbox", "Filter:")));
     filterLayout->addWidget(filter);
     layout.addLayout(filterLayout);
     layout.addWidget(view);
@@ -665,7 +671,9 @@ QString SessionController::showSessionChooserDialog(const QString& headerText, b
     const QString selectedSessionId = selected.sibling(selected.row(), 0).data().toString();
     if (selectedSessionId.isEmpty()) {
         // "Create New Session" item selected, return a fresh UUID
-        qsrand(QDateTime::currentDateTimeUtc().toTime_t());
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+        qsrand(static_cast<uint>(QDateTime::currentDateTimeUtc().toSecsSinceEpoch()));
+#endif
         return QUuid::createUuid().toString();
     }
     return selectedSessionId;

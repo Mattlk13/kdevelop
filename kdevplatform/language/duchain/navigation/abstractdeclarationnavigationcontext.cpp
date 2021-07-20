@@ -94,7 +94,7 @@ QString AbstractDeclarationNavigationContext::html(bool shorten)
     clear();
     AbstractNavigationContext::html(shorten);
 
-    modifyHtml()  += QLatin1String("<html><body>");
+    modifyHtml()  += QStringLiteral("<html><body>");
 
     if (!d->m_declaration.data()) {
         modifyHtml() += QLatin1String("<p>") + i18n("lost declaration") + QLatin1String("</p></body></html>");
@@ -138,6 +138,11 @@ QString AbstractDeclarationNavigationContext::html(bool shorten)
             modifyHtml() += QLatin1Char(' ') + identifierHighlight(declarationName(
                                                                        d->m_declaration).toHtmlEscaped(),
                                                                    d->m_declaration);
+
+            const auto* memberDecl = dynamic_cast<const ClassMemberDeclaration*>(d->m_declaration.data());
+            if (memberDecl && memberDecl->bitWidth() > 0) {
+                modifyHtml() += QLatin1String(" :") + QString::number(memberDecl->bitWidth());
+            }
 
             if (auto integralType = d->m_declaration->type<ConstantIntegralType>()) {
                 const QString plainValue = integralType->valueAsString();
@@ -305,7 +310,7 @@ QString AbstractDeclarationNavigationContext::html(bool shorten)
         modifyHtml() += QStringLiteral(" ");
         //modifyHtml() += "<br />";
         if (!dynamic_cast<FunctionDefinition*>(d->m_declaration.data())) {
-            if (FunctionDefinition* definition = FunctionDefinition::definition(d->m_declaration.data())) {
+            if (auto* definition = FunctionDefinition::definition(d->m_declaration.data())) {
                 modifyHtml() += labelHighlight(i18n(" Def.: "));
                 makeLink(QStringLiteral("%1 :%2").arg(definition->url().toUrl().fileName()).arg(definition->
                                                                                                 rangeInCurrentRevision()
@@ -368,7 +373,7 @@ QString AbstractDeclarationNavigationContext::html(bool shorten)
         modifyHtml() += QStringLiteral("</p>");
     }
 
-    modifyHtml() += QLatin1String("</body></html>");
+    modifyHtml() += QStringLiteral("</body></html>");
 
     return currentHtml();
 }
@@ -747,7 +752,7 @@ QString AbstractDeclarationNavigationContext::identifierHighlight(const QString&
     }
 
     if (decl->isDeprecated()) {
-        ret = QStringLiteral("<i>") + ret + QStringLiteral("</i>");
+        ret = QLatin1String("<i>") + ret + QLatin1String("</i>");
     }
     return ret;
 }
@@ -863,43 +868,44 @@ QString AbstractDeclarationNavigationContext::declarationSizeInformation(const D
     if (!decl) {
         return {};
     }
-
-    if (decl->isTypeAlias()) {
-        // show size information for underlying type of aliases / typedefs etc.
-        const auto type = TypeUtils::targetType(decl->abstractType(), topContext);
-        if (const auto* idType = dynamic_cast<const IdentifiedType*>(type.data())) {
-            return declarationSizeInformation(DeclarationPointer(idType->declaration(topContext)), topContext);
-        }
+    const auto type = TypeUtils::unAliasedType(decl->abstractType());
+    if (!type) {
         return {};
     }
-    // Note that ClassMemberDeclaration also includes ClassDeclaration, which uses the sizeOf and alignOf fields,
-    // but normally leaves the bitOffsetOf unset (-1).
-    const auto* memberDecl = dynamic_cast<const ClassMemberDeclaration*>(decl.data());
-    if (memberDecl && (memberDecl->bitOffsetOf() > 0 || memberDecl->sizeOf() > 0 || memberDecl->alignOf() > 0)) {
-        QString sizeInfo = QStringLiteral("<p>");
 
-        if (memberDecl->bitOffsetOf() >= 0) {
+    if (type->sizeOf() > 0 || type->alignOf() > 0) {
+        QString sizeInfo = QStringLiteral("<p>");
+        const auto memberDecl = decl.dynamicCast<ClassMemberDeclaration>();
+        if (memberDecl && memberDecl->bitOffsetOf() > 0) {
             const auto byteOffset = memberDecl->bitOffsetOf() / 8;
             const auto bitOffset = memberDecl->bitOffsetOf() % 8;
             const QString byteOffsetStr = i18np("1 Byte", "%1 Bytes", byteOffset);
             const QString bitOffsetStr = bitOffset ? i18np("1 Bit", "%1 Bits", bitOffset) : QString();
-            sizeInfo +=
-                i18n("offset in parent: %1", bitOffset ? i18nc("%1: bytes, %2: bits", "%1, %2", byteOffsetStr,
-                                                               bitOffsetStr) : byteOffsetStr) + QLatin1String("; ");
+            sizeInfo
+                += i18n("offset in parent: %1",
+                        bitOffset ? i18nc("%1: bytes, %2: bits", "%1, %2", byteOffsetStr, bitOffsetStr) : byteOffsetStr)
+                + QLatin1String("; ");
         }
 
-        if (memberDecl->sizeOf() >= 0) {
-            sizeInfo += i18n("size: %1 Bytes", memberDecl->sizeOf()) + QLatin1String("; ");
+        if (type->sizeOf() > 0) {
+            sizeInfo += i18n("size: %1 Bytes", type->sizeOf()) + QLatin1String("; ");
         }
 
-        if (memberDecl->alignOf() >= 0) {
-            sizeInfo += i18n("aligned to: %1 Bytes", memberDecl->alignOf());
+        if (type->alignOf() > 0) {
+            sizeInfo += i18n("aligned to: %1 Bytes", type->alignOf());
         }
 
-        sizeInfo += QStringLiteral("</p>");
-
+        sizeInfo += QLatin1String("</p>");
         return sizeInfo;
+    } else if (decl->isTypeAlias()) {
+        // show size information for underlying type of aliases / typedefs etc.
+        if (const auto* idType = dynamic_cast<const IdentifiedType*>(type.data())) {
+            DeclarationPointer ptr(idType->declaration(topContext));
+            if (ptr != decl) {
+                return declarationSizeInformation(ptr, topContext);
+            }
+        }
     }
-    return QString();
+    return {};
 }
 }

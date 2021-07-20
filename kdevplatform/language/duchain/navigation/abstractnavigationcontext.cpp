@@ -20,8 +20,6 @@
 
 #include <KLocalizedString>
 
-#include <qtcompat_p.h>
-
 #include "abstractdeclarationnavigationcontext.h"
 #include "abstractnavigationwidget.h"
 #include "usesnavigationcontext.h"
@@ -185,7 +183,7 @@ NavigationContextPointer AbstractNavigationContext::execute(const NavigationActi
         return executeKeyAction(action.key);
 
     if (!action.decl && (action.type != NavigationAction::JumpToSource || action.document.isEmpty())) {
-        qCDebug(LANGUAGE) << "Navigation-action has invalid declaration" << endl;
+        qCDebug(LANGUAGE) << "Navigation-action has invalid declaration";
         return NavigationContextPointer(this);
     }
 
@@ -193,7 +191,7 @@ NavigationContextPointer AbstractNavigationContext::execute(const NavigationActi
     case NavigationAction::ExecuteKey:
         break;
     case NavigationAction::None:
-        qCDebug(LANGUAGE) << "Tried to execute an invalid action in navigation-widget" << endl;
+        qCDebug(LANGUAGE) << "Tried to execute an invalid action in navigation-widget";
         break;
     case NavigationAction::NavigateDeclaration:
     {
@@ -482,7 +480,7 @@ NavigationContextPointer AbstractNavigationContext::acceptLink(const QString& li
 
     const auto actionIt = d->m_links.constFind(link);
     if (actionIt == d->m_links.constEnd()) {
-        qCDebug(LANGUAGE) << "Executed unregistered link " << link << endl;
+        qCDebug(LANGUAGE) << "Executed unregistered link " << link;
         return NavigationContextPointer(this);
     }
 
@@ -579,7 +577,7 @@ void AbstractNavigationContext::addHtml(const QString& html)
         if (line.indexOf(newLineRegExp) != -1) {
             ++d->m_currentLine;
             if (d->m_currentLine == d->m_currentPositionLine) {
-                d->m_currentText += QStringLiteral(
+                d->m_currentText += QLatin1String(
                     "<font color=\"#880088\"> <a name = \"currentPosition\" >&lt;-&gt;</a> </font>");                        // >&lt;-&gt; is <->
             }
         }

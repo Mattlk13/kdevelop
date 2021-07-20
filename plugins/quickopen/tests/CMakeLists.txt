@@ -9,11 +9,16 @@ add_library(quickopentestbase STATIC
     ../projectfilequickopen.cpp)
 
 target_link_libraries(quickopentestbase PUBLIC
-    Qt5::Test KF5::IconThemes KDev::Tests KDev::Project KDev::Language)
+    KDev::Tests
+    KDev::Project
+    KDev::Language
+    gfx::timsort
+    Qt5::Test
+)
 
 ecm_add_test(test_quickopen.cpp LINK_LIBRARIES quickopentestbase)
 
-if(NOT COMPILER_OPTIMIZATIONS_DISABLED)
+if(BUILD_BENCHMARKS)
     ecm_add_test(bench_quickopen.cpp LINK_LIBRARIES quickopentestbase)
     set_tests_properties(bench_quickopen PROPERTIES TIMEOUT 30)
 endif()

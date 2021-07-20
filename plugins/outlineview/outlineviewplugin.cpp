@@ -40,7 +40,7 @@ public:
         return new OutlineWidget(parent, m_plugin);
     }
 
-    Qt::DockWidgetArea defaultPosition() override
+    Qt::DockWidgetArea defaultPosition() const override
     {
         return Qt::RightDockWidgetArea;
     }
@@ -58,7 +58,7 @@ OutlineViewPlugin::OutlineViewPlugin(QObject *parent, const QVariantList&)
         : KDevelop::IPlugin(QStringLiteral("kdevoutlineview"), parent)
         , m_factory(new OutlineViewFactory(this))
 {
-    core()->uiController()->addToolView(i18n("Outline"), m_factory);
+    core()->uiController()->addToolView(i18nc("@title:window", "Outline"), m_factory);
 }
 
 OutlineViewPlugin::~OutlineViewPlugin()

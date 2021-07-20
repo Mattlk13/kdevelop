@@ -167,8 +167,7 @@ public:
     {
         if (role == Qt::DecorationRole) {
             if (index.column() == KTextEditor::CodeCompletionModel::Icon) {
-                static const QIcon icon = QIcon::fromTheme(QStringLiteral("CTparents"));
-                return icon;
+                return QIcon::fromTheme(QStringLiteral("CTparents"));
             }
         }
         return CompletionItem<CompletionTreeItem>::data(index, role, model);
@@ -187,7 +186,7 @@ public:
 
             appendSpecifer = match.hasMatch(); // assume non-modern if no standard is specified
             if (appendSpecifer) {
-                const auto standard = match.captured(1);
+                const auto standard = match.capturedRef(1);
                 appendSpecifer = (standard != QLatin1String("98") && standard != QLatin1String("03"));
             }
         }
@@ -397,7 +396,7 @@ public:
         changes.applyAllChanges();
 
         // Place cursor after the opening brace
-        // arbitrarily chose 4, as it would accomodate the template and return types on their own line
+        // arbitrarily chose 4, as it would accommodate the template and return types on their own line
         const auto searchRange = KTextEditor::Range(rangeStart, rangeStart.line() + 4, 0);
         const auto results = view->document()->searchText(searchRange, QStringLiteral("{"));
         if (!results.isEmpty()) {
@@ -728,7 +727,9 @@ public:
     /// Only items with @p type will be returned through @sa matchedItems
     void addMatchedType(const IndexedType& type)
     {
-        matchedTypes.insert(type);
+        if (type.isValid()) {
+            matchedTypes.insert(type);
+        }
     }
 
     /// @return look-ahead items that math given types. @sa addMatchedType
@@ -739,8 +740,8 @@ public:
             auto decl = pair.first;
             if (matchedTypes.contains(decl->indexedType())) {
                 auto parent = pair.second;
-                const QString access = parent->abstractType()->whichType() == AbstractType::TypePointer
-                                 ? QStringLiteral("->") : QStringLiteral(".");
+                const QLatin1String access = (parent->abstractType()->whichType() == AbstractType::TypePointer)
+                                 ? QLatin1String("->") : QLatin1String(".");
                 const QString text = parent->identifier().toString() + access + decl->identifier().toString();
                 auto item = new DeclarationItem(decl, text, {}, text);
                 item->setMatchQuality(8);
@@ -778,11 +779,11 @@ private:
                         }
                     }
 
-                    if(!declaration->abstractType()){
+                    if (!localDecl->abstractType()) {
                         continue;
                     }
 
-                    if (declaration->abstractType()->whichType() == AbstractType::TypeIntegral) {
+                    if (localDecl->abstractType()->whichType() == AbstractType::TypeIntegral) {
                         if (auto integralType = declaration->abstractType().cast<IntegralType>()) {
                             if (integralType->dataType() == IntegralType::TypeVoid) {
                                 continue;
@@ -821,6 +822,7 @@ public:
         DotToArrow,
         ArrowToDot
     };
+    Q_ENUM(Type)
 
 public Q_SLOTS:
     void replaceCurrentAccess(MemberAccessReplacer::Type type)
@@ -862,8 +864,6 @@ public Q_SLOTS:
 static MemberAccessReplacer s_memberAccessReplacer;
 
 }
-
-Q_DECLARE_METATYPE(MemberAccessReplacer::Type)
 
 ClangCodeCompletionContext::ClangCodeCompletionContext(const DUContextPointer& context,
                                                        const ParseSessionData::Ptr& sessionData,
@@ -944,7 +944,7 @@ ClangCodeCompletionContext::ClangCodeCompletionContext(const DUContextPointer& c
         if (trimmedText.endsWith(QLatin1Char('.'))) {
             // TODO: This shouldn't be needed if Clang provided diagnostic.
             // But it doesn't always do it, so let's try to manually determine whether '.' is used instead of '->'
-            m_text = trimmedText.leftRef(trimmedText.size() - 1) + QStringLiteral("->");
+            m_text = trimmedText.leftRef(trimmedText.size() - 1) + QLatin1String("->");
 
             CXUnsavedFile unsaved;
             unsaved.Filename = file.constData();
@@ -1018,6 +1018,18 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
 
     // If ctx is/inside the Class context, this represents that context.
     const auto currentClassContext = classDeclarationForContext(ctx, m_position);
+
+    // HACK: try to build a fallback parent ID from the USR
+    //       otherwise we won't identify typedefed anon structs correctly :(
+    auto parentFromUSR = [this]() -> QString {
+        const auto containerUSR = ClangString(clang_codeCompleteGetContainerUSR(m_results.get())).toString();
+        const auto lastAt = containerUSR.lastIndexOf(QLatin1Char('@'));
+        if (lastAt <= 0 || containerUSR[lastAt - 1] != QLatin1Char('A')) // we use this hack only for _A_non stuff
+            return {};
+
+        return containerUSR.mid(lastAt + 1);
+    };
+    const auto fallbackParentFromUSR = parentFromUSR();
 
     clangDebug() << "Clang found" << m_results->NumResults << "completion results";
 
@@ -1156,6 +1168,11 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
 
         processChunks(result.CompletionString);
 
+        // we have our own implementation of an override helper
+        // TODO: use the clang-provided one, if available
+        if (typed.endsWith(QLatin1String(" override")))
+            continue;
+
         // TODO: No closing paren if default parameters present
         if (isOverloadCandidate && !arguments.endsWith(QLatin1Char(')'))) {
             arguments += QLatin1Char(')');
@@ -1169,9 +1186,12 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
         if (isDeclaration) {
             const Identifier id(typed);
             QualifiedIdentifier qid;
-            ClangString parent(clang_getCompletionParent(result.CompletionString, nullptr));
-            if (parent.c_str() != nullptr) {
-                qid = QualifiedIdentifier(parent.toString());
+            auto parent = ClangString(clang_getCompletionParent(result.CompletionString, nullptr)).toString();
+            if (parent.isEmpty() && !fallbackParentFromUSR.isEmpty()) {
+                parent = fallbackParentFromUSR;
+            }
+            if (!parent.isEmpty()) {
+                qid = QualifiedIdentifier(parent);
             }
             qid.push(id);
 
@@ -1186,19 +1206,6 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
             }
 
             auto found = findDeclaration(qid, ctx, m_position, isOverloadCandidate ? overloadsHandled : handled);
-
-            if (found && found->type<FunctionType>() == nullptr && parent.isEmpty() && !resultType.isEmpty()) {
-                // workaround: for multiple nameless structs with the same member.
-                // Check the type of the member to have at least a higher probability.
-                auto typeCheckedDeclaration = found;
-                while (typeCheckedDeclaration != nullptr && typeCheckedDeclaration->abstractType() != nullptr) {
-                    if (typeCheckedDeclaration->abstractType()->toString() == resultType) {
-                        found = typeCheckedDeclaration;
-                        break;
-                    }
-                    typeCheckedDeclaration = findDeclaration(qid, ctx, m_position, isOverloadCandidate ? overloadsHandled : handled);
-                }
-            }
 
             CompletionTreeItemPointer item;
             if (found) {
@@ -1234,11 +1241,14 @@ QList<CompletionTreeItemPointer> ClangCodeCompletionContext::completionItems(boo
 
                 //don't set best match property for internal identifiers, also prefer declarations from current file
                 const auto isInternal = found->indexedIdentifier().identifier().toString().startsWith(QLatin1String("__"));
-                if (bestMatch && !isInternal ) {
+                if (bestMatch && !isInternal) {
                     const int matchQuality = codeCompletionPriorityToMatchQuality(completionPriority);
                     declarationItem->setMatchQuality(matchQuality);
 
                     // TODO: LibClang missing API to determine expected code completion type.
+                    if (auto functionType = found->type<FunctionType>()) {
+                        lookAheadMatcher.addMatchedType(IndexedType(functionType->returnType()));
+                    }
                     lookAheadMatcher.addMatchedType(found->indexedType());
                 } else {
                     declarationItem->setInheritanceDepth(completionPriority);
@@ -1321,7 +1331,7 @@ void ClangCodeCompletionContext::eventuallyAddGroup(const QString& name, int pri
 
 void ClangCodeCompletionContext::addOverwritableItems()
 {
-    auto overrideList = m_completionHelper.overrides();
+    const auto overrideList = m_completionHelper.overrides();
     if (overrideList.isEmpty()) {
         return;
     }
@@ -1334,7 +1344,7 @@ void ClangCodeCompletionContext::addOverwritableItems()
         for (const auto& param : info.params) {
             params << param.type + QLatin1Char(' ') + param.id;
         }
-        QString nameAndParams = info.name + QLatin1Char('(') + params.join(QStringLiteral(", ")) + QLatin1Char(')');
+        QString nameAndParams = info.name + QLatin1Char('(') + params.join(QLatin1String(", ")) + QLatin1Char(')');
         if(info.isConst)
             nameAndParams = nameAndParams + QLatin1String(" const");
         if(info.isPureVirtual)

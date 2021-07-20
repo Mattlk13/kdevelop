@@ -66,7 +66,8 @@ macro(kdevplatform_create_template_archive _templateName)
             set(extraArgs "")
             if(DEFINED ENV{SOURCE_DATE_EPOCH})
                 # We assume there is tar > 1.28 if a reproducible build is wanted.
-                set(extraArgs --mtime="@$ENV{SOURCE_DATE_EPOCH}" --sort=name)
+                set(extraArgs --mtime="@$ENV{SOURCE_DATE_EPOCH}" --sort=name
+                    --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime)
             endif()
             add_custom_command(OUTPUT ${_template}
                 COMMAND tar ARGS -c -C ${CMAKE_CURRENT_SOURCE_DIR}/${_templateName}
@@ -109,11 +110,8 @@ endmacro(kdevplatform_add_file_templates _templateNames)
 
 function(kdevplatform_add_plugin plugin)
     set(options SKIP_INSTALL)
-    set(oneValueArgs JSON)
     set(multiValueArgs SOURCES)
-    cmake_parse_arguments(KDEV_ADD_PLUGIN "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
-    get_filename_component(json "${KDEV_ADD_PLUGIN_JSON}" REALPATH)
+    cmake_parse_arguments(KDEV_ADD_PLUGIN "${options}" "" "${multiValueArgs}" ${ARGN})
 
     list(LENGTH KDEV_ADD_PLUGIN_SOURCES src_count)
     if (NOT ${src_count} GREATER 0)
@@ -121,7 +119,6 @@ function(kdevplatform_add_plugin plugin)
     endif()
 
     add_library(${plugin} MODULE ${KDEV_ADD_PLUGIN_SOURCES})
-    set_property(TARGET ${plugin} APPEND PROPERTY AUTOGEN_TARGET_DEPENDS ${json})
 
     if (NOT KDEV_ADD_PLUGIN_SKIP_INSTALL)
         install(TARGETS ${plugin} DESTINATION ${KDE_INSTALL_PLUGINDIR}/kdevplatform/${KDEV_PLUGIN_VERSION})

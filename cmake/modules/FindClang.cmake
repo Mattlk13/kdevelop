@@ -30,7 +30,7 @@
 
 #=============================================================================
 
-set(KNOWN_VERSIONS 8 7 6.0 5.0 4.0 3.9 3.8)
+set(KNOWN_VERSIONS 11 10 9 8 7 6.0 5.0 4.0 3.9 3.8)
 
 foreach(version ${KNOWN_VERSIONS})
     if (LLVM_DIR OR (DEFINED Clang_FIND_VERSION AND Clang_FIND_VERSION VERSION_GREATER version))
@@ -99,6 +99,8 @@ if(CLANG_FOUND)
 
   # svn version of clang has a svn suffix "8.0.0svn" but installs the header in "8.0.0", without the suffix
   string(REPLACE "svn" "" CLANG_VERSION_CLEAN "${CLANG_VERSION}")
+  # dito for git
+  string(REPLACE "git" "" CLANG_VERSION_CLEAN "${CLANG_VERSION}")
 
   find_path(CLANG_BUILTIN_DIR
             # cpuid.h because it is defined in ClangSupport constructor as valid clang builtin dir indicator
@@ -128,8 +130,17 @@ if(CLANG_FOUND)
     message(STATUS "Detected that llvm-config comes from a build-tree, adding more include directories for Clang")
     list(APPEND CLANG_INCLUDE_DIRS
          "${LLVM_INSTALL_PREFIX}/tools/clang/include" # build dir
-         "${_llvmSourceRoot}/tools/clang/include"     # source dir
     )
+
+    # check whether the source is from llvm-project.git (currently recommended way to clone the LLVM projects)
+    # contains all LLVM projects in the top-level directory
+    get_filename_component(_llvmProjectClangIncludeDir ${_llvmSourceRoot}/../clang/include REALPATH)
+    if (EXISTS ${_llvmProjectClangIncludeDir})
+        message(STATUS "  Note: llvm-project.git structure detected, using different include path pointing into source dir")
+        list(APPEND CLANG_INCLUDE_DIRS "${_llvmProjectClangIncludeDir}") # source dir
+    else()
+        list(APPEND CLANG_INCLUDE_DIRS "${_llvmSourceRoot}/tools/clang/include") # source dir
+    endif()
   endif()
 
   message(STATUS "Found Clang (LLVM version: ${CLANG_VERSION})")

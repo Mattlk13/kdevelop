@@ -20,7 +20,7 @@
 #include "duchain.h"
 #include "duchainlock.h"
 
-#include <QApplication>
+#include <QCoreApplication>
 #include <QHash>
 #include <QMultiMap>
 #include <QProcessEnvironment>
@@ -30,6 +30,9 @@
 #include <QStandardPaths>
 #include <QMutex>
 #include <QTimer>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#include <QRandomGenerator>
+#endif
 
 #include <interfaces/idocumentcontroller.h>
 #include <interfaces/icore.h>
@@ -159,7 +162,7 @@ public:
     {
         new (item) EnvironmentInformationItem(m_index, DUChainItemSystem::self().dynamicSize(*m_file->d_func()));
         Q_ASSERT(m_file->d_func()->m_dynamic);
-        DUChainBaseData* data =
+        auto* data =
             reinterpret_cast<DUChainBaseData*>(reinterpret_cast<char*>(item) + sizeof(EnvironmentInformationItem));
         DUChainItemSystem::self().copy(*m_file->d_func(), *data, true);
         Q_ASSERT(data->m_range == m_file->d_func()->m_range);
@@ -370,7 +373,7 @@ public:
             if (opened) {
                 qCDebug(LANGUAGE) << "reading parsing-environment static data";
                 //Read
-                f.read(( char* )ParsingEnvironmentFile::m_staticData, sizeof(StaticParsingEnvironmentData));
+                f.read(reinterpret_cast<char*>(ParsingEnvironmentFile::m_staticData), sizeof(StaticParsingEnvironmentData));
             } else {
                 qCDebug(LANGUAGE) << "creating new parsing-environment static data";
                 //Initialize
@@ -385,7 +388,7 @@ public:
             if (opened) {
                 Q_ASSERT((f.size() % sizeof(uint)) == 0);
                 m_availableTopContextIndices.resize(f.size() / ( int )sizeof(uint));
-                f.read(( char* )m_availableTopContextIndices.data(), f.size());
+                f.read(reinterpret_cast<char*>(m_availableTopContextIndices.data()), f.size());
             }
         }
     }
@@ -688,9 +691,9 @@ public:
                     index = m_environmentInfo.index(req);
                     Q_ASSERT(index);
 
-                    EnvironmentInformationItem* item =
+                    auto* item =
                         const_cast<EnvironmentInformationItem*>(m_environmentInfo.itemFromIndex(index));
-                    DUChainBaseData* theData =
+                    auto* theData =
                         reinterpret_cast<DUChainBaseData*>(reinterpret_cast<char*>(item) +
                                                            sizeof(EnvironmentInformationItem));
 
@@ -913,7 +916,11 @@ unloadContexts:
                  it != m_fileEnvironmentInformations.end();) {
                 ParsingEnvironmentFile* f = it->data();
                 Q_ASSERT(f->d_func()->classId);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+                if (f->ref.loadRelaxed() == 1) {
+#else
                 if (f->ref.load() == 1) {
+#endif
                     Q_ASSERT(!f->d_func()->isDynamic()); //It cannot be dynamic, since we have stored before
                     //The ParsingEnvironmentFilePointer is only referenced once. This means that it does not belong to any
                     //loaded top-context, so just remove it to save some memory and processing time.
@@ -939,7 +946,7 @@ unloadContexts:
             bool opened = f.open(QIODevice::WriteOnly);
             Q_ASSERT(opened);
             Q_UNUSED(opened);
-            f.write(( char* )ParsingEnvironmentFile::m_staticData, sizeof(StaticParsingEnvironmentData));
+            f.write(reinterpret_cast<const char*>(ParsingEnvironmentFile::m_staticData), sizeof(StaticParsingEnvironmentData));
         }
 
         ///Write out the list of available top-context indices
@@ -951,7 +958,7 @@ unloadContexts:
             Q_ASSERT(opened);
             Q_UNUSED(opened);
 
-            f.write(( char* )m_availableTopContextIndices.data(), m_availableTopContextIndices.size() * sizeof(uint));
+            f.write(reinterpret_cast<const char*>(m_availableTopContextIndices.data()), m_availableTopContextIndices.size() * sizeof(uint));
         }
 
         if (retries) {
@@ -1015,7 +1022,7 @@ unloadContexts:
             return alreadyLoaded;
 
         ///FIXME: ugly, and remove const_cast
-        ParsingEnvironmentFile* ret = dynamic_cast<ParsingEnvironmentFile*>(DUChainItemSystem::self().create(
+        auto* ret = dynamic_cast<ParsingEnvironmentFile*>(DUChainItemSystem::self().create(
                                                                                 const_cast<DUChainBaseData*>(
                                                                                     reinterpret_cast<const
                                                                                                      DUChainBaseData*>(
@@ -1064,7 +1071,11 @@ unloadContexts:
             checkContextsCount = percentageOfContexts;
 
         if (visitor.checkContexts.size() > ( int )checkContextsCount)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+            startPos = QRandomGenerator::global()->bounded(visitor.checkContexts.size() - checkContextsCount);
+#else
             startPos = qrand() % (visitor.checkContexts.size() - checkContextsCount);
+#endif
 
         int endPos = startPos + maxFinalCleanupCheckContexts;
         if (endPos > visitor.checkContexts.size())
@@ -1105,18 +1116,17 @@ private:
 
         if (info) {
             //Check whether importers need to be removed as well
-            QList<QExplicitlySharedDataPointer<ParsingEnvironmentFile>> importers = info->importers();
+            const QList<QExplicitlySharedDataPointer<ParsingEnvironmentFile>> importers = info->importers();
 
             QSet<QExplicitlySharedDataPointer<ParsingEnvironmentFile>> checkNext;
 
             //Do breadth first search, so less imports/importers have to be loaded, and a lower depth is reached
 
-            for (QList<QExplicitlySharedDataPointer<ParsingEnvironmentFile>>::iterator it = importers.begin();
-                 it != importers.end(); ++it) {
-                IndexedTopDUContext c = (*it)->indexedTopContext();
+            for (auto& importer : importers) {
+                IndexedTopDUContext c = importer->indexedTopContext();
                 if (!topContexts.contains(c.index())) {
                     topContexts.insert(c.index()); //Prevent useless recursion
-                    checkNext.insert(*it);
+                    checkNext.insert(importer);
                 }
             }
 
@@ -1231,9 +1241,9 @@ extern void initInstantiationInformationRepository();
 QString DUChain::repositoryPathForSession(const KDevelop::ISessionLock::Ptr& session)
 {
     QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation);
-    cacheDir += QStringLiteral("/kdevduchain");
+    cacheDir += QLatin1String("/kdevduchain");
     QString baseDir = QProcessEnvironment::systemEnvironment().value(QStringLiteral("KDEV_DUCHAIN_DIR"), cacheDir);
-    baseDir += QStringLiteral("/%1-%2").arg(qApp->applicationName(), session->id());
+    baseDir += QStringLiteral("/%1-%2").arg(QCoreApplication::applicationName(), session->id());
     return baseDir;
 }
 
@@ -1486,20 +1496,18 @@ ParsingEnvironmentFilePointer DUChain::environmentFileForDocument(const IndexedS
 
     if (sdDUChainPrivate->m_destroyed)
         return ParsingEnvironmentFilePointer();
-    QList<ParsingEnvironmentFilePointer> list = sdDUChainPrivate->getEnvironmentInformation(document);
+    const QList<ParsingEnvironmentFilePointer> list = sdDUChainPrivate->getEnvironmentInformation(document);
 
 //    qCDebug(LANGUAGE) << document.str() << ": matching" << list.size() << (onlyProxyContexts ? "proxy-contexts" : (noProxyContexts ? "content-contexts" : "contexts"));
 
-    auto it = list.constBegin();
-    while (it != list.constEnd()) {
-        if (*it && ((*it)->isProxyContext() == proxyContext) && (*it)->matchEnvironment(environment) &&
+    for (auto& envFilePtr : list) {
+        if (envFilePtr && (envFilePtr->isProxyContext() == proxyContext) && envFilePtr->matchEnvironment(environment) &&
             // Verify that the environment-file and its top-context are "good": The top-context must exist,
             // and there must be a content-context associated to the proxy-context.
-            (*it)->topContext() &&
-            (!proxyContext || DUChainUtils::contentContextFromProxyContext((*it)->topContext()))) {
-            return *it;
+            envFilePtr->topContext() &&
+            (!proxyContext || DUChainUtils::contentContextFromProxyContext(envFilePtr->topContext()))) {
+            return envFilePtr;
         }
-        ++it;
     }
     return ParsingEnvironmentFilePointer();
 }
@@ -1651,13 +1659,8 @@ void DUChain::documentLoadedPrepare(KDevelop::IDocument* doc)
 
         if (needsUpdate || !(standardContext->features() & TopDUContext::AllDeclarationsContextsAndUses)) {
             ICore::self()->languageController()->backgroundParser()->addDocument(IndexedString(doc->url()),
-                                                                                 ( TopDUContext::Features )(TopDUContext
-                                                                                                            ::
-                                                                                                            AllDeclarationsContextsAndUses
-                                                                                                            |
-                                                                                                            TopDUContext
-                                                                                                            ::
-                                                                                                            ForceUpdate));
+                                                                                 TopDUContext::AllDeclarationsContextsAndUses
+                                                                                 | TopDUContext::ForceUpdate);
             return;
         }
     }
@@ -1678,10 +1681,8 @@ void DUChain::documentRenamed(KDevelop::IDocument* doc)
         qCWarning(LANGUAGE) << "Strange, url of renamed document is invalid!";
     } else {
         ICore::self()->languageController()->backgroundParser()->addDocument(IndexedString(doc->url()),
-                                                                             ( TopDUContext::Features )(TopDUContext::
-                                                                                                        AllDeclarationsContextsAndUses
-                                                                                                        | TopDUContext::
-                                                                                                        ForceUpdate));
+                                                                             TopDUContext::AllDeclarationsContextsAndUses
+                                                                             | TopDUContext::ForceUpdate);
     }
 }
 
@@ -1823,7 +1824,7 @@ KDevelop::ReferencedTopDUContext DUChain::waitForUpdate(const KDevelop::IndexedS
         }
 
         QMetaObject::invokeMethod(ICore::self()->languageController()->backgroundParser(), "parseDocuments");
-        QApplication::processEvents();
+        QCoreApplication::processEvents();
         QThread::usleep(1000);
     }
 

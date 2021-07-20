@@ -42,6 +42,8 @@ class Controller;
 class AreaIndex;
 class IdealMainWidget;
 class IdealController;
+class MessageWidget;
+class Message;
 
 class MainWindowPrivate: public QObject {
     Q_OBJECT
@@ -61,7 +63,14 @@ public:
     /**Use this to create views for an area.*/
     class ViewCreator {
     public:
-        explicit ViewCreator(MainWindowPrivate *_d, const QList<View*>& _topViews = QList<View*>()): d(_d), topViews(_topViews.toSet()) {}
+        explicit ViewCreator(MainWindowPrivate *_d, const QList<View*>& _topViews = QList<View*>())
+            : d(_d)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+            , topViews(_topViews.begin(), _topViews.end())
+#else
+            , topViews(_topViews.toSet())
+#endif
+        {}
         Area::WalkerMode operator() (AreaIndex *index);
     private:
         MainWindowPrivate* const d;
@@ -91,15 +100,18 @@ public:
 
     QWidget *centralWidget;
     QWidget* bgCentralWidget;
+    MessageWidget* messageWidget;
     ViewBarContainer* viewBarContainer;
     QSplitter* splitterCentralWidget;
 
     IdealController *idealController;
-    int ignoreDockShown;
+    bool ignoreDockShown;
     bool autoAreaSettingsSave;
 
     bool eventFilter(QObject* obj, QEvent* event) override;
     void disableConcentrationMode();
+
+    void postMessage(Message* message);
 
 public Q_SLOTS:
     void toggleDocksShown();
@@ -126,6 +138,8 @@ private Q_SLOTS:
     void selectNextDock();
     void selectPreviousDock();
 
+    void messageDestroyed(Message* message);
+
 private:
     void restoreConcentrationMode();
 
@@ -145,6 +159,8 @@ private:
     IdealToolBar* m_leftToolBar;
 
     QAction* m_concentrationModeAction;
+
+    QHash<Message*, QVector<QSharedPointer<QAction>>> m_messageHash;
 };
 
 }

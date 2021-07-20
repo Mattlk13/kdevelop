@@ -1,4 +1,8 @@
 add_subdirectory(3rdparty/qtcreator-libs)
+
+remove_definitions(
+    -DQT_NO_FOREACH
+)
 add_subdirectory(duchain)
 add_subdirectory(nodejsmodules)
 if(BUILD_TESTING)
@@ -11,7 +15,7 @@ declare_qt_logging_category(kdevqmljslanguagesupport_LOG_SRCS
     IDENTIFIER KDEV_QMLJS
     CATEGORY_BASENAME "qmljs"
 )
-kdevplatform_add_plugin(kdevqmljslanguagesupport JSON kdevqmljs.json SOURCES
+kdevplatform_add_plugin(kdevqmljslanguagesupport SOURCES
     qmljsparsejob.cpp
     qmljshighlighting.cpp
     kdevqmljsplugin.cpp

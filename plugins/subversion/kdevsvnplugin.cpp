@@ -213,7 +213,7 @@ KDevelop::VcsJob* KDevSvnPlugin::commit(const QString& message, const QList<QUrl
                                         KDevelop::IBasicVersionControl::RecursionMode recursion)
 {
     auto* job = new SvnCommitJob(this);
-    qCDebug(PLUGIN_SVN) << "Committing locations:" << localLocations << endl;
+    qCDebug(PLUGIN_SVN) << "Committing locations:" << localLocations;
     job->setUrls(localLocations);
     job->setCommitMessage(message) ;
     job->setRecursive((recursion == KDevelop::IBasicVersionControl::Recursive));
@@ -335,14 +335,14 @@ KDevelop::ContextMenuExtension KDevSvnPlugin::contextMenuExtension(KDevelop::Con
 
     if( !copy_action )
     {
-        copy_action = new QAction(i18n("Copy..."), this);
+        copy_action = new QAction(i18nc("@action:inmenu", "Copy..."), this);
         connect(copy_action, &QAction::triggered, this, &KDevSvnPlugin::ctxCopy);
     }
     svnmenu->addAction(copy_action);
 
     if( !move_action )
     {
-        move_action = new QAction(i18n("Move..."), this);
+        move_action = new QAction(i18nc("@action:inmenu", "Move..."), this);
         connect(move_action, &QAction::triggered, this, &KDevSvnPlugin::ctxMove);
     }
     svnmenu->addAction(move_action);
@@ -371,7 +371,7 @@ void KDevSvnPlugin::ctxCopy()
             dir = dir.adjusted(QUrl::RemoveFilename|QUrl::StripTrailingSlash);
         }
 
-        KUrlRequesterDialog dlg(dir, i18n("Destination file/directory"), nullptr);
+        KUrlRequesterDialog dlg(dir, i18nc("@label", "Destination file/directory"), nullptr);
 
         if (isFile) {
             dlg.urlRequester()->setMode(KFile::File | KFile::Directory | KFile::LocalOnly);

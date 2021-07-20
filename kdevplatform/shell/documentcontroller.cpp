@@ -44,8 +44,10 @@ Boston, MA 02110-1301, USA.
 #include <KTextEditor/Document>
 #include <KTextEditor/View>
 #include <KTextEditor/AnnotationInterface>
+#include <kio_version.h>
 
 #include <sublime/area.h>
+#include <sublime/message.h>
 #include <sublime/view.h>
 #include <interfaces/iplugincontroller.h>
 #include <interfaces/iprojectcontroller.h>
@@ -85,7 +87,6 @@ public:
     explicit DocumentControllerPrivate(DocumentController* c)
         : controller(c)
         , fileOpenRecent(nullptr)
-        , globalTextEditorInstance(nullptr)
     {
     }
 
@@ -93,6 +94,7 @@ public:
 
     // used to map urls to open docs
     QHash< QUrl, IDocument* > documents;
+    bool shuttingDown = false;
 
     QHash< QString, IDocumentFactory* > factories;
 
@@ -125,7 +127,7 @@ public:
             dir = cfg.readEntry( "Last Open File Directory", Core::self()->projectController()->projectsBaseDirectory() );
         }
 
-        const auto caption = i18n("Open File");
+        const auto caption = i18nc("@title:window", "Open File");
         const auto filter = i18n("*|Text File\n");
         auto parent = Core::self()->uiControllerInternal()->defaultMainWindow();
 
@@ -204,7 +206,11 @@ public:
         if (url.isLocalFile()) {
             return QFile::exists(url.toLocalFile());
         } else {
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+            auto job = KIO::statDetails(url, KIO::StatJob::SourceSide, KIO::StatNoDetails, KIO::HideProgressInfo);
+#else
             auto job = KIO::stat(url, KIO::StatJob::SourceSide, 0, KIO::HideProgressInfo);
+#endif
             KJobWidgets::setWindow(job, ICore::self()->uiController()->activeMainWindow());
             return job->exec();
         }
@@ -547,7 +553,6 @@ public:
     QPointer<QAction> closeAll;
     QPointer<QAction> closeAllOthers;
     KRecentFilesAction* fileOpenRecent;
-    KTextEditor::Document* globalTextEditorInstance;
 };
 Q_DECLARE_TYPEINFO(KDevelop::DocumentControllerPrivate::HistoryEntry, Q_MOVABLE_TYPE);
 
@@ -567,11 +572,16 @@ DocumentController::DocumentController( QObject *parent )
 
 void DocumentController::initialize()
 {
+    Q_D(DocumentController);
+
+    d->shuttingDown = false; // required by test_documentcontroller
 }
 
 void DocumentController::cleanup()
 {
     Q_D(DocumentController);
+
+    d->shuttingDown = true;
 
     if (d->fileOpenRecent)
         d->fileOpenRecent->saveEntries( KConfigGroup(KSharedConfig::openConfig(), "Recent Files" ) );
@@ -596,65 +606,65 @@ void DocumentController::setupActions()
 
     action = ac->addAction( QStringLiteral("file_open") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-open")));
-    ac->setDefaultShortcut(action, Qt::CTRL + Qt::Key_O );
-    action->setText(i18n( "&Open..." ) );
+    ac->setDefaultShortcut(action, Qt::CTRL | Qt::Key_O);
+    action->setText(i18nc("@action",  "&Open..." ) );
     connect(action, &QAction::triggered,
             this, [this] { Q_D(DocumentController); d->chooseDocument(); } );
-    action->setToolTip( i18n( "Open file" ) );
-    action->setWhatsThis( i18n( "Opens a file for editing." ) );
+    action->setToolTip( i18nc("@info:tooltip", "Open file" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Opens a file for editing." ) );
 
     d->fileOpenRecent = KStandardAction::openRecent(this,
                     SLOT(slotOpenDocument(QUrl)), ac);
-    d->fileOpenRecent->setWhatsThis(i18n("This lists files which you have opened recently, and allows you to easily open them again."));
+    d->fileOpenRecent->setWhatsThis(i18nc("@info:whatsthis", "This lists files which you have opened recently, and allows you to easily open them again."));
     d->fileOpenRecent->loadEntries( KConfigGroup(KSharedConfig::openConfig(), "Recent Files" ) );
 
     action = d->saveAll = ac->addAction( QStringLiteral("file_save_all") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-save")));
-    action->setText(i18n( "Save Al&l" ) );
+    action->setText(i18nc("@action", "Save Al&l" ) );
     connect( action, &QAction::triggered, this, &DocumentController::slotSaveAllDocuments );
-    action->setToolTip( i18n( "Save all open documents" ) );
-    action->setWhatsThis( i18n( "Save all open documents, prompting for additional information when necessary." ) );
-    ac->setDefaultShortcut(action, QKeySequence(Qt::CTRL + Qt::Key_L) );
+    action->setToolTip( i18nc("@info:tooltip", "Save all open documents" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Save all open documents, prompting for additional information when necessary." ) );
+    ac->setDefaultShortcut(action, QKeySequence(Qt::CTRL | Qt::Key_L));
     action->setEnabled(false);
 
     action = d->revertAll = ac->addAction( QStringLiteral("file_revert_all") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-revert")));
-    action->setText(i18n( "Reload All" ) );
+    action->setText(i18nc("@action", "Reload All" ) );
     connect( action, &QAction::triggered, this, &DocumentController::reloadAllDocuments );
-    action->setToolTip( i18n( "Revert all open documents" ) );
-    action->setWhatsThis( i18n( "Revert all open documents, returning to the previously saved state." ) );
+    action->setToolTip( i18nc("@info:tooltip", "Revert all open documents" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Revert all open documents, returning to the previously saved state." ) );
     action->setEnabled(false);
 
     action = d->close = ac->addAction( QStringLiteral("file_close") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-close")));
-    ac->setDefaultShortcut(action, Qt::CTRL + Qt::Key_W );
-    action->setText( i18n( "&Close" ) );
+    ac->setDefaultShortcut(action, Qt::CTRL | Qt::Key_W);
+    action->setText( i18nc("@action", "&Close" ) );
     connect( action, &QAction::triggered, this, &DocumentController::fileClose );
-    action->setToolTip( i18n( "Close file" ) );
-    action->setWhatsThis( i18n( "Closes current file." ) );
+    action->setToolTip( i18nc("@info:tooltip", "Close file" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Closes current file." ) );
     action->setEnabled(false);
 
     action = d->closeAll = ac->addAction( QStringLiteral("file_close_all") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-close")));
-    action->setText(i18n( "Clos&e All" ) );
+    action->setText(i18nc("@action", "Clos&e All" ) );
     connect( action, &QAction::triggered, this, &DocumentController::closeAllDocuments );
-    action->setToolTip( i18n( "Close all open documents" ) );
-    action->setWhatsThis( i18n( "Close all open documents, prompting for additional information when necessary." ) );
+    action->setToolTip( i18nc("@info:tooltip", "Close all open documents" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Close all open documents, prompting for additional information when necessary." ) );
     action->setEnabled(false);
 
     action = d->closeAllOthers = ac->addAction( QStringLiteral("file_closeother") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-close")));
-    ac->setDefaultShortcut(action, Qt::CTRL + Qt::SHIFT + Qt::Key_W );
-    action->setText(i18n( "Close All Ot&hers" ) );
+    ac->setDefaultShortcut(action, Qt::CTRL | Qt::SHIFT | Qt::Key_W);
+    action->setText(i18nc("@action", "Close All Ot&hers" ) );
     connect( action, &QAction::triggered, this, &DocumentController::closeAllOtherDocuments );
-    action->setToolTip( i18n( "Close all other documents" ) );
-    action->setWhatsThis( i18n( "Close all open documents, with the exception of the currently active document." ) );
+    action->setToolTip( i18nc("@info:tooltip", "Close all other documents" ) );
+    action->setWhatsThis( i18nc("@info:whatsthis", "Close all open documents, with the exception of the currently active document." ) );
     action->setEnabled(false);
 
     action = ac->addAction( QStringLiteral("vcsannotate_current_document") );
     connect( action, &QAction::triggered, this, &DocumentController::vcsAnnotateCurrentDocument );
-    action->setText( i18n( "Show Annotate on current document") );
-    action->setIconText( i18n( "Annotate" ) );
+    action->setText( i18nc("@action", "Show Annotate on Current Document") );
+    action->setIconText( i18nc("@action", "Annotate" ) );
     action->setIcon( QIcon::fromTheme(QStringLiteral("user-properties")) );
 }
 
@@ -694,6 +704,20 @@ IDocument* DocumentController::openDocument( const QUrl & inputUrl,
         const QString& encoding, IDocument* buddy)
 {
     Q_D(DocumentController);
+
+    if (d->shuttingDown) {
+        // When a user exits KDevelop during debugging, a code breakpoint can be hit,
+        // and as a consequence DebugController::showStepInSource() be called
+        // in the event loop started by Core::cleanup() => BackgroundParser::waitForIdle().
+        // Oblivious to the application state, DebugController then tries to open a document,
+        // which eventually results in a crash inside a slot connected to either
+        // &IDocumentController::textDocumentCreated or &IDocumentController::documentLoaded
+        // (these signals are emitted in the process of opening a document).
+        // Even had there been no crash, we should not open documents after cleanup(),
+        // because we will never close them.
+        qCDebug(SHELL) << "refusing to open document" << inputUrl << "after cleanup()";
+        return nullptr;
+    }
 
     return d->openDocumentInternal(inputUrl, QString(), range, encoding, activationParams, buddy);
 }
@@ -996,14 +1020,14 @@ QString DocumentController::activeDocumentPath( const QString& target ) const
         }
     }
     IDocument* doc = activeDocument();
-    if(!doc || target == QStringLiteral("[selection]"))
+    if(!doc || target == QLatin1String("[selection]"))
     {
         Context* selection = ICore::self()->selectionController()->currentSelection();
         if(selection && selection->type() == Context::ProjectItemContext && !static_cast<ProjectItemContext*>(selection)->items().isEmpty())
         {
             QString ret = static_cast<ProjectItemContext*>(selection)->items().at(0)->path().pathOrUrl();
             if(static_cast<ProjectItemContext*>(selection)->items().at(0)->folder())
-                ret += QStringLiteral("/.");
+                ret += QLatin1String("/.");
             return  ret;
         }
         return QString();
@@ -1022,7 +1046,7 @@ QStringList DocumentController::activeDocumentPaths() const
         documents.insert(view->document()->documentSpecifier());
     }
 
-    return documents.toList();
+    return documents.values();
 }
 
 void DocumentController::registerDocumentForMimetype( const QString& mimetype,
@@ -1059,7 +1083,7 @@ QUrl DocumentController::nextEmptyDocumentUrl()
         if (DocumentController::isEmptyDocumentUrl(doc->url())) {
             const auto match = pattern.match(doc->url().toDisplayString(QUrl::PreferLocalFile));
             if (match.hasMatch()) {
-                const int num = match.captured(1).toInt();
+                const int num = match.capturedRef(1).toInt();
                 nextEmptyDocNumber = qMax(nextEmptyDocNumber, num + 1);
             } else {
                 nextEmptyDocNumber = qMax(nextEmptyDocNumber, 1);
@@ -1080,15 +1104,6 @@ IDocumentFactory* DocumentController::factory(const QString& mime) const
     Q_D(const DocumentController);
 
     return d->factories.value(mime);
-}
-
-KTextEditor::Document* DocumentController::globalTextEditorInstance()
-{
-    Q_D(DocumentController);
-
-    if(!d->globalTextEditorInstance)
-        d->globalTextEditorInstance = Core::self()->partControllerInternal()->createTextPart();
-    return d->globalTextEditorInstance;
 }
 
 bool DocumentController::openDocumentsSimple( QStringList urls )
@@ -1267,8 +1282,10 @@ void DocumentController::vcsAnnotateCurrentDocument()
         helper->annotation();
     }
     else {
-        KMessageBox::error(nullptr, i18n("Could not annotate the document because it is not "
-                                   "part of a version-controlled project."));
+        const QString messageText =
+            i18n("Could not annotate the document because it is not part of a version-controlled project.");
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
     }
 }
 

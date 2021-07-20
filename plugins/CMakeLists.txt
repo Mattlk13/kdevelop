@@ -1,4 +1,5 @@
 # BEGIN: Analyzers
+add_subdirectory(compileanalyzercommon)
 add_subdirectory(clangtidy)
 add_subdirectory(clazy)
 add_subdirectory(cppcheck)
@@ -33,14 +34,9 @@ add_subdirectory(customscript)
 # BEGIN: Languages
 ecm_optional_add_subdirectory(custom-definesandincludes)
 
-# 3rdparty/qtcreator-libs uses QT_CONFIG which was added for 5.8
-if(NOT Qt5_VERSION VERSION_LESS "5.8.0")
-    ecm_optional_add_subdirectory(qmljs)
-else()
-    message(WARNING "Will not build QML/JS plugin, needs Qt >= 5.8.0")
-endif()
+ecm_optional_add_subdirectory(qmljs)
 
-find_package(Clang 3.8)
+find_package(Clang 6.0)
 set(clangSearchHint "")
 if (NOT CLANG_FOUND)
     set(clangSearchHint "Please install a package providing libclang. Either pass -DLLVM_ROOT=/path/to/llvm-prefix or install the 'llvm-config' command-line utility for auto-detection.")
@@ -135,7 +131,6 @@ add_subdirectory(scratchpad)
 ecm_optional_add_subdirectory(classbrowser)
 ecm_optional_add_subdirectory(executeplasmoid)
 ecm_optional_add_subdirectory(ghprovider)
-ecm_optional_add_subdirectory(kdeprovider)
 ecm_optional_add_subdirectory(konsole)
 if (Qt5QuickWidgets_FOUND)
     add_subdirectory(welcomepage)

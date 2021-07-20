@@ -224,7 +224,7 @@ QVariant Variable::data(int column, int role) const
             return i18n("Error");
         }
     }
-    if (column == 1 && role == Qt::TextColorRole)
+    if (column == 1 && role == Qt::ForegroundRole)
     {
         KColorScheme scheme(QPalette::Active);
         if (!m_inScope) {
@@ -476,6 +476,10 @@ void VariableCollection::updateAutoUpdate(IDebugSession* session)
 
 VariableCollection::~ VariableCollection()
 {
+    for (auto* view : qAsConst(m_textHintProvidedViews)) {
+        auto* iface = qobject_cast<KTextEditor::TextHintInterface*>(view);
+        iface->unregisterTextHintProvider(&m_textHintProvider);
+    }
 }
 
 void VariableCollection::textDocumentCreated(IDocument* doc)
@@ -499,7 +503,16 @@ void VariableCollection::viewCreated(KTextEditor::Document* doc,
     if( !iface )
         return;
 
+    if (m_textHintProvidedViews.contains(view)) {
+        return;
+    }
+    connect(view, &View::destroyed, this, [this, view](QObject* obj) {
+        Q_ASSERT(obj == view);
+        m_textHintProvidedViews.removeOne(view);
+    });
+
     iface->registerTextHintProvider(&m_textHintProvider);
+    m_textHintProvidedViews.append(view);
 }
 
 Locals* VariableCollection::locals(const QString &name) const

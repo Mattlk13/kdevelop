@@ -54,7 +54,7 @@ private:
 KSaveSelectDialog::KSaveSelectDialog( const QList<IDocument*>& files, QWidget * parent )
     : QDialog( parent )
 {
-    setWindowTitle( i18n("Save Modified Files?") );
+    setWindowTitle( i18nc("@title:window", "Save Modified Files?") );
 
     auto mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(new QLabel( i18n("The following files have been modified. Save them?"), this ));
@@ -69,14 +69,14 @@ KSaveSelectDialog::KSaveSelectDialog( const QList<IDocument*>& files, QWidget * 
         new DocumentItem( doc, m_listWidget );
     }
 
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);
+    auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Save|QDialogButtonBox::Cancel);
     QPushButton *okButton = buttonBox->button(QDialogButtonBox::Save);
     okButton->setDefault(true);
     okButton->setShortcut(Qt::CTRL | Qt::Key_Return);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &KSaveSelectDialog::save);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &KSaveSelectDialog::reject);
-    auto user1Button = buttonBox->addButton(i18n("Save &None" ), QDialogButtonBox::ActionRole);
-    user1Button->setToolTip(i18n("Discard all modifications" ));
+    auto user1Button = buttonBox->addButton(i18nc("@action:button", "Save &None" ), QDialogButtonBox::ActionRole);
+    user1Button->setToolTip(i18nc("@info:tooltip", "Discard all modifications" ));
     connect(user1Button, &QPushButton::clicked, this, &KSaveSelectDialog::accept);
     mainLayout->addWidget(buttonBox);
 }

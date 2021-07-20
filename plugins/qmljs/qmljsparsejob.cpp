@@ -55,7 +55,7 @@ ProjectFileItem* findProjectFileItem(const IndexedString& url)
 
     const auto& projects = ICore::self()->projectController()->projects();
     for (auto project: projects) {
-        auto files = project->filesForPath(url);
+        const auto files = project->filesForPath(url);
         if (files.isEmpty()) {
             continue;
         }
@@ -156,7 +156,7 @@ void QmlJsParseJob::run(ThreadWeaver::JobPointer pointer, ThreadWeaver::Thread* 
             return;
         }
 
-        if ( context && minimumFeatures() & TopDUContext::AllDeclarationsContextsAndUses ) {
+        if ( context && (minimumFeatures() & TopDUContext::AllDeclarationsContextsAndUses) ) {
             UseBuilder useBuilder(&session);
             useBuilder.buildUses(session.ast());
         }
@@ -169,7 +169,7 @@ void QmlJsParseJob::run(ThreadWeaver::JobPointer pointer, ThreadWeaver::Thread* 
 
     if (!context) {
         DUChainWriteLocker lock;
-        ParsingEnvironmentFile *file = new ParsingEnvironmentFile(document());
+        auto* file = new ParsingEnvironmentFile(document());
         file->setLanguage(ParseSession::languageString());
         context = new TopDUContext(document(), RangeInRevision(0, 0, INT_MAX, INT_MAX), file);
         DUChain::self()->addDocumentChain(context);

@@ -29,8 +29,6 @@
 #include <icore.h>
 #include <iuicontroller.h>
 
-#include <qtcompat_p.h>
-
 #include <QDialog>
 #include <QSortFilterProxyModel>
 #include <QIdentityProxyModel>
@@ -61,7 +59,7 @@ public:
     }
 };
 
-QuickOpenWidget::QuickOpenWidget(const QString& title, QuickOpenModel* model, const QStringList& initialItems, const QStringList& initialScopes, bool listOnly, bool noSearchField)
+QuickOpenWidget::QuickOpenWidget(QuickOpenModel* model, const QStringList& initialItems, const QStringList& initialScopes, bool listOnly, bool noSearchField)
     : m_model(model)
     , m_expandedTemporary(false)
     , m_hadNoCommandSinceAlt(true)
@@ -69,7 +67,6 @@ QuickOpenWidget::QuickOpenWidget(const QString& title, QuickOpenModel* model, co
     m_filterTimer.setSingleShot(true);
     connect(&m_filterTimer, &QTimer::timeout, this, &QuickOpenWidget::applyFilter);
 
-    Q_UNUSED(title);
     ui.setupUi(this);
     ui.list->header()->hide();
     ui.list->setRootIsDecorated(false);
@@ -259,7 +256,7 @@ QuickOpenWidget::~QuickOpenWidget()
 
 QuickOpenWidgetDialog::QuickOpenWidgetDialog(const QString& title, QuickOpenModel* model, const QStringList& initialItems, const QStringList& initialScopes, bool listOnly, bool noSearchField)
 {
-    m_widget = new QuickOpenWidget(title, model, initialItems, initialScopes, listOnly, noSearchField);
+    m_widget = new QuickOpenWidget(model, initialItems, initialScopes, listOnly, noSearchField);
     // the QMenu might close on esc and we want to close the whole dialog then
     connect(m_widget, &QuickOpenWidget::aboutToHide, this, &QuickOpenWidgetDialog::deleteLater);
 
@@ -306,7 +303,7 @@ void QuickOpenWidget::updateProviders()
             }
         }
 
-        ui.itemsButton->setText(checkedItems.join(QStringLiteral(", ")));
+        ui.itemsButton->setText(checkedItems.join(QLatin1String(", ")));
     }
 
     QStringList checkedScopes;
@@ -321,7 +318,7 @@ void QuickOpenWidget::updateProviders()
             }
         }
 
-        ui.scopesButton->setText(checkedScopes.join(QStringLiteral(", ")));
+        ui.scopesButton->setText(checkedScopes.join(QLatin1String(", ")));
     }
 
     emit itemsChanged(checkedItems);
@@ -432,16 +429,20 @@ bool QuickOpenWidget::eventFilter(QObject* watched, QEvent* event)
         case Qt::Key_Tab:
             if (keyEvent->modifiers() == Qt::NoModifier) {
                 // Tab should work just like Down
-                QCoreApplication::sendEvent(ui.list, new QKeyEvent(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier));
-                QCoreApplication::sendEvent(ui.list, new QKeyEvent(QEvent::KeyRelease, Qt::Key_Down, Qt::NoModifier));
+                QKeyEvent keyDownPress(QEvent::KeyPress, Qt::Key_Down, Qt::NoModifier);
+                QCoreApplication::sendEvent(ui.list, &keyDownPress);
+                QKeyEvent keyDownRelease(QEvent::KeyRelease, Qt::Key_Down, Qt::NoModifier);
+                QCoreApplication::sendEvent(ui.list, &keyDownRelease);
                 return true; // eat event
             }
             break;
         case Qt::Key_Backtab:
             if (keyEvent->modifiers() == Qt::ShiftModifier) {
                 // Shift + Tab should work just like Up
-                QCoreApplication::sendEvent(ui.list, new QKeyEvent(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier));
-                QCoreApplication::sendEvent(ui.list, new QKeyEvent(QEvent::KeyRelease, Qt::Key_Up, Qt::NoModifier));
+                QKeyEvent keyUpPress(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
+                QCoreApplication::sendEvent(ui.list, &keyUpPress);
+                QKeyEvent keyUpRelease(QEvent::KeyPress, Qt::Key_Up, Qt::NoModifier);
+                QCoreApplication::sendEvent(ui.list, &keyUpRelease);
                 return true; // eat event
             }
             break;

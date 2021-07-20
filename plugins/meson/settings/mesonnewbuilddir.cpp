@@ -32,7 +32,6 @@
 #include <project/helper.h>
 
 #include <KColorScheme>
-#include <kio_version.h>
 
 #include <QDialogButtonBox>
 #include <QFileInfo>
@@ -46,11 +45,11 @@ MesonNewBuildDir::MesonNewBuildDir(IProject* project, QWidget* parent)
     , m_project(project)
 {
     Q_ASSERT(project); // Just in case
-    MesonManager* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
+    auto* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
     Q_ASSERT(mgr); // This dialog only works with the MesonManager
 
     setWindowTitle(
-        i18n("Configure a build directory - %1", ICore::self()->runtimeController()->currentRuntime()->name()));
+        i18nc("@title:window", "Configure a Build Directory - %1", ICore::self()->runtimeController()->currentRuntime()->name()));
 
     m_ui = new Ui::MesonNewBuildDir;
     m_ui->setupUi(this);
@@ -63,11 +62,7 @@ MesonNewBuildDir::MesonNewBuildDir(IProject* project, QWidget* parent)
         }
     });
 
-#if KIO_VERSION >= QT_VERSION_CHECK(5, 33, 0)
     m_ui->i_buildDir->setAcceptMode(QFileDialog::AcceptSave);
-#else
-    m_ui->i_buildDir->fileDialog()->setAcceptMode(QFileDialog::AcceptSave);
-#endif
 
     resetFields();
 }
@@ -81,7 +76,7 @@ void MesonNewBuildDir::resetFields()
 {
     Meson::MesonConfig cfg = Meson::getMesonConfig(m_project);
     Path projectPath = m_project->path();
-    MesonManager* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
+    auto* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
     Q_ASSERT(mgr); // This dialog only works with the MesonManager
 
     auto aConf = m_ui->advanced->getConfig();
@@ -132,7 +127,7 @@ void MesonNewBuildDir::setStatus(const QString& str, bool validConfig)
     }
 
     QPalette pal = m_ui->l_statusMessage->palette();
-    pal.setColor(QPalette::Foreground, scheme.foreground(role).color());
+    pal.setColor(QPalette::WindowText, scheme.foreground(role).color());
     m_ui->l_statusMessage->setPalette(pal);
     m_ui->l_statusMessage->setText(str);
 

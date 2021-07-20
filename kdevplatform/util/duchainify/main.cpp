@@ -35,7 +35,7 @@
 #include <tests/autotestshell.h>
 #include <tests/testcore.h>
 
-#include <QApplication>
+#include <QCoreApplication>
 #include <QCommandLineParser>
 #include <QCommandLineOption>
 #include <QDebug>
@@ -43,7 +43,7 @@
 #include <QStringList>
 #include <QTimer>
 
-#include <stdio.h>
+#include <cstdio>
 
 #include <KAboutData>
 #include <KLocalizedString>
@@ -88,7 +88,7 @@ void Manager::init()
         QCoreApplication::exit(1);
     }
 
-    uint features = TopDUContext::VisibleDeclarationsAndContexts;
+    TopDUContext::Features features = TopDUContext::VisibleDeclarationsAndContexts;
     if (m_args->isSet(QStringLiteral("features"))) {
         QString featuresStr = m_args->value(QStringLiteral("features"));
         if (featuresStr == QLatin1String("visible-declarations")) {
@@ -132,11 +132,14 @@ void Manager::init()
     // and quit when it's emitted
     connect(
         ICore::self()->languageController()->backgroundParser(), &BackgroundParser::hideProgress, this,
-        &Manager::finish);
+        [this]() {
+            if (ICore::self()->languageController()->backgroundParser()->isIdle())
+                QTimer::singleShot(0, this, &Manager::finish);
+        });
 
     const auto files = m_args->positionalArguments();
     for (const auto& file : files) {
-        addToBackgroundParser(file, ( TopDUContext::Features )features);
+        addToBackgroundParser(file, features);
     }
 
     m_allFilesAdded = 1;
@@ -253,14 +256,14 @@ QSet<QUrl> Manager::waiting()
 void Manager::finish()
 {
     std::cerr << "ready" << std::endl;
-    QApplication::quit();
+    QCoreApplication::quit();
 }
 
 using namespace KDevelop;
 
 int main(int argc, char** argv)
 {
-    QApplication app(argc, argv);
+    QCoreApplication app(argc, argv);
 
     KAboutData aboutData(QStringLiteral("duchainify"), i18n("duchainify"),
         QStringLiteral("1"), i18n("DUChain builder application"), KAboutLicense::GPL,
@@ -296,10 +299,10 @@ int main(int argc, char** argv)
     parser.addOption(QCommandLineOption{QStringList{QStringLiteral("dump-symboltable")},
                                         i18n(
                                             "Print complete DUChain PersistentSymbolTable repository on successful parse")});
-    parser.addOption(QCommandLineOption{QStringList{QStringLiteral("dump-depth")},
-                                        i18n(
-                                            "Number defining the maximum depth where declaration details are printed"),
-                                        QStringLiteral("depth")});
+    parser.addOption(
+        QCommandLineOption { QStringList { QStringLiteral("dump-depth") },
+                             i18n("Number defining the maximum depth where declaration details are printed"),
+                             QStringLiteral("depth"), QStringLiteral("100") });
     parser.addOption(QCommandLineOption{QStringList{QStringLiteral("dump-graph")},
                                         i18n("Dump DUChain graph (in .dot format)")});
     parser.addOption(QCommandLineOption{QStringList{QStringLiteral("d"), QStringLiteral("dump-errors")},

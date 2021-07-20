@@ -20,31 +20,40 @@
 #ifndef KDEVELOPSESSIONSRUNNER_H
 #define KDEVELOPSESSIONSRUNNER_H
 
+// KDevelopSessionsWatch
+#include <kdevelopsessionsobserver.h>
+// KF
 #include <KRunner/AbstractRunner>
+#include <krunner_version.h>
 
-struct Session
+
+class KDevelopSessions : public Plasma::AbstractRunner
+                       , public KDevelopSessionsObserver
 {
-    QString id;
-    QString name;
-};
-
-Q_DECLARE_TYPEINFO(Session, Q_MOVABLE_TYPE);
-
-class KDevelopSessions : public Plasma::AbstractRunner {
     Q_OBJECT
+    Q_INTERFACES(KDevelopSessionsObserver)
 
-    public:
-        KDevelopSessions( QObject *parent, const QVariantList& args );
-        ~KDevelopSessions() override;
+public:
+#if KRUNNER_VERSION >= QT_VERSION_CHECK(5, 77, 0)
+    KDevelopSessions(QObject* parent, const KPluginMetaData& metaData, const QVariantList& args);
+#else
+    KDevelopSessions(QObject *parent, const QVariantList& args);
+#endif
+    ~KDevelopSessions() override;
 
-        void match(Plasma::RunnerContext &context) override;
-        void run(const Plasma::RunnerContext &context, const Plasma::QueryMatch &match) override;
+public:
+    void match(Plasma::RunnerContext &context) override;
+    void run(const Plasma::RunnerContext &context, const Plasma::QueryMatch &match) override;
 
-    private Q_SLOTS:
-        void loadSessions();
+protected:
+    void init() override;
 
-    private:
-        QVector<Session> m_sessions;
+public Q_SLOTS: // KDevelopSessionsObserver API
+    void setSessionDataList(const QVector<KDevelopSessionData>& sessionDataList) override;
+
+private:
+    // working copy of the list
+    QVector<KDevelopSessionData> m_sessionDataList;
 };
 
 #endif

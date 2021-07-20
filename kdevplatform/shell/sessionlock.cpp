@@ -31,9 +31,14 @@
 #include <QFile>
 #include <QDir>
 
-using namespace KDevelop;
+namespace KDevelop {
 
-namespace {
+using TextStreamFunction = QTextStream& (*)(QTextStream&);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+constexpr TextStreamFunction endl = Qt::endl;
+#else
+constexpr TextStreamFunction endl = ::endl;
+#endif
 
 QString lockFileForSession( const QString& id )
 {
@@ -44,7 +49,7 @@ QString dBusServiceNameForSession( const QString& id )
 {
     // We remove starting "{" and ending "}" from the string UUID representation
     // as D-Bus apparently doesn't allow them in service names
-    return QStringLiteral( "org.kdevelop.kdevplatform-lock-" ) + id.midRef( 1, id.size() - 2 );
+    return QLatin1String("org.kdevelop.kdevplatform-lock-") + id.midRef(1, id.size() - 2);
 }
 
 /// Force-removes the lock-file.
@@ -53,8 +58,6 @@ void forceRemoveLockfile(const QString& lockFilename)
     if( QFile::exists( lockFilename ) ) {
         QFile::remove( lockFilename );
     }
-}
-
 }
 
 TryLockSessionResult SessionLock::tryLockSession(const QString& sessionId, bool doLocking)
@@ -172,7 +175,6 @@ QString SessionLock::handleLockedSession(const QString& sessionName, const QStri
             return QString();
         } else {
             qCWarning(SHELL) << i18nc("@info:shell", "Running %1 instance (PID: %2) is apparently hung", runInfo.holderApp, runInfo.holderPid);
-            qCWarning(SHELL) << i18nc("@info:shell", "running %1 instance (PID: %2) is apparently hung", runInfo.holderApp, runInfo.holderPid);
         }
     }
 
@@ -197,10 +199,10 @@ QString SessionLock::handleLockedSession(const QString& sessionName, const QStri
     QString errmsg = QLatin1String("<p>") + problemHeader + QLatin1String("<br>") + problemDescription + QLatin1String("</p>") + problemResolution;
 
     KGuiItem retry = KStandardGuiItem::cont();
-    retry.setText(i18nc("@action:button", "Retry startup"));
+    retry.setText(i18nc("@action:button", "Retry Startup"));
 
     KGuiItem choose = KStandardGuiItem::configure();
-    choose.setText(i18nc("@action:button", "Choose another session"));
+    choose.setText(i18nc("@action:button", "Choose Another Session"));
 
     KGuiItem cancel = KStandardGuiItem::quit();
     int ret = KMessageBox::warningYesNoCancel(nullptr, errmsg, i18nc("@title:window", "Failed to Lock Session %1", sessionName),
@@ -221,4 +223,6 @@ QString SessionLock::handleLockedSession(const QString& sessionName, const QStri
     }
 
     return QString();
+}
+
 }

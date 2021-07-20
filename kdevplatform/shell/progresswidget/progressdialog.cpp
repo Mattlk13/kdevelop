@@ -59,7 +59,7 @@ TransactionItemView::TransactionItemView( QWidget *parent, const char *name )
     setFrameStyle( NoFrame );
     mBigBox = new QWidget( this );
     auto layout = new QVBoxLayout(mBigBox);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     setWidget( mBigBox );
     setWidgetResizable( true );
     setSizePolicy( QSizePolicy::Maximum, QSizePolicy::Maximum );
@@ -135,7 +135,7 @@ TransactionItem::TransactionItem( QWidget *parent,
 {
     auto vbox = new QVBoxLayout(this);
     vbox->setSpacing( 2 );
-    vbox->setMargin( 2 );
+    vbox->setContentsMargins(2, 2, 2, 2);
     setSizePolicy( QSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed ) );
 
     mFrame = new QFrame( this );
@@ -145,9 +145,9 @@ TransactionItem::TransactionItem( QWidget *parent,
     vbox->setStretchFactor( mFrame, 3 );
     vbox->addWidget( mFrame );
 
-    QWidget *h = new QWidget( this );
+    auto* h = new QWidget( this );
     auto hboxLayout = new QHBoxLayout(h);
-    hboxLayout->setMargin(0);
+    hboxLayout->setContentsMargins(0, 0, 0, 0);
     hboxLayout->setSpacing( 5 );
     vbox->addWidget( h );
 
@@ -165,7 +165,7 @@ TransactionItem::TransactionItem( QWidget *parent,
     if ( item->canBeCanceled() ) {
         mCancelButton = new QPushButton( QIcon::fromTheme( QStringLiteral("dialog-cancel") ), QString(), h );
         hboxLayout->addWidget(mCancelButton);
-        mCancelButton->setToolTip( i18n( "Cancel this operation." ) );
+        mCancelButton->setToolTip( i18nc("@info:tooltip", "Cancel this operation" ) );
         connect ( mCancelButton, &QPushButton::clicked,
                   this, &TransactionItem::slotItemCanceled);
         h->layout()->addWidget( mCancelButton );
@@ -173,7 +173,7 @@ TransactionItem::TransactionItem( QWidget *parent,
 
     h = new QWidget( this );
     hboxLayout = new QHBoxLayout(h);
-    hboxLayout->setMargin(0);
+    hboxLayout->setContentsMargins(0, 0, 0, 0);
     hboxLayout->setSpacing( 5 );
     h->setSizePolicy( QSizePolicy( QSizePolicy::Preferred, QSizePolicy::Fixed ) );
     vbox->addWidget( h );

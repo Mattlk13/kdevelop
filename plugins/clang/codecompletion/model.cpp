@@ -186,7 +186,7 @@ ClangCodeCompletionModel::~ClangCodeCompletionModel()
 bool ClangCodeCompletionModel::shouldStartCompletion(KTextEditor::View* view, const QString& inserted,
                                                      bool userInsertion, const KTextEditor::Cursor& position)
 {
-    static const QString noCompletionAfter = QStringLiteral(";{}]) ");
+    const QString noCompletionAfter = QStringLiteral(";{}]) ");
 
     if (inserted.isEmpty() || isSpaceOnly(inserted)) {
         return false;
@@ -203,7 +203,7 @@ bool ClangCodeCompletionModel::shouldStartCompletion(KTextEditor::View* view, co
     if (userInsertion && lastChar == QLatin1Char('-') && includePathCompletionRequired(view->document()->line(position.line()))) {
         return true;
     }
-    if (userInsertion && inserted.endsWith(QStringLiteral("::"))) {
+    if (userInsertion && inserted.endsWith(QLatin1String("::"))) {
         return true;
     }
 

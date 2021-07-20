@@ -149,7 +149,7 @@ public:
         return ret;
     }
 
-    Qt::DockWidgetArea defaultPosition() override
+    Qt::DockWidgetArea defaultPosition() const override
     {
         return Qt::BottomDockWidgetArea;
     }
@@ -174,7 +174,7 @@ KXMLGUIClient* ContextBrowserPlugin::createGUIForMainWindow(Sublime::MainWindow*
         &ContextBrowserPlugin::documentJumpPerformed);
 
     m_previousButton = new QToolButton();
-    m_previousButton->setToolTip(i18n("Go back in context history"));
+    m_previousButton->setToolTip(i18nc("@info:tooltip", "Go back in context history"));
     m_previousButton->setAutoRaise(true);
     m_previousButton->setPopupMode(QToolButton::MenuButtonPopup);
     m_previousButton->setIcon(QIcon::fromTheme(QStringLiteral("go-previous")));
@@ -186,7 +186,7 @@ KXMLGUIClient* ContextBrowserPlugin::createGUIForMainWindow(Sublime::MainWindow*
     connect(m_previousMenu.data(), &QMenu::aboutToShow, this, &ContextBrowserPlugin::previousMenuAboutToShow);
 
     m_nextButton = new QToolButton();
-    m_nextButton->setToolTip(i18n("Go forward in context history"));
+    m_nextButton->setToolTip(i18nc("@info:tooltip", "Go forward in context history"));
     m_nextButton->setAutoRaise(true);
     m_nextButton->setPopupMode(QToolButton::MenuButtonPopup);
     m_nextButton->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
@@ -202,10 +202,9 @@ KXMLGUIClient* ContextBrowserPlugin::createGUIForMainWindow(Sublime::MainWindow*
                                                                                         "org.kdevelop.IQuickOpen"));
 
     if (quickOpen) {
-        m_outlineLine = quickOpen->createQuickOpenLine(QStringList(), QStringList() << i18n(
-                                                           "Outline"), IQuickOpen::Outline);
-        m_outlineLine->setDefaultText(i18n("Outline..."));
-        m_outlineLine->setToolTip(i18n("Navigate outline of active document, click to browse."));
+        m_outlineLine = quickOpen->createQuickOpenLine(QStringList(), QStringList(i18nc("item quick open item type", "Outline")), IQuickOpen::Outline);
+        m_outlineLine->setPlaceholderText(i18nc("@info:placeholder", "Outline"));
+        m_outlineLine->setToolTip(i18nc("@info:tooltip", "Navigate outline of active document, click to browse"));
     }
 
     connect(m_browseManager, &BrowseManager::startDelayedBrowsing,
@@ -220,14 +219,14 @@ KXMLGUIClient* ContextBrowserPlugin::createGUIForMainWindow(Sublime::MainWindow*
     m_toolbarWidgetLayout->setSizeConstraint(QLayout::SetMaximumSize);
     m_previousButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     m_nextButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    m_toolbarWidgetLayout->setMargin(0);
+    m_toolbarWidgetLayout->setContentsMargins(0, 0, 0, 0);
 
     m_toolbarWidgetLayout->addWidget(m_previousButton);
     if (m_outlineLine) {
         m_toolbarWidgetLayout->addWidget(m_outlineLine);
         m_outlineLine->setMaximumWidth(600);
         connect(ICore::self()->documentController(), &IDocumentController::documentClosed,
-                m_outlineLine.data(), &IQuickOpenLine::clear);
+                m_outlineLine.data(), &QLineEdit::clear);
     }
     m_toolbarWidgetLayout->addWidget(m_nextButton);
 
@@ -246,37 +245,37 @@ void ContextBrowserPlugin::createActionsForMainWindow(Sublime::MainWindow* windo
     xmlFile = QStringLiteral("kdevcontextbrowser.rc");
 
     QAction* sourceBrowseMode = actions.addAction(QStringLiteral("source_browse_mode"));
-    sourceBrowseMode->setText(i18n("Source &Browse Mode"));
+    sourceBrowseMode->setText(i18nc("@action", "Source &Browse Mode"));
     sourceBrowseMode->setIcon(QIcon::fromTheme(QStringLiteral("arrow-up")));
     sourceBrowseMode->setCheckable(true);
     connect(sourceBrowseMode, &QAction::triggered, m_browseManager, &BrowseManager::setBrowsing);
 
     QAction* previousContext = actions.addAction(QStringLiteral("previous_context"));
-    previousContext->setText(i18n("&Previous Visited Context"));
+    previousContext->setText(i18nc("@action", "&Previous Visited Context"));
     previousContext->setIcon(QIcon::fromTheme(QStringLiteral("go-previous-context")));
     actions.setDefaultShortcut(previousContext, Qt::META | Qt::Key_Left);
     QObject::connect(previousContext, &QAction::triggered, this, &ContextBrowserPlugin::previousContextShortcut);
 
     QAction* nextContext = actions.addAction(QStringLiteral("next_context"));
-    nextContext->setText(i18n("&Next Visited Context"));
+    nextContext->setText(i18nc("@action", "&Next Visited Context"));
     nextContext->setIcon(QIcon::fromTheme(QStringLiteral("go-next-context")));
     actions.setDefaultShortcut(nextContext, Qt::META | Qt::Key_Right);
     QObject::connect(nextContext, &QAction::triggered, this, &ContextBrowserPlugin::nextContextShortcut);
 
     QAction* previousUse = actions.addAction(QStringLiteral("previous_use"));
-    previousUse->setText(i18n("&Previous Use"));
+    previousUse->setText(i18nc("@action", "&Previous Use"));
     previousUse->setIcon(QIcon::fromTheme(QStringLiteral("go-previous-use")));
     actions.setDefaultShortcut(previousUse, Qt::META | Qt::SHIFT |  Qt::Key_Left);
     QObject::connect(previousUse, &QAction::triggered, this, &ContextBrowserPlugin::previousUseShortcut);
 
     QAction* nextUse = actions.addAction(QStringLiteral("next_use"));
-    nextUse->setText(i18n("&Next Use"));
+    nextUse->setText(i18nc("@action", "&Next Use"));
     nextUse->setIcon(QIcon::fromTheme(QStringLiteral("go-next-use")));
     actions.setDefaultShortcut(nextUse, Qt::META | Qt::SHIFT | Qt::Key_Right);
     QObject::connect(nextUse, &QAction::triggered, this, &ContextBrowserPlugin::nextUseShortcut);
 
     auto* outline = new QWidgetAction(this);
-    outline->setText(i18n("Context Browser"));
+    outline->setText(i18nc("@action", "Context Browser"));
     QWidget* w = toolbarWidgetForMainWindow(window);
     w->setHidden(false);
     outline->setDefaultWidget(w);
@@ -307,7 +306,7 @@ ContextBrowserPlugin::ContextBrowserPlugin(QObject* parent, const QVariantList&)
 {
     qRegisterMetaType<KDevelop::IndexedDeclaration>("KDevelop::IndexedDeclaration");
 
-    core()->uiController()->addToolView(i18n("Code Browser"), m_viewFactory);
+    core()->uiController()->addToolView(i18nc("@title:window", "Code Browser"), m_viewFactory);
 
     connect(
         core()->documentController(), &IDocumentController::textDocumentCreated, this,
@@ -323,12 +322,22 @@ ContextBrowserPlugin::ContextBrowserPlugin(QObject* parent, const QVariantList&)
     connect(m_updateTimer, &QTimer::timeout, this, &ContextBrowserPlugin::updateViews);
 
     //Needed global action for the context-menu extensions
-    m_findUses = new QAction(i18n("Find Uses"), this);
+    m_findUses = new QAction(i18nc("@action", "Find Uses"), this);
     connect(m_findUses, &QAction::triggered, this, &ContextBrowserPlugin::findUses);
+
+    const auto documents = core()->documentController()->openDocuments();
+    for (KDevelop::IDocument* document : documents) {
+        textDocumentCreated(document);
+    }
 }
 
 ContextBrowserPlugin::~ContextBrowserPlugin()
 {
+    for (auto* view : qAsConst(m_textHintProvidedViews)) {
+        auto* iface = qobject_cast<KTextEditor::TextHintInterface*>(view);
+        iface->unregisterTextHintProvider(&m_textHintProvider);
+    }
+
     ///TODO: QObject inheritance should suffice?
     delete m_nextMenu;
     delete m_previousMenu;
@@ -377,8 +386,7 @@ void ContextBrowserPlugin::showUsesDelayed(const DeclarationPointer& declaration
     if (!decl) {
         return;
     }
-    QWidget* toolView = ICore::self()->uiController()->findToolView(i18n(
-                                                                        "Code Browser"), m_viewFactory,
+    QWidget* toolView = ICore::self()->uiController()->findToolView(i18nc("@title:window", "Code Browser"), m_viewFactory,
                                                                     KDevelop::IUiController::CreateAndRaise);
     if (!toolView) {
         return;
@@ -489,7 +497,6 @@ static QVector<KDevelop::IProblem::Ptr> findProblemsUnderCursor(TopDUContext* to
 
 static QVector<KDevelop::IProblem::Ptr> findProblemsCloseToCursor(const TopDUContext* topContext,
                                                                   KTextEditor::Cursor position,
-                                                                  const KTextEditor::View* view,
                                                                   KTextEditor::Range& handleRange)
 {
     handleRange = KTextEditor::Range::invalid();
@@ -537,28 +544,6 @@ static QVector<KDevelop::IProblem::Ptr> findProblemsCloseToCursor(const TopDUCon
             closestProblems += problem;
         else
             break;
-    }
-
-    // If not, only show it in case there's only whitespace
-    // between the current cursor position and the problem line
-    if (closestProblems.isEmpty()) {
-        for (auto& problem : qAsConst(allProblems)) {
-            auto r = problem->finalLocation();
-
-            KTextEditor::Range dist;
-            KTextEditor::Cursor bound(r.start().line(), 0);
-            if (position < r.start())
-                dist = KTextEditor::Range(position, bound);
-            else {
-                bound.setLine(r.end().line() + 1);
-                dist = KTextEditor::Range(bound, position);
-            }
-
-            if (view->document()->text(dist).trimmed().isEmpty())
-                closestProblems += problem;
-            else
-                break;
-        }
     }
 
     if (!closestProblems.isEmpty()) {
@@ -657,7 +642,7 @@ QWidget* ContextBrowserPlugin::navigationWidgetForPosition(KTextEditor::View* vi
     // Nothing has been found so far which created a widget.
     // Thus, find the closest problem to the cursor in a second pass.
     if (topContext) {
-        problems = findProblemsCloseToCursor(topContext, position, view, itemRange);
+        problems = findProblemsCloseToCursor(topContext, position, itemRange);
         if (!problems.isEmpty()) {
             // Return nullptr if the correct contents are already being shown in the tool tip currently.
             if (m_currentToolTip &&
@@ -704,7 +689,7 @@ void ContextBrowserPlugin::showToolTip(KTextEditor::View* view, KTextEditor::Cur
             m_currentNavigationWidget = nullptr;
         }
 
-        KDevelop::NavigationToolTip* tooltip =
+        auto* tooltip =
             new KDevelop::NavigationToolTip(view, view->mapToGlobal(view->cursorToCoordinate(position)) + QPoint(20,
                                                                                                                  40),
                                             navigationWidget);
@@ -787,15 +772,17 @@ void ContextBrowserPlugin::addHighlight(View* view, KDevelop::Declaration* decl)
     {
         const auto currentRevisionUses = decl->usesCurrentRevision();
         for (auto fileIt = currentRevisionUses.constBegin(); fileIt != currentRevisionUses.constEnd(); ++fileIt) {
-            for (auto useIt = (*fileIt).constBegin(); useIt != (*fileIt).constEnd(); ++useIt) {
-                highlights.highlights << PersistentMovingRange::Ptr(new PersistentMovingRange(*useIt, fileIt.key()));
+            const auto& document = fileIt.key();
+            const auto& documentUses = fileIt.value();
+            for (auto& use : documentUses) {
+                highlights.highlights << PersistentMovingRange::Ptr(new PersistentMovingRange(use, document));
                 highlights.highlights.back()->setAttribute(highlightedUseAttribute(view));
                 highlights.highlights.back()->setZDepth(highlightingZDepth);
             }
         }
     }
 
-    if (FunctionDefinition* def = FunctionDefinition::definition(decl)) {
+    if (auto* def = FunctionDefinition::definition(decl)) {
         highlights.highlights << def->createRangeMoving();
         highlights.highlights.back()->setAttribute(highlightedUseAttribute(view));
         highlights.highlights.back()->setZDepth(highlightingZDepth);
@@ -870,13 +857,10 @@ void ContextBrowserPlugin::updateForView(View* view)
         highlightPosition = KTextEditor::Cursor(view->cursorPosition());
 
     ///Pick a language
-    ILanguageSupport* language = nullptr;
-
-    if (ICore::self()->languageController()->languagesForUrl(url).isEmpty()) {
+    ILanguageSupport* const language = ICore::self()->languageController()->languagesForUrl(url).value(0);
+    if (!language) {
         qCDebug(PLUGIN_CONTEXTBROWSER) << "found no language for document" << url;
         return;
-    } else {
-        language = ICore::self()->languageController()->languagesForUrl(url).front();
     }
 
     ///Check whether there is a special language object to highlight (for example a macro)
@@ -999,6 +983,7 @@ void ContextBrowserPlugin::viewDestroyed(QObject* obj)
 {
     m_highlightedRanges.remove(static_cast<KTextEditor::View*>(obj));
     m_updateViews.remove(static_cast<View*>(obj));
+    m_textHintProvidedViews.removeOne(static_cast<KTextEditor::View*>(obj));
 }
 
 void ContextBrowserPlugin::selectionChanged(View* view)
@@ -1047,8 +1032,12 @@ void ContextBrowserPlugin::viewCreated(KTextEditor::Document*, View* v)
     if (!iface)
         return;
 
+    if (m_textHintProvidedViews.contains(v)) {
+        return;
+    }
     iface->setTextHintDelay(highlightingTimeout);
     iface->registerTextHintProvider(&m_textHintProvider);
+    m_textHintProvidedViews.append(v);
 }
 
 void ContextBrowserPlugin::registerToolView(ContextBrowserView* view)
@@ -1416,7 +1405,7 @@ void ContextBrowserPlugin::fillHistoryPopup(QMenu* menu, const QList<int>& histo
     menu->clear();
     KDevelop::DUChainReadLocker lock(KDevelop::DUChain::lock());
     for (int index : historyIndices) {
-        QAction* action = new QAction(actionTextFor(index), menu);
+        auto* action = new QAction(actionTextFor(index), menu);
         action->setData(index);
         menu->addAction(action);
         connect(action, &QAction::triggered, this, &ContextBrowserPlugin::actionTriggered);

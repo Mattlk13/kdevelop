@@ -112,7 +112,9 @@ bool importLocationLessThan(const Import& lhs, const Import& rhs)
 
 ReferencedTopDUContext ClangHelpers::buildDUChain(CXFile file, const Imports& imports, const ParseSession& session,
                                                   TopDUContext::Features features, IncludeFileContexts& includedFiles,
-                                                  ClangIndex* index, const std::function<bool()>& abortFunction)
+                                                  const UnsavedRevisions& unsavedRevisions,
+                                                  const KDevelop::IndexedString& parseDocument, ClangIndex* index,
+                                                  const std::function<bool()>& abortFunction)
 {
     if (includedFiles.contains(file)) {
         return {};
@@ -130,10 +132,12 @@ ReferencedTopDUContext ClangHelpers::buildDUChain(CXFile file, const Imports& im
     std::sort(sortedImports.begin(), sortedImports.end(), importLocationLessThan);
 
     for (const auto& import : qAsConst(sortedImports)) {
-        buildDUChain(import.file, imports, session, features, includedFiles, index, abortFunction);
+        buildDUChain(import.file, imports, session, features, includedFiles, unsavedRevisions, parseDocument, index,
+                     abortFunction);
     }
 
-    const IndexedString path(QDir(ClangString(clang_getFileName(file)).toString()).canonicalPath());
+    const QFileInfo pathInfo(ClangString(clang_getFileName(file)).toString());
+    const IndexedString path(pathInfo.canonicalFilePath());
     if (path.isEmpty()) {
         // may happen when the file gets removed before the job is run
         return {};
@@ -154,29 +158,36 @@ ReferencedTopDUContext ClangHelpers::buildDUChain(CXFile file, const Imports& im
         }
 
         includedFiles.insert(file, context);
-        if (update) {
-            auto envFile = ClangParsingEnvironmentFile::Ptr(dynamic_cast<ClangParsingEnvironmentFile*>(context->parsingEnvironmentFile().data()));
-            Q_ASSERT(envFile);
-            if (!envFile)
-                return context;
 
-            /* NOTE: When we are here, then either the translation unit or one of its headers was changed.
-             *       Thus we must always update the translation unit to propagate the change(s).
-             *       See also: https://bugs.kde.org/show_bug.cgi?id=356327
-             *       This assumes that headers are independent, we may need to improve that in the future
-             *       and also update header files more often when other files included therein got updated.
+        auto envFile = dynamic_cast<ClangParsingEnvironmentFile*>(context->parsingEnvironmentFile().data());
+        Q_ASSERT(envFile);
+        if (!envFile)
+            return context;
+
+        if (update) {
+            /*
+             * The features of the parse request are meant for the parseDocument.
+             * We don't want to apply ForceUpdate to all imports,
+             * except when ForceUpdateRecursive is set!
              */
-            if (path != environment.translationUnitUrl() && !envFile->needsUpdate(&environment) && envFile->featuresSatisfied(features)) {
-                return context;
-            } else {
-                //TODO: don't attempt to update if this environment is worse quality than the outdated one
-                if (index && envFile->environmentQuality() < environment.quality()) {
-                    index->pinTranslationUnitForUrl(environment.translationUnitUrl(), path);
+            const auto pathFeatures = [features, path, parseDocument]() {
+                if (path == parseDocument || features.testFlag(TopDUContext::ForceUpdateRecursive)) {
+                    return features;
                 }
-                envFile->setEnvironment(environment);
-                envFile->setModificationRevision(ModificationRevision::revisionForFile(context->url()));
+                auto ret = features;
+                return ret.setFlag(TopDUContext::ForceUpdate, false);
+            };
+            if (!envFile->needsUpdate(&environment) && envFile->featuresSatisfied(pathFeatures())) {
+                return context;
             }
 
+            // TODO: don't attempt to update if this environment is worse quality than the outdated one
+            if (index && envFile->environmentQuality() < environment.quality()) {
+                index->pinTranslationUnitForUrl(environment.translationUnitUrl(), path);
+            }
+            envFile->setEnvironment(environment);
+
+            envFile->clearModificationRevisions();
             context->clearImportedParentContexts();
         }
         context->setFeatures(features);
@@ -188,8 +199,17 @@ ReferencedTopDUContext ClangHelpers::buildDUChain(CXFile file, const Imports& im
                 continue;
             }
             context->addImportedParentContext(ctx, import.location);
+            envFile->addModificationRevisions(ctx->parsingEnvironmentFile()->allModificationRevisions());
         }
         context->updateImportsCache();
+
+        // prefer the editor modification revision, instead of the on-disk revision
+        auto it = unsavedRevisions.find(path);
+        if (it == unsavedRevisions.end()) {
+            envFile->setModificationRevision(ModificationRevision::revisionForFile(path));
+        } else {
+            envFile->setModificationRevision(*it);
+        }
     }
 
     const auto problems = session.problemsForFile(file);
@@ -366,7 +386,8 @@ QString ClangHelpers::clangVersion()
         // samples:
         //   clang version 6.0.1 (trunk 321709) (git@github.com:llvm-mirror/llvm.git 5136df4d089a086b70d452160ad5451861269498)
         //   clang version 7.0.0-svn341916-1~exp1~20180911115939.26 (branches/release_70)
-        QRegularExpression re(QStringLiteral("^clang version (\\d+\\.\\d+\\.\\d+)"));
+        //   Ubuntu clang version 11.0.0-2
+        QRegularExpression re(QStringLiteral("clang version (\\d+\\.\\d+\\.\\d+)"));
         const auto match = re.match(version.toString());
         if (!match.hasMatch())
             return {};

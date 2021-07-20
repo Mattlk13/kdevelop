@@ -79,11 +79,14 @@ void DUChainBase::setData(DUChainBaseData* data, bool constructorCalled)
     Q_ASSERT(data);
     Q_ASSERT(d_ptr);
 
-    if (constructorCalled)
+    if (d_ptr->m_dynamic) {
+        Q_ASSERT(constructorCalled);
+        DUChainItemSystem::self().deleteDynamicData(d_ptr);
+    } else if (constructorCalled) {
+        // If the data object isn't dynamic, then it is part of a central repository, and cannot be deleted here.
+        // we still need to call the destructor though
         KDevelop::DUChainItemSystem::self().callDestructor(static_cast<DUChainBaseData*>(d_ptr));
-
-    if (d_ptr->m_dynamic) // If the data object isn't dynamic, then it is part of a central repository, and cannot be deleted here.
-        delete d_ptr;
+    }
 
     d_ptr = data;
 }
@@ -94,8 +97,7 @@ DUChainBase::~DUChainBase()
         m_ptr->m_base = nullptr;
 
     if (d_ptr->m_dynamic) {
-        KDevelop::DUChainItemSystem::self().callDestructor(d_ptr);
-        delete d_ptr;
+        DUChainItemSystem::self().deleteDynamicData(d_ptr);
         d_ptr = nullptr;
     }
 }
@@ -133,12 +135,13 @@ void DUChainBase::makeDynamic()
     if (!d_func()->m_dynamic) {
         Q_ASSERT(d_func()->classId);
         DUChainBaseData* newData = DUChainItemSystem::self().cloneData(*d_func());
-        enableDUChainReferenceCounting(d_ptr,
-                                       DUChainItemSystem::self().dynamicSize(*static_cast<DUChainBaseData*>(d_ptr)));
-        //We don't delete the previous data, because it's embedded in the top-context when it isn't dynamic.
-        //However we do call the destructor, to keep semantic stuff like reference-counting within the data class working correctly.
-        KDevelop::DUChainItemSystem::self().callDestructor(static_cast<DUChainBaseData*>(d_ptr));
-        disableDUChainReferenceCounting(d_ptr);
+        {
+            auto* const baseData = static_cast<DUChainBaseData*>(d_ptr);
+            const DUChainReferenceCountingEnabler rcEnabler(d_ptr, DUChainItemSystem::self().dynamicSize(*baseData));
+            //We don't delete the previous data, because it's embedded in the top-context when it isn't dynamic.
+            //However we do call the destructor, to keep semantic stuff like reference-counting within the data class working correctly.
+            DUChainItemSystem::self().callDestructor(baseData);
+        }
         d_ptr = newData;
         Q_ASSERT(d_ptr);
         Q_ASSERT(d_func()->m_dynamic);

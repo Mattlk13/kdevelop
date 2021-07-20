@@ -197,16 +197,15 @@ QList<CompletionTreeItemPointer> CodeCompletionContext::commentCompletion()
 QList<CompletionTreeItemPointer> CodeCompletionContext::importCompletion()
 {
     QList<CompletionTreeItemPointer> items;
-    QString fragment = m_text.section(QLatin1Char(' '), -1, -1);
+    const auto fragment = m_text.section(QLatin1Char(' '), -1, -1);
 
-    // Use the cache to find the directory corresponding to the fragment
-    // (org.kde is, for instance, /usr/lib64/kde4/imports/org/kde), and list
-    // its subdirectories
-    QString dataDir = Cache::instance().modulePath(m_duContext->url(), fragment);
-    QDir dir;
+    auto addModules = [&items, &fragment](const QString& dataDir) {
+        if (dataDir.isEmpty())
+            return;
 
-    if (!dataDir.isEmpty()) {
-        dir.setPath(dataDir);
+        QDir dir(dataDir);
+        if (!dir.exists())
+            return;
 
         const auto dirEntries = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
         items.reserve(dirEntries.size());
@@ -215,6 +214,21 @@ QList<CompletionTreeItemPointer> CodeCompletionContext::importCompletion()
                 fragment + entry.section(QLatin1Char('.'), 0, 0),
                 ModuleCompletionItem::Import
             )));
+        }
+    };
+
+    // Use the cache to find the directory corresponding to the fragment
+    // (org.kde is, for instance, /usr/lib64/kde4/imports/org/kde), and list
+    // its subdirectories
+    addModules(Cache::instance().modulePath(m_duContext->url(), fragment));
+
+    if (items.isEmpty()) {
+        // fallback to list all directories we can find
+        const auto paths = Cache::instance().libraryPaths(m_duContext->url());
+        auto fragmentPath = fragment;
+        fragmentPath.replace(QLatin1Char('.'), QLatin1Char('/'));
+        for (const auto& path : paths) {
+            addModules(path.cd(fragmentPath).path());
         }
     }
 
@@ -478,7 +492,7 @@ DeclarationPointer CodeCompletionContext::declarationAtEndOfString(const QString
     QmlJS::Document::MutablePtr doc = QmlJS::Document::create(QStringLiteral("inline"), Dialect::JavaScript);
     ExpressionStackEntry topEntry = expressionStack(expression).top();
 
-    doc->setSource(expression.mid(topEntry.operatorEnd));
+    doc->setSource(expression.mid(topEntry.operatorEnd + topEntry.commas));
     doc->parseExpression();
 
     if (!doc || !doc->isParsedCorrectly()) {
@@ -496,13 +510,9 @@ DeclarationPointer CodeCompletionContext::declarationAtEndOfString(const QString
 
 bool CodeCompletionContext::containsOnlySpaces(const QString& str)
 {
-    for (int i=0; i<str.size(); ++i) {
-        if (!str.at(i).isSpace()) {
-            return false;
-        }
-    }
-
-    return true;
+    return std::all_of(str.begin(), str.end(), [](const QChar c) {
+        return c.isSpace();
+    });
 }
 
 }

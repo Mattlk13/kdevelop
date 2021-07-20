@@ -35,6 +35,7 @@
 
 #include <project/projectmodel.h>
 
+#include <sublime/message.h>
 #include <util/path.h>
 
 #include <libkomparediff2/komparemodellist.h>
@@ -72,8 +73,6 @@ namespace
 const int maximumFilesToOpenDirectly = 15;
 }
 
-Q_DECLARE_METATYPE( const Diff2::DiffModel* )
-
 void PatchReviewPlugin::seekHunk( bool forwards, const QUrl& fileName ) {
     try {
         qCDebug(PLUGIN_PATCHREVIEW) << forwards << fileName << fileName.isEmpty();
@@ -100,8 +99,8 @@ void PatchReviewPlugin::seekHunk( bool forwards, const QUrl& fileName ) {
                     if ( v ) {
                         int bestLine = -1;
                         KTextEditor::Cursor c = v->cursorPosition();
-                        for ( QList<KTextEditor::MovingRange*>::const_iterator it = ranges.begin(); it != ranges.end(); ++it ) {
-                            int line = ( *it )->start().line();
+                        for (auto* range : ranges) {
+                            const int line = range->start().line();
 
                             if ( forwards ) {
                                 if ( line > c.line() && ( bestLine == -1 || line < bestLine ) )
@@ -269,7 +268,7 @@ void PatchReviewPlugin::updateKompareModel() {
 
         try {
             m_modelList->openDirAndDiff();
-        } catch ( const QString & str ) {
+        } catch ( const QString & /*str*/ ) {
             throw;
         } catch ( ... ) {
             throw QStringLiteral( "lib/libdiff2 crashed, memory may be corrupted. Please restart kdevelop." );
@@ -291,8 +290,8 @@ void PatchReviewPlugin::updateKompareModel() {
 
         for( int i = 0; i < m_modelList->modelCount(); i++ ) {
             const Diff2::DiffModel* model = m_modelList->modelAt( i );
-            for( int j = 0; j < model->differences()->count(); j++ ) {
-                model->differences()->at( j )->apply( m_patch->isAlreadyApplied() );
+            for (auto* difference : *model->differences()) {
+                difference->apply(m_patch->isAlreadyApplied());
             }
         }
 
@@ -300,9 +299,9 @@ void PatchReviewPlugin::updateKompareModel() {
 
         return;
     } catch ( const QString & str ) {
-        KMessageBox::error( nullptr, str, i18n( "Kompare Model Update" ) );
+        KMessageBox::error(nullptr, str, i18nc("@title:window", "Kompare Model Update"));
     } catch ( const char * str ) {
-        KMessageBox::error( nullptr, QLatin1String(str), i18n( "Kompare Model Update" ) );
+        KMessageBox::error(nullptr, QLatin1String(str), i18nc("@title:window", "Kompare Model Update"));
     }
     removeHighlighting();
     m_modelList.reset( nullptr );
@@ -325,7 +324,8 @@ public:
         return new PatchReviewToolView( parent, m_plugin );
     }
 
-    Qt::DockWidgetArea defaultPosition() override {
+    Qt::DockWidgetArea defaultPosition() const override
+    {
         return Qt::BottomDockWidgetArea;
     }
 
@@ -345,16 +345,6 @@ PatchReviewPlugin::~PatchReviewPlugin()
     // and http://qt-project.org/forums/viewthread/38406/#162801
     // modified tweak: use setPatch() and deleteLater in that method.
     setPatch(nullptr);
-}
-
-void PatchReviewPlugin::clearPatch( QObject* _patch ) {
-    qCDebug(PLUGIN_PATCHREVIEW) << "clearing patch" << _patch << "current:" << ( QObject* )m_patch;
-    IPatchSource::Ptr patch( ( IPatchSource* )_patch );
-
-    if( patch == m_patch ) {
-        qCDebug(PLUGIN_PATCHREVIEW) << "is current patch";
-        setPatch( IPatchSource::Ptr( new LocalPatchSource ) );
-    }
 }
 
 void PatchReviewPlugin::closeReview()
@@ -379,10 +369,17 @@ void PatchReviewPlugin::closeReview()
         } else
             emit patchChanged();
 
-        Sublime::Area* area = ICore::self()->uiController()->activeArea();
-        if( area->objectName() == QLatin1String("review") ) {
-            if( ICore::self()->documentController()->saveAllDocuments() )
-                ICore::self()->uiController()->switchToArea( QStringLiteral("code"), KDevelop::IUiController::ThisWindow );
+        auto oldArea = ICore::self()->uiController()->activeArea();
+        if (oldArea->objectName() == QLatin1String("review")) {
+            if (ICore::self()->documentController()->saveAllDocumentsForWindow(ICore::self()->uiController()->activeMainWindow(),
+                                                                               IDocument::Default, true))
+            {
+                ICore::self()->uiController()->switchToArea(m_lastArea.isEmpty() ? QStringLiteral("code") : m_lastArea,
+                                                            KDevelop::IUiController::ThisWindow);
+                if (oldArea->workingSetPersistent()) {
+                    ICore::self()->uiController()->activeArea()->setWorkingSet(oldArea->workingSet(), true, oldArea);
+                }
+            }
         }
     }
 }
@@ -405,7 +402,7 @@ void PatchReviewPlugin::startReview( IPatchSource* patch, IPatchReview::ReviewMo
     Q_UNUSED( mode );
     emit startingNewReview();
     setPatch( patch );
-    QMetaObject::invokeMethod( this, "updateReview", Qt::QueuedConnection );
+    QMetaObject::invokeMethod(this, &PatchReviewPlugin::updateReview, Qt::QueuedConnection);
 }
 
 void PatchReviewPlugin::switchToEmptyReviewArea()
@@ -413,12 +410,17 @@ void PatchReviewPlugin::switchToEmptyReviewArea()
     const auto allAreas = ICore::self()->uiController()->allAreas();
     for (Sublime::Area* area : allAreas) {
         if (area->objectName() == QLatin1String("review")) {
-            area->clearDocuments();
+            area->setWorkingSet(QString(), false);
         }
     }
 
-    if ( ICore::self()->uiController()->activeArea()->objectName() != QLatin1String("review") )
-        ICore::self()->uiController()->switchToArea( QStringLiteral("review"), KDevelop::IUiController::ThisWindow );
+    QString areaName = ICore::self()->uiController()->activeArea()->objectName();
+    if (areaName != QLatin1String("review")) {
+        m_lastArea = areaName;
+        ICore::self()->uiController()->switchToArea(QStringLiteral("review"), KDevelop::IUiController::ThisWindow);
+    } else {
+        m_lastArea.clear();
+    }
 }
 
 QUrl PatchReviewPlugin::urlForFileModel( const Diff2::DiffModel* model )
@@ -459,20 +461,22 @@ void PatchReviewPlugin::updateReview()
     }
 
     futureActiveDoc->textDocument()->setReadWrite( false );
-    futureActiveDoc->setPrettyName( i18n( "Overview" ) );
+    futureActiveDoc->setPrettyName(i18nc("@title complete patch", "Overview"));
     auto* modif = qobject_cast<KTextEditor::ModificationInterface*>(futureActiveDoc->textDocument());
     modif->setModifiedOnDiskWarning( false );
 
     docController->activateDocument( futureActiveDoc );
 
-    auto* toolView = qobject_cast<PatchReviewToolView*>(ICore::self()->uiController()->findToolView( i18n( "Patch Review" ), m_factory ));
+    auto* toolView = qobject_cast<PatchReviewToolView*>(ICore::self()->uiController()->findToolView(i18nc("@title:window", "Patch Review"), m_factory));
     Q_ASSERT( toolView );
 
     //Open all relates files
     for( int a = 0; a < m_modelList->modelCount() && a < maximumFilesToOpenDirectly; ++a ) {
         QUrl absoluteUrl = urlForFileModel( m_modelList->modelAt( a ) );
         if (absoluteUrl.isRelative()) {
-            KMessageBox::error( nullptr, i18n("The base directory of the patch must be an absolute directory"), i18n( "Patch Review" ) );
+            const QString messageText = i18n("The base directory of the patch must be an absolute directory.");
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
             break;
         }
 
@@ -493,11 +497,7 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
     if( m_patch ) {
         disconnect( m_patch.data(), &IPatchSource::patchChanged, this, &PatchReviewPlugin::notifyPatchChanged );
-        if ( qobject_cast<LocalPatchSource*>( m_patch ) ) {
-            // make sure we don't leak this
-            // TODO: what about other patch sources?
-            m_patch->deleteLater();
-        }
+        m_patch->deleteLater();
     }
     m_patch = patch;
 
@@ -506,7 +506,7 @@ void PatchReviewPlugin::setPatch( IPatchSource* patch ) {
 
         connect( m_patch.data(), &IPatchSource::patchChanged, this, &PatchReviewPlugin::notifyPatchChanged );
     }
-    QString finishText = i18n( "Finish Review" );
+    QString finishText = i18nc("@action", "Finish Review");
     if( m_patch && !m_patch->finishReviewCustomText().isEmpty() )
       finishText = m_patch->finishReviewCustomText();
     m_finishReview->setText( finishText );
@@ -532,7 +532,7 @@ PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
     m_updateKompareTimer->setInterval(500);
     connect( m_updateKompareTimer, &QTimer::timeout, this, &PatchReviewPlugin::updateKompareModel );
 
-    m_finishReview = new QAction(i18n("Finish Review"), this);
+    m_finishReview = new QAction(i18nc("@action", "Finish Review"), this);
     m_finishReview->setIcon( QIcon::fromTheme( QStringLiteral("dialog-ok") ) );
     actionCollection()->setDefaultShortcut( m_finishReview, Qt::CTRL|Qt::Key_Return );
     actionCollection()->addAction(QStringLiteral("commit_or_finish_review"), m_finishReview);
@@ -543,7 +543,7 @@ PatchReviewPlugin::PatchReviewPlugin( QObject *parent, const QVariantList & )
             area->addAction(m_finishReview);
     }
 
-    core()->uiController()->addToolView( i18n( "Patch Review" ), m_factory, IUiController::None );
+    core()->uiController()->addToolView(i18nc("@title:window", "Patch Review"), m_factory, IUiController::None);
 
     areaChanged(ICore::self()->uiController()->activeArea());
 }
@@ -606,8 +606,8 @@ KDevelop::ContextMenuExtension PatchReviewPlugin::contextMenuExtension(KDevelop:
     }
 
     if (urls.size() == 1) {
-        QAction* reviewAction = new QAction( QIcon::fromTheme(QStringLiteral("text-x-patch")),
-                                             i18n("Review Patch"), parent);
+        auto* reviewAction = new QAction(QIcon::fromTheme(QStringLiteral("text-x-patch")),
+                                         i18nc("@action:inmenu", "Review Patch"), parent);
         reviewAction->setData(QVariant(urls[0]));
         connect( reviewAction, &QAction::triggered, this, &PatchReviewPlugin::executeFileReviewAction );
         ContextMenuExtension cm;

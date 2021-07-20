@@ -63,7 +63,7 @@ void CMakeParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
     }
 
     ReferencedTopDUContext parentCtx;
-    if (document().str().endsWith(QStringLiteral("CMakeLists.txt"))) {
+    if (document().str().endsWith(QLatin1String("CMakeLists.txt"))) {
         IndexedString parentFile = parentCMakeFile(document());
         if (QFile::exists(parentFile.toUrl().toLocalFile())) {
 
@@ -114,7 +114,7 @@ void CMakeParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
 
 //         session.reparseImporters(context);
 
-        if ( context && minimumFeatures() & TopDUContext::AllDeclarationsContextsAndUses ) {
+        if ( context && (minimumFeatures() & TopDUContext::AllDeclarationsContextsAndUses) ) {
             UseBuilder useBuilder(context);
             CMakeContentIterator it(package);
             useBuilder.startVisiting(&it);
@@ -128,7 +128,7 @@ void CMakeParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
 
     if (!context) {
         DUChainWriteLocker lock;
-        ParsingEnvironmentFile *file = new ParsingEnvironmentFile(document());
+        auto* file = new ParsingEnvironmentFile(document());
         file->setLanguage(languageName);
         context = new TopDUContext(document(), RangeInRevision(0, 0, INT_MAX, INT_MAX), file);
         DUChain::self()->addDocumentChain(context);

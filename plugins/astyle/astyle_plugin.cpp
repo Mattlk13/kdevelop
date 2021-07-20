@@ -221,7 +221,6 @@ AStylePlugin::AStylePlugin(QObject *parent, const QVariantList&)
     : IPlugin(QStringLiteral("kdevastyle"), parent)
     , m_formatter(new AStyleFormatter())
 {
-    currentStyle = predefinedStyles().at(0);
 }
 
 AStylePlugin::~AStylePlugin()
@@ -312,7 +311,7 @@ QVector<SourceFormatterStyle> AStylePlugin::predefinedStyles() const
         predefinedStyle(QStringLiteral("Whitesmith")),
         predefinedStyle(QStringLiteral("Banner")),
         predefinedStyle(QStringLiteral("1TBS")),
-        predefinedStyle(QStringLiteral("KDELibs")),
+        predefinedStyle(QStringLiteral("KDELibs"), QStringLiteral("KDE Frameworks")),
         predefinedStyle(QStringLiteral("Qt")),
     };
 }

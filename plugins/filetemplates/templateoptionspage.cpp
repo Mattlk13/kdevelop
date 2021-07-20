@@ -21,7 +21,6 @@
 
 #include "templateclassassistant.h"
 #include "debug.h"
-#include "qtcompat_p.h"
 
 #include <language/codegen/sourcefiletemplate.h>
 
@@ -80,6 +79,7 @@ void TemplateOptionsPage::load(const SourceFileTemplate& fileTemplate, TemplateR
     delete layout();
 
     auto* layout = new QVBoxLayout();
+    layout->setContentsMargins(0, 0, 0, 0);
 
     const auto customOptions = fileTemplate.customOptions(renderer);
     d->groupBoxes.reserve(customOptions.size());
@@ -134,8 +134,12 @@ void TemplateOptionsPage::load(const SourceFileTemplate& fileTemplate, TemplateR
             }
             if (control)
             {
-                const QString entryLabelText = i18n("%1:", entry.label);
-                QLabel* label = new QLabel(entryLabelText, box);
+                const QString entryLabelText = i18nc("@label", "%1:", entry.label);
+                auto* label = new QLabel(entryLabelText, box);
+                if (!entry.context.isEmpty()) {
+                    label->setToolTip(entry.context);
+                    control->setToolTip(entry.context);
+                }
                 formLayout->addRow(label, control);
                 d->controls.insert(entry.name, control);
                 if (d->firstEditWidget == nullptr) {

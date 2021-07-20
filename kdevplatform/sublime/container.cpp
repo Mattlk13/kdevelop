@@ -93,7 +93,7 @@ public:
         return QTabBar::event(ev);
     }
     void mousePressEvent(QMouseEvent* event) override {
-        if (event->button() == Qt::MidButton) {
+        if (event->button() == Qt::MiddleButton) {
             // just close on midbutton, drag can still be done with left mouse button
 
             int tab = tabAt(event->pos());
@@ -116,7 +116,7 @@ public:
         if (event->type() == QEvent::MouseButtonDblClick) {
             // block tabBarDoubleClicked signals with RMB, see https://bugs.kde.org/show_bug.cgi?id=356016
             auto mouseEvent = static_cast<const QMouseEvent*>(event);
-            if (mouseEvent->button() == Qt::MidButton) {
+            if (mouseEvent->button() == Qt::MiddleButton) {
                 return true;
             }
         }
@@ -150,6 +150,8 @@ public:
     ContainerTabBar *tabBar;
     QStackedWidget *stack;
     KSqueezedTextLabel *fileNameCorner;
+    QSpacerItem* shortCutHelpLeftSpacerItem;
+    QSpacerItem* shortCutHelpRightSpacerItem;
     QLabel *shortcutHelpLabel;
     QLabel *fileStatus;
     KSqueezedTextLabel *statusCorner;
@@ -309,11 +311,11 @@ Container::Container(QWidget *parent)
     KAcceleratorManager::setNoAccel(this);
 
     auto *l = new QBoxLayout(QBoxLayout::TopToBottom, this);
-    l->setMargin(0);
+    l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(0);
 
     d->layout = new QBoxLayout(QBoxLayout::LeftToRight);
-    d->layout->setMargin(0);
+    d->layout->setContentsMargins(0, 0, 0, 0);
     d->layout->setSpacing(0);
 
     d->documentListMenu = new QMenu(this);
@@ -326,7 +328,7 @@ Container::Container(QWidget *parent)
 #endif
     d->documentListButton->setPopupMode(QToolButton::InstantPopup);
     d->documentListButton->setAutoRaise(true);
-    d->documentListButton->setToolTip(i18n("Show sorted list of opened documents"));
+    d->documentListButton->setToolTip(i18nc("@info:tooltip", "Show sorted list of opened documents"));
     d->documentListButton->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
     d->layout->addWidget(d->documentListButton);
     d->tabBar = new ContainerTabBar(this);
@@ -338,16 +340,17 @@ Container::Container(QWidget *parent)
     d->fileNameCorner = new UnderlinedLabel(d->tabBar, this);
     d->fileNameCorner->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     d->layout->addWidget(d->fileNameCorner);
-    d->shortcutHelpLabel = new QLabel(i18n("(Press Ctrl+Tab to switch)"), this);
+    d->shortcutHelpLabel = new QLabel(i18nc("@info", "(Press Ctrl+Tab to switch)"), this);
     auto font = d->shortcutHelpLabel->font();
     font.setPointSize(font.pointSize() - 2);
     font.setItalic(true);
     d->shortcutHelpLabel->setFont(font);
-    d->layout->addSpacerItem(new QSpacerItem(style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing), 0,
-                                             QSizePolicy::Fixed, QSizePolicy::Fixed));
+    d->shortCutHelpLeftSpacerItem = new QSpacerItem(0, 0); // fully set in setTabBarHidden()
+    d->layout->addSpacerItem(d->shortCutHelpLeftSpacerItem);
     d->shortcutHelpLabel->setAlignment(Qt::AlignCenter);
     d->layout->addWidget(d->shortcutHelpLabel);
-    d->layout->addSpacerItem(new QSpacerItem(0, 0, QSizePolicy::Expanding));
+    d->shortCutHelpRightSpacerItem = new QSpacerItem(0, 0); // fully set in setTabBarHidden()
+    d->layout->addSpacerItem(d->shortCutHelpRightSpacerItem);
     d->statusCorner = new StatusLabel(d->tabBar, this);
     d->layout->addWidget(d->statusCorner);
     l->addLayout(d->layout);
@@ -365,7 +368,7 @@ Container::Container(QWidget *parent)
 
 
     setTabBarHidden(!configTabBarVisible());
-    d->tabBar->setTabsClosable(true);
+    d->tabBar->setTabsClosable(configCloseButtonsOnTabs());
     d->tabBar->setMovable(true);
     d->tabBar->setExpanding(false);
     d->tabBar->setSelectionBehaviorOnRemove(QTabBar::SelectPreviousTab);
@@ -377,6 +380,12 @@ bool Container::configTabBarVisible()
 {
     KConfigGroup group = KSharedConfig::openConfig()->group("UiSettings");
     return group.readEntry("TabBarVisibility", 1);
+}
+
+bool Container::configCloseButtonsOnTabs()
+{
+    KConfigGroup group = KSharedConfig::openConfig()->group("UiSettings");
+    return group.readEntry("CloseButtonsOnTabs", 1);
 }
 
 void Container::setLeftCornerWidget(QWidget* widget)
@@ -616,7 +625,10 @@ void Container::setTabBarHidden(bool hide)
     {
         d->tabBar->hide();
         d->fileStatus->show();
+        d->shortCutHelpLeftSpacerItem->changeSize(style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing), 0,
+                                                  QSizePolicy::Fixed, QSizePolicy::Fixed);
         d->shortcutHelpLabel->show();
+        d->shortCutHelpRightSpacerItem->changeSize(0, 0, QSizePolicy::Expanding, QSizePolicy::Minimum);
         d->fileNameCorner->show();
     }
     else
@@ -624,12 +636,24 @@ void Container::setTabBarHidden(bool hide)
         d->fileNameCorner->hide();
         d->fileStatus->hide();
         d->tabBar->show();
+        d->shortCutHelpLeftSpacerItem->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
         d->shortcutHelpLabel->hide();
+        d->shortCutHelpRightSpacerItem->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
     }
+    // have spacer item changes taken into account
+    d->layout->invalidate();
+
     View* v = currentView();
     if (v) {
         documentTitleChanged(v->document());
     }
+}
+
+void Container::setCloseButtonsOnTabs(bool show)
+{
+    Q_D(Container);
+
+    d->tabBar->setTabsClosable(show);
 }
 
 void Container::resetTabColors(const QColor& color)
@@ -685,6 +709,9 @@ void Container::contextMenu( const QPoint& pos )
     int currentTab = d->tabBar->tabAt(pos);
 
     QMenu menu;
+    // Polish before creating a native window below. The style could want change the surface format
+    // of the window which will have no effect when the native window has already been created.
+    menu.ensurePolished();
     // At least for positioning on Wayland the window the menu belongs to
     // needs to be set. We cannot set senderWidget as parent because some actions (e.g. split view)
     // result in sync destruction of the senderWidget, which then would also prematurely
@@ -706,14 +733,14 @@ void Container::contextMenu( const QPoint& pos )
     QAction* closeOtherTabsAction = nullptr;
     if (view) {
         copyPathAction = menu.addAction(QIcon::fromTheme(QStringLiteral("edit-copy")),
-                                        i18n("Copy Filename"));
+                                        i18nc("@action:inmenu", "Copy Filename"));
         menu.addSeparator();
         closeTabAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-close")),
-                                        i18n("Close"));
+                                        i18nc("@action:inmenu", "Close"));
         closeOtherTabsAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-close")),
-                                              i18n("Close All Other"));
+                                              i18nc("@action:inmenu", "Close All Other"));
     }
-    QAction* closeAllTabsAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18n("Close All"));
+    QAction* closeAllTabsAction = menu.addAction(QIcon::fromTheme(QStringLiteral("document-close")), i18nc("@action:inmenu", "Close All"));
 
     QAction* triggered = menu.exec(senderWidget->mapToGlobal(pos));
 

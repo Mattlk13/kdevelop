@@ -20,6 +20,8 @@
 
 #include <QString>
 #include <QFileInfo>
+#include <QMutex>
+#include <QMutexLocker>
 
 #include <serialization/indexedstring.h>
 #include "modificationrevisionset.h"
@@ -60,7 +62,7 @@ OpenDocumentRevisionsMap& openDocumentsRevisionMap()
 
 QDateTime fileModificationTimeCached(const IndexedString& fileName)
 {
-    const auto currentTime = QDateTime::currentDateTime();
+    const auto currentTime = QDateTime::currentDateTimeUtc();
 
     auto it = fileModificationCache().constFind(fileName);
     if (it != fileModificationCache().constEnd()) {
@@ -118,7 +120,7 @@ void ModificationRevision::setEditorRevisionForFile(const KDevelop::IndexedStrin
 }
 
 ModificationRevision::ModificationRevision(const QDateTime& modTime, int revision_)
-    : modificationTime(modTime.toTime_t())
+    : modificationTime(modTime.toSecsSinceEpoch())
     , revision(revision_)
 {
 }
@@ -141,5 +143,5 @@ bool ModificationRevision::operator !=(const ModificationRevision& rhs) const
 
 QString ModificationRevision::toString() const
 {
-    return QStringLiteral("%1 (rev %2)").arg(QDateTime::fromTime_t(modificationTime).time().toString()).arg(revision);
+    return QStringLiteral("%1 (rev %2)").arg(QDateTime::fromSecsSinceEpoch(modificationTime, Qt::LocalTime).time().toString()).arg(revision);
 }

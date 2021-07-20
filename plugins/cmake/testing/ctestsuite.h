@@ -24,9 +24,11 @@
 #include <language/duchain/indexeddeclaration.h>
 #include <util/path.h>
 #include <QHash>
+#include <QPointer>
 
 namespace KDevelop {
 class ReferencedTopDUContext;
+class Declaration;
 }
 
 class CTestSuite : public KDevelop::ITestSuite
@@ -55,12 +57,14 @@ public:
     void loadDeclarations(const KDevelop::IndexedString& document, const KDevelop::ReferencedTopDUContext& context);
 
 private:
+    bool findCaseDeclarations(const QVector<KDevelop::Declaration*> &classDeclarations);
+
     KDevelop::Path m_executable;
     QString m_name;
     QStringList m_cases;
     QStringList m_args;
     QList<KDevelop::Path> m_files;
-    KDevelop::IProject* m_project;
+    QPointer<KDevelop::IProject> m_project;
 
     QHash<QString, KDevelop::IndexedDeclaration> m_declarations;
     QHash<QString, QString> m_properties;

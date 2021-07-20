@@ -22,6 +22,9 @@
 
 #include "gitplugin.h"
 
+#include "repostatusmodel.h"
+#include "committoolview.h"
+
 #include <QDateTime>
 #include <QProcess>
 #include <QDir>
@@ -30,9 +33,13 @@
 #include <QTimer>
 #include <QRegularExpression>
 #include <QPointer>
+#include <QTemporaryFile>
+#include <QVersionNumber>
 
 #include <interfaces/icore.h>
 #include <interfaces/iproject.h>
+#include <interfaces/iruncontroller.h>
+#include <interfaces/iuicontroller.h>
 
 #include <util/path.h>
 
@@ -44,7 +51,7 @@
 #include <vcs/vcsannotation.h>
 #include <vcs/widgets/standardvcslocationwidget.h>
 #include "gitclonejob.h"
-#include <interfaces/iruncontroller.h>
+#include "rebasedialog.h"
 #include "stashmanagerdialog.h"
 
 #include <KDirWatch>
@@ -59,6 +66,8 @@
 #include "gitplugincheckinrepositoryjob.h"
 #include "gitnameemaildialog.h"
 #include "debug.h"
+
+#include <array>
 
 using namespace KDevelop;
 
@@ -75,15 +84,15 @@ QVariant runSynchronously(KDevelop::VcsJob* job)
 namespace
 {
 
-QDir dotGitDirectory(const QUrl& dirPath)
+QDir dotGitDirectory(const QUrl& dirPath, bool silent = false)
 {
     const QFileInfo finfo(dirPath.toLocalFile());
     QDir dir = finfo.isDir() ? QDir(finfo.filePath()): finfo.absoluteDir();
 
-    static const QString gitDir = QStringLiteral(".git");
+    const QString gitDir = QStringLiteral(".git");
     while (!dir.exists(gitDir) && dir.cdUp()) {} // cdUp, until there is a sub-directory called .git
 
-    if (dir.isRoot()) {
+    if (!silent && dir.isRoot()) {
         qCWarning(PLUGIN_GIT) << "couldn't find the git root for" << dirPath;
     }
 
@@ -176,17 +185,26 @@ QDir urlDir(const QList<QUrl>& urls) { return urlDir(urls.first()); } //TODO: co
 
 }
 
-GitPlugin::GitPlugin( QObject *parent, const QVariantList & )
-    : DistributedVersionControlPlugin(parent, QStringLiteral("kdevgit")), m_oldVersion(false), m_usePrefix(true)
+GitPlugin::GitPlugin(QObject* parent, const QVariantList&)
+    : DistributedVersionControlPlugin(parent, QStringLiteral("kdevgit"))
+    , m_repoStatusModel(new RepoStatusModel(this))
+    , m_commitToolViewFactory(new CommitToolViewFactory(m_repoStatusModel))
 {
     if (QStandardPaths::findExecutable(QStringLiteral("git")).isEmpty()) {
         setErrorDescription(i18n("Unable to find git executable. Is it installed on the system?"));
         return;
     }
 
+    // FIXME: Is this needed (I don't quite understand the comment
+    // in vcsstatusinfo.h which says we need to do this if we want to
+    // use VcsStatusInfo in queued signals/slots)
+    qRegisterMetaType<VcsStatusInfo>();
+
+    ICore::self()->uiController()->addToolView(i18n("Git Commit"), m_commitToolViewFactory);
+
     setObjectName(QStringLiteral("Git"));
 
-    DVcsJob* versionJob = new DVcsJob(QDir::tempPath(), this, KDevelop::OutputJob::Silent);
+    auto* versionJob = new GitJob(QDir::tempPath(), this, KDevelop::OutputJob::Silent);
     *versionJob << "git" << "--version";
     connect(versionJob, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitVersionOutput);
     ICore::self()->runController()->registerJob(versionJob);
@@ -229,10 +247,19 @@ void GitPlugin::additionalMenuEntries(QMenu* menu, const QList<QUrl>& urls)
 
     QDir dir=urlDir(urls);
     bool hasSt = hasStashes(dir);
-    menu->addSeparator()->setText(i18n("Git Stashes"));
-    menu->addAction(i18n("Stash Manager"), this, SLOT(ctxStashManager()))->setEnabled(hasSt);
-    menu->addAction(i18n("Push Stash"), this, SLOT(ctxPushStash()));
-    menu->addAction(i18n("Pop Stash"), this, SLOT(ctxPopStash()))->setEnabled(hasSt);
+
+    menu->addAction(i18nc("@action:inmenu", "Rebase"), this, SLOT(ctxRebase()));
+    menu->addSeparator()->setText(i18nc("@title:menu", "Git Stashes"));
+    menu->addAction(i18nc("@action:inmenu", "Stash Manager"), this, SLOT(ctxStashManager()))->setEnabled(hasSt);
+    menu->addAction(QIcon::fromTheme(QStringLiteral("vcs-stash")), i18nc("@action:inmenu", "Push Stash"), this, SLOT(ctxPushStash()));
+    menu->addAction(QIcon::fromTheme(QStringLiteral("vcs-stash-pop")), i18nc("@action:inmenu", "Pop Stash"), this, SLOT(ctxPopStash()))->setEnabled(hasSt);
+}
+
+void GitPlugin::ctxRebase()
+{
+    auto* dialog = new RebaseDialog(this, m_urls.first(), nullptr);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->open();
 }
 
 void GitPlugin::ctxPushStash()
@@ -257,7 +284,7 @@ void GitPlugin::ctxStashManager()
 
 DVcsJob* GitPlugin::errorsFound(const QString& error, KDevelop::OutputJob::OutputJobVerbosity verbosity=OutputJob::Verbose)
 {
-    DVcsJob* j = new DVcsJob(QDir::temp(), this, verbosity);
+    auto* j = new GitJob(QDir::temp(), this, verbosity);
     *j << "echo" << i18n("error: %1", error) << "-n";
     return j;
 }
@@ -274,7 +301,7 @@ QUrl GitPlugin::repositoryRoot(const QUrl& path)
 
 bool GitPlugin::isValidDirectory(const QUrl & dirPath)
 {
-    QDir dir=dotGitDirectory(dirPath);
+    QDir dir = dotGitDirectory(dirPath, true);
     QFile dotGitPotentialFile(dir.filePath(QStringLiteral(".git")));
     // if .git is a file, we may be in a git worktree
     QFileInfo dotGitPotentialFileInfo(dotGitPotentialFile);
@@ -340,7 +367,7 @@ bool GitPlugin::isVersionControlled(const QUrl &path)
 
 VcsJob* GitPlugin::init(const QUrl &directory)
 {
-    DVcsJob* job = new DVcsJob(urlDir(directory), this);
+    auto* job = new GitJob(urlDir(directory), this);
     job->setType(VcsJob::Import);
     *job << "git" << "init";
     return job;
@@ -389,7 +416,19 @@ KDevelop::VcsJob* GitPlugin::status(const QList<QUrl>& localLocations, KDevelop:
 VcsJob* GitPlugin::diff(const QUrl& fileOrDirectory, const KDevelop::VcsRevision& srcRevision, const KDevelop::VcsRevision& dstRevision,
                         IBasicVersionControl::RecursionMode recursion)
 {
-    DVcsJob* job = new GitJob(dotGitDirectory(fileOrDirectory), this, KDevelop::OutputJob::Silent);
+    DVcsJob* job = static_cast<DVcsJob*>(diff(fileOrDirectory, srcRevision, dstRevision));
+    *job << "--";
+    if (recursion == IBasicVersionControl::Recursive) {
+        *job << fileOrDirectory;
+    } else {
+        *job << preventRecursion(QList<QUrl>() << fileOrDirectory);
+    }
+    return job;
+}
+
+KDevelop::VcsJob * GitPlugin::diff(const QUrl& repoPath, const KDevelop::VcsRevision& srcRevision, const KDevelop::VcsRevision& dstRevision)
+{
+    DVcsJob* job = new GitJob(dotGitDirectory(repoPath), this, KDevelop::OutputJob::Silent);
     job->setType(VcsJob::Diff);
     *job << "git" << "diff" << "--no-color" << "--no-ext-diff";
     if (!usePrefix()) {
@@ -410,17 +449,45 @@ VcsJob* GitPlugin::diff(const QUrl& fileOrDirectory, const KDevelop::VcsRevision
         if(!revstr.isEmpty())
             *job << revstr;
     }
-
-    *job << "--";
-    if (recursion == IBasicVersionControl::Recursive) {
-        *job << fileOrDirectory;
-    } else {
-        *job << preventRecursion(QList<QUrl>() << fileOrDirectory);
-    }
-
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitDiffOutput);
     return job;
 }
+
+
+KDevelop::VcsJob * GitPlugin::reset ( const QList<QUrl>& localLocations, KDevelop::IBasicVersionControl::RecursionMode recursion )
+{
+    if(localLocations.isEmpty() )
+        return errorsFound(i18n("Could not reset changes (empty list of paths)"), OutputJob::Verbose);
+
+    DVcsJob* job = new GitJob(dotGitDirectory(localLocations.front()), this);
+    job->setType(VcsJob::Reset);
+    *job << "git" << "reset" << "--";
+    *job << (recursion == IBasicVersionControl::Recursive ? localLocations : preventRecursion(localLocations));
+    return job;
+}
+
+KDevelop::VcsJob * GitPlugin::apply(const KDevelop::VcsDiff& diff, const ApplyParams applyTo)
+{
+    DVcsJob* job = new GitJob(dotGitDirectory(diff.baseDiff()), this);
+    job->setType(VcsJob::Apply);
+    *job << "git" << "apply";
+    if (applyTo == Index) {
+        *job << "--index";   // Applies the diff also to the index
+        *job << "--cached";  // Does not touch the work tree
+    }
+    auto* diffFile = new QTemporaryFile(this);
+    if (diffFile->open()) {
+        *job << diffFile->fileName();
+        diffFile->write(diff.diff().toUtf8());
+        diffFile->close();
+        connect(job, &KDevelop::VcsJob::resultsReady, [=](){delete diffFile;});
+    } else {
+        job->cancel();
+        delete diffFile;
+    }
+    return job;
+}
+
 
 VcsJob* GitPlugin::revert(const QList<QUrl>& localLocations, IBasicVersionControl::RecursionMode recursion)
 {
@@ -465,7 +532,7 @@ VcsJob* GitPlugin::commit(const QString& message,
         return errorsFound(i18n("Email or name for Git not specified"));
     }
 
-    auto* job = new DVcsJob(dir, this);
+    auto* job = new GitJob(dir, this);
     job->setType(VcsJob::Commit);
     QList<QUrl> files = (recursion == IBasicVersionControl::Recursive ? localLocations : preventRecursion(localLocations));
     addNotVersionedFiles(dir, files);
@@ -474,6 +541,21 @@ VcsJob* GitPlugin::commit(const QString& message,
     *job << "--" << files;
     return job;
 }
+
+KDevelop::VcsJob * GitPlugin::commitStaged(const QString& message, const QUrl& repoUrl)
+{
+    if (message.isEmpty())
+        return errorsFound(i18n("No message specified"));
+    const QDir dir = dotGitDirectory(repoUrl);
+    if (!ensureValidGitIdentity(dir)) {
+        return errorsFound(i18n("Email or name for Git not specified"));
+    }
+    auto* job = new GitJob(dir, this);
+    job->setType(VcsJob::Commit);
+    *job << "git" << "commit" << "-m" << message;
+    return job;
+}
+
 
 bool GitPlugin::ensureValidGitIdentity(const QDir& dir)
 {
@@ -639,31 +721,29 @@ void GitPlugin::parseGitBlameOutput(DVcsJob *job)
 
     bool skipNext=false;
     QMap<QString, VcsAnnotationLine> definedRevisions;
-    for(QVector<QStringRef>::const_iterator it=lines.constBegin(), itEnd=lines.constEnd();
-        it!=itEnd; ++it)
-    {
+    for (auto& line : lines) {
         if(skipNext) {
             skipNext=false;
-            results += qVariantFromValue(*annotation);
+            results += QVariant::fromValue(*annotation);
 
             continue;
         }
 
-        if(it->isEmpty())
+        if (line.isEmpty())
             continue;
 
-        QStringRef name = it->left(it->indexOf(QLatin1Char(' ')));
-        QStringRef value = it->mid(name.size()+1);
+        QStringRef name = line.left(line.indexOf(QLatin1Char(' ')));
+        QStringRef value = line.mid(name.size()+1);
 
         if(name==QLatin1String("author"))
             annotation->setAuthor(value.toString());
         else if(name==QLatin1String("author-mail")) {} //TODO: do smth with the e-mail?
         else if(name==QLatin1String("author-tz")) {} //TODO: does it really matter?
         else if(name==QLatin1String("author-time"))
-            annotation->setDate(QDateTime::fromTime_t(value.toUInt()));
+            annotation->setDate(QDateTime::fromSecsSinceEpoch(value.toUInt(), Qt::LocalTime));
         else if(name==QLatin1String("summary"))
             annotation->setCommitMessage(value.toString());
-        else if(name.startsWith(QStringLiteral("committer"))) {} //We will just store the authors
+        else if(name.startsWith(QLatin1String("committer"))) {} //We will just store the authors
         else if(name==QLatin1String("previous")) {} //We don't need that either
         else if(name==QLatin1String("filename")) { skipNext=true; }
         else if(name==QLatin1String("boundary")) {
@@ -693,21 +773,21 @@ void GitPlugin::parseGitBlameOutput(DVcsJob *job)
 DVcsJob* GitPlugin::lsFiles(const QDir &repository, const QStringList &args,
                             OutputJob::OutputJobVerbosity verbosity)
 {
-    auto* job = new DVcsJob(repository, this, verbosity);
+    auto* job = new GitJob(repository, this, verbosity);
     *job << "git" << "ls-files" << args;
     return job;
 }
 
 DVcsJob* GitPlugin::gitStash(const QDir& repository, const QStringList& args, OutputJob::OutputJobVerbosity verbosity)
 {
-    auto* job = new DVcsJob(repository, this, verbosity);
+    auto* job = new GitJob(repository, this, verbosity);
     *job << "git" << "stash" << args;
     return job;
 }
 
 VcsJob* GitPlugin::tag(const QUrl& repository, const QString& commitMessage, const VcsRevision& rev, const QString& tagName)
 {
-    DVcsJob* job = new DVcsJob(urlDir(repository), this);
+    auto* job = new GitJob(urlDir(repository), this);
     *job << "git" << "tag" << "-m" << commitMessage << tagName;
     if(rev.revisionValue().isValid())
         *job << rev.revisionValue().toString();
@@ -718,12 +798,17 @@ VcsJob* GitPlugin::switchBranch(const QUrl &repository, const QString &branch)
 {
     QDir d=urlDir(repository);
 
-    if(hasModifications(d) && KMessageBox::questionYesNo(nullptr, i18n("There are pending changes, do you want to stash them first?"))==KMessageBox::Yes) {
-        QScopedPointer<DVcsJob> stash(gitStash(d, QStringList(), KDevelop::OutputJob::Verbose));
-        stash->exec();
+    if(hasModifications(d)) {
+        auto answer = KMessageBox::questionYesNoCancel(nullptr, i18n("There are pending changes, do you want to stash them first?"));
+        if (answer == KMessageBox::Yes) {
+            QScopedPointer<DVcsJob> stash(gitStash(d, QStringList(), KDevelop::OutputJob::Verbose));
+            stash->exec();
+        } else if (answer == KMessageBox::Cancel) {
+            return nullptr;
+        }
     }
 
-    auto* job = new DVcsJob(d, this);
+    auto* job = new GitJob(d, this);
     *job << "git" << "checkout" << branch;
     return job;
 }
@@ -732,7 +817,7 @@ VcsJob* GitPlugin::branch(const QUrl& repository, const KDevelop::VcsRevision& r
 {
     Q_ASSERT(!branchName.isEmpty());
 
-    DVcsJob* job = new DVcsJob(urlDir(repository), this);
+    auto* job = new GitJob(urlDir(repository), this);
     *job << "git" << "branch" << "--" << branchName;
 
     if(!rev.prettyValue().isEmpty())
@@ -742,7 +827,7 @@ VcsJob* GitPlugin::branch(const QUrl& repository, const KDevelop::VcsRevision& r
 
 VcsJob* GitPlugin::deleteBranch(const QUrl& repository, const QString& branchName)
 {
-    DVcsJob* job = new DVcsJob(urlDir(repository), this, OutputJob::Silent);
+    auto* job = new GitJob(urlDir(repository), this, OutputJob::Silent);
     *job << "git" << "branch" << "-D" << branchName;
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitCurrentBranch);
     return job;
@@ -750,7 +835,7 @@ VcsJob* GitPlugin::deleteBranch(const QUrl& repository, const QString& branchNam
 
 VcsJob* GitPlugin::renameBranch(const QUrl& repository, const QString& oldBranchName, const QString& newBranchName)
 {
-    DVcsJob* job = new DVcsJob(urlDir(repository), this, OutputJob::Silent);
+    auto* job = new GitJob(urlDir(repository), this, OutputJob::Silent);
     *job << "git" << "branch" << "-m" << newBranchName << oldBranchName;
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitCurrentBranch);
     return job;
@@ -760,15 +845,23 @@ VcsJob* GitPlugin::mergeBranch(const QUrl& repository, const QString& branchName
 {
     Q_ASSERT(!branchName.isEmpty());
 
-    DVcsJob* job = new DVcsJob(urlDir(repository), this);
+    auto* job = new GitJob(urlDir(repository), this);
     *job << "git" << "merge" << branchName;
+
+    return job;
+}
+
+VcsJob* GitPlugin::rebase(const QUrl& repository, const QString& branchName)
+{
+    auto* job = new GitJob(urlDir(repository), this);
+    *job << "git" << "rebase" << branchName;
 
     return job;
 }
 
 VcsJob* GitPlugin::currentBranch(const QUrl& repository)
 {
-    DVcsJob* job = new DVcsJob(urlDir(repository), this, OutputJob::Silent);
+    auto* job = new GitJob(urlDir(repository), this, OutputJob::Silent);
     job->setIgnoreError(true);
     *job << "git" << "symbolic-ref" << "-q" << "--short" << "HEAD";
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitCurrentBranch);
@@ -784,7 +877,7 @@ void GitPlugin::parseGitCurrentBranch(DVcsJob* job)
 
 VcsJob* GitPlugin::branches(const QUrl &repository)
 {
-    DVcsJob* job=new DVcsJob(urlDir(repository));
+    auto* job = new GitJob(urlDir(repository));
     *job << "git" << "branch" << "-a";
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitBranchOutput);
     return job;
@@ -793,17 +886,21 @@ VcsJob* GitPlugin::branches(const QUrl &repository)
 void GitPlugin::parseGitBranchOutput(DVcsJob* job)
 {
     const auto output = job->output();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto branchListDirty = output.splitRef(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     const auto branchListDirty = output.splitRef(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 
     QStringList branchList;
     for (const auto& branch : branchListDirty) {
         // Skip pointers to another branches (one example of this is "origin/HEAD -> origin/master");
         // "git rev-list" chokes on these entries and we do not need duplicate branches altogether.
-        if (branch.contains(QStringLiteral("->")))
+        if (branch.contains(QLatin1String("->")))
             continue;
 
         // Skip entries such as '(no branch)'
-        if (branch.contains(QStringLiteral("(no branch)")))
+        if (branch.contains(QLatin1String("(no branch)")))
             continue;
 
         QStringRef name = branch;
@@ -850,7 +947,11 @@ QVector<DVcsEvent> GitPlugin::allCommits(const QString& repo)
     bool ret = job->exec();
     Q_ASSERT(ret && job->status()==VcsJob::JobSucceeded && "TODO: provide a fall back in case of failing");
     Q_UNUSED(ret);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const QStringList commits = job->output().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     QStringList commits = job->output().split(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 
     static QRegExp rx_com(QStringLiteral("commit \\w{40,40}"));
 
@@ -884,7 +985,7 @@ QVector<DVcsEvent> GitPlugin::allCommits(const QString& repo)
             item.setParents(parents);
 
             //Avoid Merge string
-            while (!commits[i].contains(QStringLiteral("Author: ")))
+            while (!commits[i].contains(QLatin1String("Author: ")))
                     ++i;
 
             item.setAuthor(commits[i].section(QStringLiteral("Author: "), 1).trimmed());
@@ -1017,7 +1118,11 @@ void GitPlugin::initBranchHash(const QString &repo)
     bool ret = job->exec();
     Q_ASSERT(ret && job->status()==VcsJob::JobSucceeded && "TODO: provide a fall back in case of failing");
     Q_UNUSED(ret);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const QStringList commits = job->output().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     const QStringList commits = job->output().split(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 //     qCDebug(PLUGIN_GIT) << "\n\n\n commits" << commits << "\n\n\n";
     branchesShas.append(commits);
     for (const QString& branch : gitBranches) {
@@ -1033,7 +1138,11 @@ void GitPlugin::initBranchHash(const QString &repo)
         bool ret = job->exec();
         Q_ASSERT(ret && job->status()==VcsJob::JobSucceeded && "TODO: provide a fall back in case of failing");
         Q_UNUSED(ret);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        const QStringList commits = job->output().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
         const QStringList commits = job->output().split(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 //         qCDebug(PLUGIN_GIT) << "\n\n\n commits" << commits << "\n\n\n";
         branchesShas.append(commits);
     }
@@ -1048,7 +1157,11 @@ void GitPlugin::parseLogOutput(const DVcsJob* job, QVector<DVcsEvent>& commits) 
     static QRegularExpression rx_com( QStringLiteral("commit \\w{1,40}") );
 
     const auto output = job->output();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto lines = output.splitRef(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     const auto lines = output.splitRef(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 
     DVcsEvent item;
     QString commitLog;
@@ -1126,7 +1239,7 @@ void GitPlugin::parseGitLogOutput(DVcsJob * job)
             if (cap1 == QLatin1String("Author")) {
                 item.setAuthor(infoRegex.cap(2).trimmed());
             } else if (cap1 == QLatin1String("Date")) {
-                item.setDate(QDateTime::fromTime_t(infoRegex.cap(2).trimmed().split(QLatin1Char(' '))[0].toUInt()));
+                item.setDate(QDateTime::fromSecsSinceEpoch(infoRegex.cap(2).trimmed().split(QLatin1Char(' '))[0].toUInt(), Qt::LocalTime));
             }
         } else if (modificationsRegex.exactMatch(line)) {
             VcsItemEvent::Actions a = actionsFromString(modificationsRegex.cap(1).at(0).toLatin1());
@@ -1158,7 +1271,7 @@ void GitPlugin::parseGitDiffOutput(DVcsJob* job)
     diff.setBaseDiff(repositoryRoot(QUrl::fromLocalFile(job->directory().absolutePath())));
     diff.setDepth(usePrefix()? 1 : 0);
 
-    job->setResults(qVariantFromValue(diff));
+    job->setResults(QVariant::fromValue(diff));
 }
 
 static VcsStatusInfo::State lsfilesToState(char id)
@@ -1178,14 +1291,19 @@ static VcsStatusInfo::State lsfilesToState(char id)
 
 void GitPlugin::parseGitStatusOutput_old(DVcsJob* job)
 {
-    const QStringList outputLines = job->output().split(QLatin1Char('\n'), QString::SkipEmptyParts);
+    const QString output = job->output();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto outputLines = output.splitRef(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
+    const auto outputLines = output.splitRef(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 
     QDir dir = job->directory();
     QMap<QUrl, VcsStatusInfo::State> allStatus;
-    for (const QString& line : outputLines) {
+    for (const auto& line : outputLines) {
         VcsStatusInfo::State status = lsfilesToState(line[0].toLatin1());
 
-        QUrl url = QUrl::fromLocalFile(dir.absoluteFilePath(line.mid(2)));
+        QUrl url = QUrl::fromLocalFile(dir.absoluteFilePath(line.mid(2).toString()));
 
         allStatus[url] = status;
     }
@@ -1199,7 +1317,7 @@ void GitPlugin::parseGitStatusOutput_old(DVcsJob* job)
         status.setUrl(it.key());
         status.setState(it.value());
 
-        statuses.append(qVariantFromValue<VcsStatusInfo>(status));
+        statuses.append(QVariant::fromValue<VcsStatusInfo>(status));
     }
 
     job->setResults(statuses);
@@ -1208,7 +1326,11 @@ void GitPlugin::parseGitStatusOutput_old(DVcsJob* job)
 void GitPlugin::parseGitStatusOutput(DVcsJob* job)
 {
     const auto output = job->output();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto outputLines = output.splitRef(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     const auto outputLines = output.splitRef(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
     QDir workingDir = job->directory();
     QDir dotGit = dotGitDirectory(QUrl::fromLocalFile(workingDir.absolutePath()));
 
@@ -1220,12 +1342,12 @@ void GitPlugin::parseGitStatusOutput(DVcsJob* job)
         QStringRef curr=line.mid(3);
         QStringRef state = line.left(2);
 
-        int arrow = curr.indexOf(QStringLiteral(" -> "));
+        int arrow = curr.indexOf(QLatin1String(" -> "));
         if(arrow>=0) {
             VcsStatusInfo status;
             status.setUrl(QUrl::fromLocalFile(dotGit.absoluteFilePath(curr.toString().left(arrow))));
             status.setState(VcsStatusInfo::ItemDeleted);
-            statuses.append(qVariantFromValue<VcsStatusInfo>(status));
+            statuses.append(QVariant::fromValue<VcsStatusInfo>(status));
             processedFiles += status.url();
 
             curr = curr.mid(arrow+4);
@@ -1236,13 +1358,15 @@ void GitPlugin::parseGitStatusOutput(DVcsJob* job)
         }
 
         VcsStatusInfo status;
+        ExtendedState ex_state = parseGitState(state);
         status.setUrl(QUrl::fromLocalFile(dotGit.absoluteFilePath(curr.toString())));
-        status.setState(messageToState(state));
+        status.setExtendedState(ex_state);
+        status.setState(extendedStateToBasic(ex_state));
         processedFiles.append(status.url());
 
         qCDebug(PLUGIN_GIT) << "Checking git status for " << line << curr << status.state();
 
-        statuses.append(qVariantFromValue<VcsStatusInfo>(status));
+        statuses.append(QVariant::fromValue<VcsStatusInfo>(status));
     }
     QStringList paths;
     QStringList oldcmd=job->dvcsCommand();
@@ -1261,7 +1385,7 @@ void GitPlugin::parseGitStatusOutput(DVcsJob* job)
             status.setUrl(fileUrl);
             status.setState(VcsStatusInfo::ItemUpToDate);
 
-            statuses.append(qVariantFromValue<VcsStatusInfo>(status));
+            statuses.append(QVariant::fromValue<VcsStatusInfo>(status));
         }
     }
     job->setResults(statuses);
@@ -1270,28 +1394,12 @@ void GitPlugin::parseGitStatusOutput(DVcsJob* job)
 void GitPlugin::parseGitVersionOutput(DVcsJob* job)
 {
     const auto output = job->output().trimmed();
-    auto versionString = output.midRef(output.lastIndexOf(QLatin1Char(' '))).split(QLatin1Char('.'));
-    static const QList<int> minimumVersion = QList<int>{1, 7};
-    qCDebug(PLUGIN_GIT) << "checking git version" << versionString << "against" << minimumVersion;
-    m_oldVersion = false;
-    if (versionString.size() < minimumVersion.size()) {
-        m_oldVersion = true;
-        qCWarning(PLUGIN_GIT) << "invalid git version string:" << job->output().trimmed();
-        return;
-    }
-    for (int num : minimumVersion) {
-        QStringRef curr = versionString.takeFirst();
-        int valcurr = curr.toInt();
-        if (valcurr < num) {
-            m_oldVersion = true;
-            break;
-        }
-        if (valcurr > num) {
-            m_oldVersion = false;
-            break;
-        }
-    }
-    qCDebug(PLUGIN_GIT) << "the current git version is old: " << m_oldVersion;
+    auto versionString = output.midRef(output.lastIndexOf(QLatin1Char(' ')));
+    const auto minimumVersion = QVersionNumber(1, 7);
+    const auto actualVersion = QVersionNumber::fromString(versionString);
+    m_oldVersion = actualVersion < minimumVersion;
+    qCDebug(PLUGIN_GIT) << "checking git version" << versionString << actualVersion << "against" << minimumVersion
+                        << m_oldVersion;
 }
 
 QStringList GitPlugin::getLsFiles(const QDir &directory, const QStringList &args,
@@ -1299,7 +1407,11 @@ QStringList GitPlugin::getLsFiles(const QDir &directory, const QStringList &args
 {
     QScopedPointer<DVcsJob> job(lsFiles(directory, args, verbosity));
     if (job->exec() && job->status() == KDevelop::VcsJob::JobSucceeded)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        return job->output().split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
         return job->output().split(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
 
     return QStringList();
 }
@@ -1307,7 +1419,7 @@ QStringList GitPlugin::getLsFiles(const QDir &directory, const QStringList &args
 DVcsJob* GitPlugin::gitRevParse(const QString &repository, const QStringList &args,
     KDevelop::OutputJob::OutputJobVerbosity verbosity)
 {
-    DVcsJob* job = new DVcsJob(QDir(repository), this, verbosity);
+    auto* job = new GitJob(QDir(repository), this, verbosity);
     *job << "git" << "rev-parse" << args;
 
     return job;
@@ -1315,50 +1427,126 @@ DVcsJob* GitPlugin::gitRevParse(const QString &repository, const QStringList &ar
 
 DVcsJob* GitPlugin::gitRevList(const QString& directory, const QStringList& args)
 {
-    DVcsJob* job = new DVcsJob(urlDir(QUrl::fromLocalFile(directory)), this, KDevelop::OutputJob::Silent);
+    auto* job = new GitJob(urlDir(QUrl::fromLocalFile(directory)), this, KDevelop::OutputJob::Silent);
     {
         *job << "git" << "rev-list" << args;
         return job;
     }
 }
 
-VcsStatusInfo::State GitPlugin::messageToState(const QStringRef& msg)
+constexpr int _pair(char a, char b) { return a*256 + b;}
+
+GitPlugin::ExtendedState GitPlugin::parseGitState(const QStringRef& msg)
 {
     Q_ASSERT(msg.size()==1 || msg.size()==2);
-    VcsStatusInfo::State ret = VcsStatusInfo::ItemUnknown;
+    ExtendedState ret = GitInvalid;
 
     if(msg.contains(QLatin1Char('U')) || msg == QLatin1String("AA") || msg == QLatin1String("DD"))
-        ret = VcsStatusInfo::ItemHasConflicts;
-    else switch(msg.at(0).toLatin1())
+        ret = GitConflicts;
+    else switch(_pair(msg.at(0).toLatin1(), msg.at(1).toLatin1()))
     {
-        case 'M':
-            ret = VcsStatusInfo::ItemModified;
+        case _pair(' ', ' '):
+            ret = GitXX;
             break;
-        case 'A':
-            ret = VcsStatusInfo::ItemAdded;
+        case _pair(' ','M'):
+            ret = GitXM;
             break;
-        case 'R':
-            ret = VcsStatusInfo::ItemModified;
+        case _pair ( ' ','D' ) :
+            ret = GitXD;
             break;
-        case 'C':
-            ret = VcsStatusInfo::ItemHasConflicts;
+        case _pair ( ' ','R' ) :
+            ret = GitXR;
             break;
-        case ' ':
-            ret = msg.at(1) == QLatin1Char('M') ? VcsStatusInfo::ItemModified : VcsStatusInfo::ItemDeleted;
+        case _pair ( ' ','C' ) :
+            ret = GitXC;
             break;
-        case 'D':
-            ret = VcsStatusInfo::ItemDeleted;
+        case _pair ( 'M',' ' ) :
+            ret = GitMX;
             break;
-        case '?':
-            ret = VcsStatusInfo::ItemUnknown;
+        case _pair ( 'M','M' ) :
+            ret = GitMM;
+            break;
+        case _pair ( 'M','D' ) :
+            ret = GitMD;
+            break;
+        case _pair ( 'A',' ' ) :
+            ret = GitAX;
+            break;
+        case _pair ( 'A','M' ) :
+            ret = GitAM;
+            break;
+        case _pair ( 'A','D' ) :
+            ret = GitAD;
+            break;
+        case _pair ( 'D',' ' ) :
+            ret = GitDX;
+            break;
+        case _pair ( 'D','R' ) :
+            ret = GitDR;
+            break;
+        case _pair ( 'D','C' ) :
+            ret = GitDC;
+            break;
+        case _pair ( 'R',' ' ) :
+            ret = GitRX;
+            break;
+        case _pair ( 'R','M' ) :
+            ret = GitRM;
+            break;
+        case _pair ( 'R','D' ) :
+            ret = GitRD;
+            break;
+        case _pair ( 'C',' ' ) :
+            ret = GitCX;
+            break;
+        case _pair ( 'C','M' ) :
+            ret = GitCM;
+            break;
+        case _pair ( 'C','D' ) :
+            ret = GitCD;
+            break;
+        case _pair ( '?','?' ) :
+            ret = GitUntracked;
             break;
         default:
             qCDebug(PLUGIN_GIT) << "Git status not identified:" << msg;
+            ret = GitInvalid;
             break;
     }
 
     return ret;
 }
+
+KDevelop::VcsStatusInfo::State GitPlugin::extendedStateToBasic(const GitPlugin::ExtendedState state)
+{
+    switch(state) {
+        case GitXX: return VcsStatusInfo::ItemUpToDate;
+        case GitXM: return VcsStatusInfo::ItemModified;
+        case GitXD: return VcsStatusInfo::ItemDeleted;
+        case GitXR: return VcsStatusInfo::ItemModified;
+        case GitXC: return VcsStatusInfo::ItemModified;
+        case GitMX: return VcsStatusInfo::ItemModified;
+        case GitMM: return VcsStatusInfo::ItemModified;
+        case GitMD: return VcsStatusInfo::ItemDeleted;
+        case GitAX: return VcsStatusInfo::ItemAdded;
+        case GitAM: return VcsStatusInfo::ItemAdded;
+        case GitAD: return VcsStatusInfo::ItemAdded;
+        case GitDX: return VcsStatusInfo::ItemDeleted;
+        case GitDR: return VcsStatusInfo::ItemDeleted;
+        case GitDC: return VcsStatusInfo::ItemDeleted;
+        case GitRX: return VcsStatusInfo::ItemModified;
+        case GitRM: return VcsStatusInfo::ItemModified;
+        case GitRD: return VcsStatusInfo::ItemDeleted;
+        case GitCX: return VcsStatusInfo::ItemModified;
+        case GitCM: return VcsStatusInfo::ItemModified;
+        case GitCD: return VcsStatusInfo::ItemDeleted;
+        case GitUntracked: return VcsStatusInfo::ItemUnknown;
+        case GitConflicts: return VcsStatusInfo::ItemHasConflicts;
+        case GitInvalid: return VcsStatusInfo::ItemUnknown;
+    }
+    return VcsStatusInfo::ItemUnknown;
+}
+
 
 StandardJob::StandardJob(IPlugin* parent, KJob* job,
                                  OutputJob::OutputJobVerbosity verbosity)
@@ -1408,7 +1596,7 @@ VcsJob* GitPlugin::move(const QUrl& source, const QUrl& destination)
 
     const QStringList otherStr = getLsFiles(dir, QStringList{QStringLiteral("--others"), QStringLiteral("--"), source.toLocalFile()}, KDevelop::OutputJob::Silent);
     if(otherStr.isEmpty()) {
-        auto* job = new DVcsJob(dir, this, KDevelop::OutputJob::Verbose);
+        auto* job = new GitJob(dir, this, KDevelop::OutputJob::Verbose);
         *job << "git" << "mv" << source.toLocalFile() << destination.toLocalFile();
         return job;
     } else {
@@ -1423,7 +1611,7 @@ void GitPlugin::parseGitRepoLocationOutput(DVcsJob* job)
 
 VcsJob* GitPlugin::repositoryLocation(const QUrl& localLocation)
 {
-    DVcsJob* job = new DVcsJob(urlDir(localLocation), this);
+    auto* job = new GitJob(urlDir(localLocation), this);
     //Probably we should check first if origin is the proper remote we have to use but as a first attempt it works
     *job << "git" << "config" << "remote.origin.url";
     connect(job, &DVcsJob::readyForParsing, this, &GitPlugin::parseGitRepoLocationOutput);
@@ -1432,7 +1620,7 @@ VcsJob* GitPlugin::repositoryLocation(const QUrl& localLocation)
 
 VcsJob* GitPlugin::pull(const KDevelop::VcsLocation& localOrRepoLocationSrc, const QUrl& localRepositoryLocation)
 {
-    DVcsJob* job = new DVcsJob(urlDir(localRepositoryLocation), this);
+    auto* job = new GitJob(urlDir(localRepositoryLocation), this);
     job->setCommunicationMode(KProcess::MergedChannels);
     *job << "git" << "pull";
     if(!localOrRepoLocationSrc.localUrl().isEmpty())
@@ -1442,7 +1630,7 @@ VcsJob* GitPlugin::pull(const KDevelop::VcsLocation& localOrRepoLocationSrc, con
 
 VcsJob* GitPlugin::push(const QUrl& localRepositoryLocation, const KDevelop::VcsLocation& localOrRepoLocationDst)
 {
-    DVcsJob* job = new DVcsJob(urlDir(localRepositoryLocation), this);
+    auto* job = new GitJob(urlDir(localRepositoryLocation), this);
     job->setCommunicationMode(KProcess::MergedChannels);
     *job << "git" << "push";
     if(!localOrRepoLocationDst.localUrl().isEmpty())
@@ -1460,7 +1648,7 @@ VcsJob* GitPlugin::update(const QList<QUrl>& localLocations, const KDevelop::Vcs
     if(rev.revisionType()==VcsRevision::Special && rev.revisionValue().value<VcsRevision::RevisionSpecialType>()==VcsRevision::Head) {
         return pull(VcsLocation(), localLocations.first());
     } else {
-        DVcsJob* job = new DVcsJob(urlDir(localLocations.first()), this);
+        auto* job = new GitJob(urlDir(localLocations.first()), this);
         {
             //Probably we should check first if origin is the proper remote we have to use but as a first attempt it works
             *job << "git" << "checkout" << rev.revisionValue().toString() << "--";
@@ -1513,7 +1701,7 @@ void GitPlugin::registerRepositoryForCurrentBranchChanges(const QUrl& repository
 
 void GitPlugin::fileChanged(const QString& file)
 {
-    Q_ASSERT(file.endsWith(QStringLiteral("HEAD")));
+    Q_ASSERT(file.endsWith(QLatin1String("HEAD")));
     //SMTH/.git/HEAD -> SMTH/
     const QUrl fileUrl = Path(file).parent().parent().toUrl();
 
@@ -1537,7 +1725,7 @@ CheckInRepositoryJob* GitPlugin::isInRepository(KTextEditor::Document* document)
 
 DVcsJob* GitPlugin::setConfigOption(const QUrl& repository, const QString& key, const QString& value, bool global)
 {
-    auto job = new DVcsJob(urlDir(repository), this);
+    auto job = new GitJob(urlDir(repository), this);
     QStringList args;
     args << QStringLiteral("git") << QStringLiteral("config");
     if(global)

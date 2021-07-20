@@ -17,19 +17,19 @@
  *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.         *
  ***************************************************************************/
 
-#include <stdlib.h>
-#include <iostream>
-#include <sys/socket.h>
-#include <sys/un.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <fcntl.h>
+#include <cassert>
 #include <cerrno>
-#include <assert.h>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <sstream>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/un.h>
 #include <unistd.h>
-#include <string.h>
 
 #ifndef HAVE_MSG_NOSIGNAL
 #define MSG_NOSIGNAL 0
@@ -80,8 +80,8 @@ std::string getAuthToken()
     };
 
     std::ostringstream hexStream;
-    for (unsigned int i = 0; i < uidStr.size(); ++i) {
-        auto byte = ( unsigned char )uidStr[i];
+    for (char c : uidStr) {
+        auto byte = (unsigned char)c;
         hexStream << hexdigits[byte >> 4] << hexdigits[byte & 0x0f];
     }
 
@@ -250,8 +250,6 @@ int main(int argc, char** argv)
             path = path.substr(0, path.find(",guid="));
 
         // Mark it as an abstract unix domain socket
-        path = path;
-
         serverfd = socket(AF_INET, SOCK_STREAM, 0);
 
         if (serverfd < 0) {

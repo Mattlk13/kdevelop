@@ -28,6 +28,9 @@
 
 #include <language/util/kdevhash.h>
 
+#include <algorithm>
+#include <iterator>
+
 using namespace KDevelop;
 
 namespace {
@@ -67,11 +70,6 @@ QString KDevelop::toUrlOrLocalFile(const QUrl& url, QUrl::FormattingOptions opti
     }
 #endif
     return str;
-}
-
-Path::Path()
-{
-
 }
 
 Path::Path(const QString& pathOrUrl)
@@ -294,27 +292,23 @@ QString Path::remotePrefix() const
     return isRemote() ? m_data.first() : QString();
 }
 
-bool Path::operator<(const Path& other) const
+int Path::compare(const Path& other, Qt::CaseSensitivity cs) const
 {
     const int size = m_data.size();
     const int otherSize = other.m_data.size();
-    const int toCompare = qMin(size, otherSize);
+    const int toCompare = std::min(size, otherSize);
 
     // compare each Path segment in turn and try to return early
     for (int i = 0; i < toCompare; ++i) {
-        int comparison = m_data.at(i).compare(other.m_data.at(i));
-        if (comparison == 0) {
-            // equal, try next segment
-            continue;
-        } else {
-            // return whether our segment is less then the other one
-            return comparison < 0;
+        const int comparison = m_data.at(i).compare(other.m_data.at(i), cs);
+        if (comparison != 0) {
+            return comparison;
         }
     }
 
     // when we reach this point, all elements that we compared where equal
-    // thus return whether we have less items than the other Path
-    return size < otherSize;
+    // thus return the segment count difference between the two paths
+    return size - otherSize;
 }
 
 QUrl Path::toUrl() const
@@ -455,11 +449,6 @@ bool Path::hasParent() const
     return m_data.size() > rootIdx && !m_data[rootIdx].isEmpty();
 }
 
-void Path::clear()
-{
-    m_data.clear();
-}
-
 Path Path::cd(const QString& dir) const
 {
     if (!isValid()) {
@@ -472,8 +461,7 @@ namespace KDevelop {
 uint qHash(const Path& path)
 {
     KDevHash hash;
-    const auto pathSegments = path.segments();
-    for (const QString& segment : pathSegments) {
+    for (const QString& segment : path.segments()) {
         hash << qHash(segment);
     }
 

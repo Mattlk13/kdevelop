@@ -25,9 +25,15 @@
 #include <QTest>
 #include <QTemporaryFile>
 
+#include <type_traits>
+#include <utility>
+
 QTEST_MAIN(TestQuickOpen)
 
 using namespace KDevelop;
+
+static_assert(std::is_nothrow_move_assignable<ProjectFile>(), "Why would a move assignment operator throw?");
+static_assert(std::is_nothrow_move_constructible<ProjectFile>(), "Why would a move constructor throw?");
 
 using ItemList = QVector<DUChainItem>;
 using StringList = QVector<QString>;
@@ -36,6 +42,7 @@ using StringList = QVector<QString>;
 TestQuickOpen::TestQuickOpen(QObject* parent)
     : QuickOpenTestBase(Core::Default, parent)
 {
+    QStandardPaths::setTestModeEnabled(true);
 }
 
 void TestQuickOpen::testDuchainFilter()
@@ -97,8 +104,12 @@ void TestQuickOpen::testAbbreviations()
     QFETCH(StringList, filtered);
 
     PathTestFilter filterItems;
-    filterItems.setItems(items);
+    filterItems.setItems(std::move(items));
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    filterItems.setFilter(filter.split('/', Qt::SkipEmptyParts));
+#else
     filterItems.setFilter(filter.split('/', QString::SkipEmptyParts));
+#endif
     QCOMPARE(filterItems.filteredItems(), filtered);
 }
 
@@ -125,9 +136,13 @@ void TestQuickOpen::testSorting()
     QFETCH(QString, filter);
     QFETCH(StringList, filtered);
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto filterList = filter.split('/', Qt::SkipEmptyParts);
+#else
     const auto filterList = filter.split('/', QString::SkipEmptyParts);
+#endif
     PathTestFilter filterItems;
-    filterItems.setItems(items);
+    filterItems.setItems(std::move(items));
     filterItems.setFilter(filterList);
     QEXPECT_FAIL("bar7", "empty parts are skipped", Abort);
     if (filterItems.filteredItems() != filtered)
@@ -303,7 +318,7 @@ void TestQuickOpen::testStableSort()
 void TestQuickOpen::testProjectFileFilter()
 {
     QTemporaryDir dir;
-    TestProject* project = new TestProject(Path(dir.path()));
+    auto* project = new TestProject(Path(dir.path()));
     auto* foo = createChild<ProjectFolderItem>(project->projectItem(), QStringLiteral("foo"));
     createChild<ProjectFileItem>(foo, QStringLiteral("bar"));
     createChild<ProjectFileItem>(foo, QStringLiteral("asdf"));
@@ -314,7 +329,7 @@ void TestQuickOpen::testProjectFileFilter()
     QTemporaryFile tmpFile;
     tmpFile.setFileName(dir.path() + "/aaaa");
     QVERIFY(tmpFile.open());
-    ProjectFileItem* aaaa = new ProjectFileItem(QStringLiteral("aaaa"), project->projectItem());
+    auto* aaaa = new ProjectFileItem(QStringLiteral("aaaa"), project->projectItem());
     QCOMPARE(project->fileSet().size(), 5);
 
     ProjectFileDataProvider provider;

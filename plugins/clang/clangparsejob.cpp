@@ -96,7 +96,11 @@ Path::List readPathListFile(const QString& filepath)
     }
 
     const QString text = QString::fromLocal8Bit(f.readAll());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const QStringList lines = text.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
     const QStringList lines = text.split(QLatin1Char('\n'), QString::SkipEmptyParts);
+#endif
     Path::List paths;
     paths.reserve(lines.length());
     for (const auto& line : lines) {
@@ -123,7 +127,7 @@ ProjectFileItem* findProjectFileItem(const IndexedString& url, bool* hasBuildSys
     *hasBuildSystemInfo = false;
     const auto& projects = ICore::self()->projectController()->projects();
     for (auto project : projects) {
-        auto files = project->filesForPath(url);
+        const auto files = project->filesForPath(url);
         if (files.isEmpty()) {
             continue;
         }
@@ -150,7 +154,7 @@ ProjectFileItem* findProjectFileItem(const IndexedString& url, bool* hasBuildSys
     return file;
 }
 
-ClangParsingEnvironmentFile* parsingEnvironmentFile(const TopDUContext* context)
+[[maybe_unused]] ClangParsingEnvironmentFile* parsingEnvironmentFile(const TopDUContext* context)
 {
     return dynamic_cast<ClangParsingEnvironmentFile*>(context->parsingEnvironmentFile().data());
 }
@@ -164,6 +168,7 @@ DocumentChangeTracker* trackerForUrl(const IndexedString& url)
 
 ClangParseJob::ClangParseJob(const IndexedString& url, ILanguageSupport* languageSupport)
     : ParseJob(url, languageSupport)
+    , m_options(ParseSessionData::NoOption)
 {
     const auto tuUrl = clang()->index()->translationUnitForUrl(url);
     bool hasBuildSystemInfo;
@@ -194,6 +199,9 @@ ClangParseJob::ClangParseJob(const IndexedString& url, ILanguageSupport* languag
     projectPaths.reserve(projects.size());
     for (auto project : projects) {
         projectPaths.append(project->path());
+        if (auto* bsm = project->buildSystemManager()) {
+            projectPaths.append(bsm->buildDirectory(project->projectItem()));
+        }
     }
     m_environment.setProjectPaths(projectPaths);
 
@@ -214,6 +222,9 @@ ClangParseJob::ClangParseJob(const IndexedString& url, ILanguageSupport* languag
 
     if (auto tracker = trackerForUrl(url)) {
         tracker->reset();
+        m_options |= ParseSessionData::OpenedInEditor;
+    } else if (tuUrl != url && trackerForUrl(tuUrl)) {
+        m_options |= ParseSessionData::OpenedInEditor;
     }
 }
 
@@ -254,7 +265,7 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
     //       it is very hard to check this for all included files of this TU, and previously lead to problems
     //       when we tried to skip function bodies as an optimization for files that where not open in the editor.
     //       now, we always build everything, which is correct but a tad bit slower. we can try to optimize later.
-    setMinimumFeatures(static_cast<TopDUContext::Features>(minimumFeatures() | TopDUContext::AllDeclarationsContextsAndUses));
+    setMinimumFeatures(minimumFeatures() | TopDUContext::AllDeclarationsContextsAndUses);
 
     if (minimumFeatures() & AttachASTWithoutUpdating) {
         // The context doesn't need to be updated, but has no AST attached (restored from disk),
@@ -325,9 +336,9 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
         return;
     }
 
-    auto context = ClangHelpers::buildDUChain(session.mainFile(), imports, session,
-                                              minimumFeatures(), includedFiles,
-                                              clang()->index(), [this] { return abortRequested(); });
+    auto context = ClangHelpers::buildDUChain(session.mainFile(), imports, session, minimumFeatures(), includedFiles,
+                                              m_unsavedRevisions, document(), clang()->index(),
+                                              [this] { return abortRequested(); });
     setDuChain(context);
 
     if (abortRequested()) {
@@ -344,7 +355,7 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
         auto file = parsingEnvironmentFile(context);
         Q_ASSERT(file);
         // verify that features and environment where properly set in ClangHelpers::buildDUChain
-        Q_ASSERT(file->featuresSatisfied(TopDUContext::Features(minimumFeatures() & ~TopDUContext::ForceUpdateRecursive)));
+        Q_ASSERT(file->featuresSatisfied(minimumFeatures() & ~TopDUContext::ForceUpdateRecursive));
         if (trackerForUrl(context->url())) {
             Q_ASSERT(file->featuresSatisfied(TopDUContext::AllDeclarationsContextsAndUses));
         }
@@ -354,16 +365,6 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
     for (const auto& context : qAsConst(includedFiles)) {
         if (!context) {
             continue;
-        }
-        {
-            // prefer the editor modification revision, instead of the on-disk revision
-            auto it = m_unsavedRevisions.find(context->url());
-            if (it != m_unsavedRevisions.end()) {
-                DUChainWriteLocker lock;
-                auto file = parsingEnvironmentFile(context);
-                Q_ASSERT(file);
-                file->setModificationRevision(it.value());
-            }
         }
         if (trackerForUrl(context->url())) {
             if (clang()->index()->translationUnitForUrl(context->url()) == m_environment.translationUnitUrl()) {
@@ -383,7 +384,7 @@ void ClangParseJob::run(ThreadWeaver::JobPointer /*self*/, ThreadWeaver::Thread*
 
 ParseSessionData::Ptr ClangParseJob::createSessionData() const
 {
-    return ParseSessionData::Ptr(new ParseSessionData(m_unsavedFiles, clang()->index(), m_environment, ParseSessionData::NoOption));
+    return ParseSessionData::Ptr(new ParseSessionData(m_unsavedFiles, clang()->index(), m_environment, m_options));
 }
 
 const ParsingEnvironment* ClangParseJob::environment() const

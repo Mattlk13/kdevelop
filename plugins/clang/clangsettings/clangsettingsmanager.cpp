@@ -107,13 +107,17 @@ ClangSettingsManager::ClangSettingsManager()
 
 bool ParserSettings::isCpp() const
 {
-    return parserOptions.contains(QStringLiteral("-std=c++")) || parserOptions.contains(QStringLiteral("-std=gnu++"));
+    return parserOptions.contains(QLatin1String("-std=c++")) || parserOptions.contains(QLatin1String("-std=gnu++"));
 }
 
 QVector<QByteArray> ParserSettings::toClangAPI() const
 {
     // TODO: This is not efficient.
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto list = parserOptions.splitRef(QLatin1Char(' '), Qt::SkipEmptyParts);
+#else
     auto list = parserOptions.splitRef(QLatin1Char(' '), QString::SkipEmptyParts);
+#endif
     QVector<QByteArray> result;
     result.reserve(list.size());
 

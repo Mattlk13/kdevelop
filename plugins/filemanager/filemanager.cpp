@@ -31,10 +31,10 @@
 #include <KFilePlacesModel>
 #include <KParts/MainWindow>
 #include <KActionCollection>
-#include <KMessageBox>
 #include <KActionMenu>
 #include <KJobWidgets>
 #include <KConfigGroup>
+#include <kwidgetsaddons_version.h>
 
 #include <interfaces/icore.h>
 #include <interfaces/isession.h>
@@ -43,6 +43,7 @@
 #include <interfaces/idocumentcontroller.h>
 #include <interfaces/context.h>
 #include <interfaces/contextmenuextension.h>
+#include <sublime/message.h>
 
 #include "../openwith/iopenwith.h"
 
@@ -55,12 +56,12 @@ FileManager::FileManager(KDevFileManagerPlugin *plugin, QWidget* parent)
 {
     setObjectName(QStringLiteral("FileManager"));
     setWindowIcon(QIcon::fromTheme(QStringLiteral("folder-sync"), windowIcon()));
-    setWindowTitle(i18n("File System"));
+    setWindowTitle(i18nc("@title:window", "File System"));
 
     KConfigGroup cg = KDevelop::ICore::self()->activeSession()->config()->group( "Filesystem" );
 
     auto *l = new QVBoxLayout(this);
-    l->setMargin(0);
+    l->setContentsMargins(0, 0, 0, 0);
     l->setSpacing(0);
     auto* model = new KFilePlacesModel( this );
     urlnav = new KUrlNavigator(model, QUrl(cg.readEntry( "LastLocation", QUrl::fromLocalFile( QDir::homePath() ) )), this );
@@ -135,14 +136,18 @@ void FileManager::updateNav( const QUrl& url )
 
 void FileManager::setupActions()
 {
-    KActionMenu *acmBookmarks = new KActionMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), i18n("Bookmarks"), this);
+    auto* acmBookmarks = new KActionMenu(QIcon::fromTheme(QStringLiteral("bookmarks")), i18nc("@title:menu", "Bookmarks"), this);
+#if KWIDGETSADDONS_VERSION >= QT_VERSION_CHECK(5, 77, 0)
+    acmBookmarks->setPopupMode(QToolButton::InstantPopup);
+#else
     acmBookmarks->setDelayed(false);
+#endif
     m_bookmarkHandler = new BookmarkHandler(this, acmBookmarks->menu());
     acmBookmarks->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 
     auto* action = new QAction(this);
     action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-    action->setText(i18n("Current Document Directory"));
+    action->setText(i18nc("@action switch to directory of current document", "Current Document Directory"));
     action->setIcon(QIcon::fromTheme(QStringLiteral("dirsync")));
     connect(action, &QAction::triggered, this, &FileManager::syncCurrentDocumentDirectory);
     auto* diropActionCollection = dirop->actionCollection();
@@ -159,14 +164,14 @@ void FileManager::setupActions()
     };
 
     newFileAction = new QAction(this);
-    newFileAction->setText(i18n("New File..."));
+    newFileAction->setText(i18nc("@action", "New File..."));
     newFileAction->setIcon(QIcon::fromTheme(QStringLiteral("document-new")));
     connect(newFileAction, &QAction::triggered, this, &FileManager::createNewFile);
 }
 
 void FileManager::createNewFile()
 {
-    QUrl destUrl = QFileDialog::getSaveFileUrl(KDevelop::ICore::self()->uiController()->activeMainWindow(), i18n("Create New File"));
+    QUrl destUrl = QFileDialog::getSaveFileUrl(KDevelop::ICore::self()->uiController()->activeMainWindow(), i18nc("@title:window", "Create New File"));
     if (destUrl.isEmpty()) {
         return;
     }
@@ -182,7 +187,9 @@ void FileManager::fileCreated(KJob* job)
     if (!transferJob->error()) {
         KDevelop::ICore::self()->documentController()->openDocument( transferJob->url() );
     } else {
-        KMessageBox::error(KDevelop::ICore::self()->uiController()->activeMainWindow(), i18n("Unable to create file '%1'", transferJob->url().toDisplayString(QUrl::PreferLocalFile)));
+        const QString messageText = i18n("Unable to create file '%1'", transferJob->url().toDisplayString(QUrl::PreferLocalFile));
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        KDevelop::ICore::self()->uiController()->postMessage(message);
     }
 }
 

@@ -62,7 +62,7 @@ bool isPathChar(QChar c)
 QString escapePath(QString path)
 {
     // see https://cmake.org/Wiki/CMake/Language_Syntax#Escapes
-    static const QString toBeEscaped = QStringLiteral("\"()#$^");
+    const QString toBeEscaped = QStringLiteral("\"()#$^");
 
     for(const QChar &ch : toBeEscaped) {
         path.replace(ch, QLatin1Char('\\') + ch);
@@ -208,11 +208,11 @@ QVariant CMakeCodeCompletionModel::data (const QModelIndex & index, int role) co
     {
         switch(type)
         {
-            case Command:   return i18n("Command");
-            case Variable:  return i18n("Variable");
-            case Macro:     return i18n("Macro");
-            case Path:      return i18n("Path");
-            case Target:      return i18n("Target");
+            case Command:   return i18nc("@item", "Command");
+            case Variable:  return i18nc("@item", "Variable");
+            case Macro:     return i18nc("@item", "Macro");
+            case Path:      return i18nc("@item", "Path");
+            case Target:    return i18nc("@item", "Target");
         }
     }
     else if(role==Qt::DecorationRole && index.column()==CodeCompletionModel::Icon)
@@ -266,7 +266,7 @@ QVariant CMakeCodeCompletionModel::data (const QModelIndex & index, int role) co
                     DelayedType::Ptr delay = t.cast<DelayedType>();
                     args.append(delay ? delay->identifier().toString() : i18n("wrong"));
                 }
-                return QString(QLatin1Char('(')+args.join(QStringLiteral(", "))+QLatin1Char(')'));
+                return QString(QLatin1Char('(') + args.join(QLatin1String(", ")) + QLatin1Char(')'));
             }
         }
         

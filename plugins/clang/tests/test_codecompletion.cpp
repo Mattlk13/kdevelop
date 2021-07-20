@@ -30,6 +30,7 @@
 #include <tests/testproject.h>
 
 #include "duchain/parsesession.h"
+#include "duchain/clanghelpers.h"
 #include "util/clangtypes.h"
 
 #include <interfaces/idocumentcontroller.h>
@@ -48,6 +49,9 @@
 #include <KTextEditor/View>
 
 #include <KConfigGroup>
+
+#include <QVersionNumber>
+#include <QStandardPaths>
 
 QTEST_MAIN(TestCodeCompletion)
 
@@ -147,6 +151,8 @@ void executeCompletionTest(const ReferencedTopDUContext& top, const CompletionIt
                            CustomTestFunction customTestFunction = {})
 {
     DUChainReadLocker lock;
+    QVERIFY(top);
+    QVERIFY(top->ast());
     const ParseSessionData::Ptr sessionData(dynamic_cast<ParseSessionData*>(top->ast().data()));
     QVERIFY(sessionData);
     lock.unlock();
@@ -176,6 +182,13 @@ void executeCompletionTest(const ReferencedTopDUContext& top, const CompletionIt
 #endif
     if (QTest::currentTestFunction() == QByteArrayLiteral("testImplementAfterEdit") && expectedCompletionItems.position.line() == 3) {
         QEXPECT_FAIL("", "TU is not properly updated after edit", Continue);
+    }
+    if (QTest::currentTestFunction() == QByteArrayLiteral("testClangCodeCompletion")) {
+        QEXPECT_FAIL("look-ahead pointer", "self-assignment isn't done anymore, so we don't find any suitable type anymore", Continue);
+
+        if (QVersionNumber::fromString(ClangHelpers::clangVersion()) >= QVersionNumber(9, 0, 0)) {
+            QEXPECT_FAIL("enum-case", "quite a lot of unrelated cruft is suggested, needs to be fixed upstream", Continue);
+        }
     }
     if (tester.names.size() != expectedCompletionItems.completions.size()) {
         qDebug() << "different results:\nactual:" << tester.names << "\nexpected:" << expectedCompletionItems.completions;
@@ -333,9 +346,8 @@ void TestCodeCompletion::testClangCodeCompletion_data()
     QTest::newRow("assignment")
         << "int foo = 5; \nint bar = "
         << CompletionItems{{1,9}, {
-            "bar",
             "foo",
-        }, {"bar","foo"}};
+        }, {"foo"}};
     QTest::newRow("dotmemberaccess")
         << "class Foo { public: void foo() {} bool operator=(Foo &&) }; int main() { Foo f; \nf. "
         << CompletionItems{{1, 2}, {
@@ -419,14 +431,14 @@ void TestCodeCompletion::testClangCodeCompletion_data()
     QTest::newRow("look-ahead int")
         << "struct LookAhead { int intItem;}; int main() {LookAhead* pInstance; LookAhead instance; int i =\n }"
         << CompletionItems{{1, 0}, {
-            "LookAhead", "i", "instance",
+            "LookAhead", "instance",
             "instance.intItem", "main",
             "pInstance", "pInstance->intItem",
         }};
     QTest::newRow("look-ahead class")
         << "class Class{}; struct LookAhead {Class classItem;}; int main() {LookAhead* pInstance; LookAhead instance; Class cl =\n }"
         << CompletionItems{{1, 0}, {
-            "Class", "LookAhead", "cl",
+            "Class", "LookAhead",
             "instance", "instance.classItem",
             "main", "pInstance", "pInstance->classItem",
         }};
@@ -453,7 +465,7 @@ void TestCodeCompletion::testClangCodeCompletion_data()
         << "typedef double DOUBLE; struct LookAhead {DOUBLE doubleItem;};"
            "int main() {LookAhead* pInstance; LookAhead instance; double i =\n "
         << CompletionItems{{1, 0}, {
-            "DOUBLE", "LookAhead", "i",
+            "DOUBLE", "LookAhead",
             "instance", "instance.doubleItem",
             "main", "pInstance", "pInstance->doubleItem",
         }};
@@ -461,7 +473,7 @@ void TestCodeCompletion::testClangCodeCompletion_data()
         << "struct LookAhead {int* pInt;};"
            "int main() {LookAhead* pInstance; LookAhead instance; int* i =\n "
         << CompletionItems{{1, 0}, {
-            "LookAhead", "i", "instance",
+            "LookAhead", "instance",
             "instance.pInt", "main",
             "pInstance", "pInstance->pInt",
         }};
@@ -469,7 +481,7 @@ void TestCodeCompletion::testClangCodeCompletion_data()
         << "template <typename T> struct LookAhead {int intItem;};"
            "int main() {LookAhead<int>* pInstance; LookAhead<int> instance; int i =\n "
         << CompletionItems{{1, 0}, {
-            "LookAhead", "i", "instance",
+            "LookAhead", "instance",
             "instance.intItem", "main",
             "pInstance", "pInstance->intItem",
         }};
@@ -477,7 +489,7 @@ void TestCodeCompletion::testClangCodeCompletion_data()
         << "template <typename T> struct LookAhead {T itemT;};"
            "int main() {LookAhead<int>* pInstance; LookAhead<int> instance; int i =\n "
         << CompletionItems{{1, 0}, {
-            "LookAhead", "i", "instance",
+            "LookAhead", "instance",
             "instance.itemT", "main",
             "pInstance", "pInstance->itemT",
         }};
@@ -487,7 +499,7 @@ void TestCodeCompletion::testClangCodeCompletion_data()
         << CompletionItems{{1, 0}, {
             "Class", "cl",
             "cl.publicInt",
-            "i", "main",
+            "main",
         }};
 
     QTest::newRow("look-ahead auto item")
@@ -495,7 +507,6 @@ void TestCodeCompletion::testClangCodeCompletion_data()
            "int main() {auto instance = LookAhead(); int i = \n "
         << CompletionItems{{1, 0}, {
             "LookAhead",
-            "i",
             "instance",
             "instance.intItem",
             "main"
@@ -876,6 +887,14 @@ void TestCodeCompletion::testImplement_data()
         << "class Foo { int bar() const; };"
         << CompletionItems{{3, 1}, {"Foo::bar() const"}};
 
+    QTest::newRow("noexcept")
+        << "class Foo { int bar() noexcept; };"
+        << CompletionItems{{3, 1}, {"Foo::bar() noexcept"}};
+
+    QTest::newRow("throw()")
+        << "class Foo { int bar() throw(); };"
+        << CompletionItems{{3, 1}, {"Foo::bar() throw()"}};
+
     QTest::newRow("multiple-methods")
         << "class Foo { int bar(); void foo(); char asdf() const; };"
         << CompletionItems{{1, 1}, {"Foo::asdf() const", "Foo::bar()", "Foo::foo()"}};
@@ -1176,12 +1195,12 @@ void TestCodeCompletion::testCompletionPriority_data()
 
     QTest::newRow("primary-types")
         << "class A{}; int main(){A a; int b; bool c = \n "
-        << CompletionPriorityItems{{1,0}, {{"a", 0, 34}, {"b", 8, 0}, {"c", 9, 0}}};
+        << CompletionPriorityItems{{1,0}, {{"a", 0, 34}, {"b", 8, 0}}};
 
     QTest::newRow("reference")
         << "class A{}; class B{}; class C : public B{};"
            "int main(){A tmp; A& a = tmp; C tmp2; C& c = tmp2; B& b =\n ;}"
-        << CompletionPriorityItems{{1,0}, {{"a", 0, 21}, {"b", 9, 0},
+        << CompletionPriorityItems{{1,0}, {{"a", 0, 21},
         {"c", 8, 0, QStringLiteral("Reference to derived class is not added to the Best Matches group")}}};
 
     QTest::newRow("typedef")
@@ -1196,7 +1215,7 @@ void TestCodeCompletion::testCompletionPriority_data()
     QTest::newRow("template")
         << "template <typename T> class Class{}; template <typename T> class Class2{};"
            "int main(){ Class<int> a; Class2<int> b =\n }"
-        << CompletionPriorityItems{{1,0}, {{"b", 9, 0}, {"a", 0, 21}}};
+        << CompletionPriorityItems{{1,0}, {{"a", 0, 21}}};
 
     QTest::newRow("protected-access")
         << "class Base { protected: int m_protected; };"
@@ -1227,7 +1246,7 @@ void TestCodeCompletion::testVariableScope()
     lock.lock();
     const auto tester = ClangCodeCompletionItemTester(context);
 
-    QCOMPARE(tester.items.size(), 4);
+    QCOMPARE(tester.items.size(), 3);
     auto item = tester.findItem(QStringLiteral("var"));
     VERIFY(item);
     QCOMPARE(item->declaration()->range().start, CursorInRevision(1, 14));

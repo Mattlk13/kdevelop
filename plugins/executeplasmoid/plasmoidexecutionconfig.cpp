@@ -42,8 +42,6 @@
 #include <QLineEdit>
 class la;
 
-Q_DECLARE_METATYPE(KDevelop::IProject*)
-
 QIcon PlasmoidExecutionConfig::icon() const
 {
     return QIcon::fromTheme(QStringLiteral("system-run"));
@@ -128,7 +126,7 @@ void PlasmoidExecutionConfig::loadFromConfiguration(const KConfigGroup& cfg, KDe
 
 QString PlasmoidExecutionConfig::title() const
 {
-    return i18n("Configure Plasmoid Execution");
+    return i18nc("@title:tab", "Configure Plasmoid Execution");
 }
 
 QList< KDevelop::LaunchConfigurationPageFactory* > PlasmoidLauncher::configPages() const
@@ -299,7 +297,7 @@ QMenu* PlasmoidExecutionConfigType::launcherSuggestions()
                 QString relUrl = p->path().relativePath(path);
                 auto* action = new QAction(relUrl, this);
                 action->setProperty("url", relUrl);
-                action->setProperty("project", qVariantFromValue<KDevelop::IProject*>(p));
+                action->setProperty("project", QVariant::fromValue<KDevelop::IProject*>(p));
                 connect(action, &QAction::triggered, this, &PlasmoidExecutionConfigType::suggestionTriggered);
                 found.append(action);
             }
@@ -308,7 +306,7 @@ QMenu* PlasmoidExecutionConfigType::launcherSuggestions()
 
     QMenu *m = nullptr;
     if(!found.isEmpty()) {
-        m = new QMenu(i18n("Plasmoids"));
+        m = new QMenu(i18nc("@title:menu", "Plasmoids"));
         m->addActions(found);
     }
     return m;

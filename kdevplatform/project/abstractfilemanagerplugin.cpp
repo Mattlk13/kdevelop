@@ -339,7 +339,7 @@ void AbstractFileManagerPluginPrivate::deleted(const QString& path_)
                                i18n("The base folder of project <b>%1</b>"
                                     " got deleted or moved outside of KDevelop.\n"
                                     "The project has to be closed.", p->name()),
-                               i18n("Project Folder Deleted") );
+                               i18nc("@title:window", "Project Folder Deleted") );
             ICore::self()->projectController()->closeProject(p);
             continue;
         }
@@ -484,7 +484,7 @@ ProjectFolderItem *AbstractFileManagerPlugin::import( IProject *project )
 
         // set up the signal handling
         // NOTE: We delay handling of the creation/deletion events here by one second to prevent
-        //       useless or even outright wrong handling of events during comming git workflows.
+        //       useless or even outright wrong handling of events during common git workflows.
         //       I.e. sometimes we used to get a 'delete' event during a rebase which was never
         //       followed up by a 'created' signal, even though the file actually exists after
         //       the rebase.

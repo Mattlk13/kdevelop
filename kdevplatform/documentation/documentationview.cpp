@@ -28,6 +28,7 @@
 #include <QAbstractItemView>
 #include <QLineEdit>
 #include <QShortcut>
+#include <QMouseEvent>
 
 #include <KLocalizedString>
 
@@ -37,6 +38,7 @@
 #include <interfaces/idocumentationcontroller.h>
 #include <interfaces/iplugincontroller.h>
 #include "documentationfindwidget.h"
+#include "standarddocumentationview.h"
 #include "debug.h"
 
 using namespace KDevelop;
@@ -48,7 +50,7 @@ DocumentationView::DocumentationView(QWidget* parent, ProvidersModel* model)
     setWindowTitle(i18n("Documentation"));
 
     setLayout(new QVBoxLayout(this));
-    layout()->setMargin(0);
+    layout()->setContentsMargins(0, 0, 0, 0);
     layout()->setSpacing(0);
 
     mFindDoc = new DocumentationFindWidget;
@@ -76,22 +78,23 @@ QList<QAction*> DocumentationView::contextMenuActions() const
 void DocumentationView::setupActions()
 {
     // use custom QAction's with createWidget for mProviders and mIdentifiers
-    mBack = new QAction(QIcon::fromTheme(QStringLiteral("go-previous")), i18n("Back"), this);
+    mBack = new QAction(QIcon::fromTheme(QStringLiteral("go-previous")), i18nc("@action go back", "Back"), this);
     mBack->setEnabled(false);
     connect(mBack, &QAction::triggered, this, &DocumentationView::browseBack);
     addAction(mBack);
 
-    mForward = new QAction(QIcon::fromTheme(QStringLiteral("go-next")), i18n("Forward"), this);
+    mForward = new QAction(QIcon::fromTheme(QStringLiteral("go-next")), i18nc("@action go forward", "Forward"), this);
     mForward->setEnabled(false);
     connect(mForward, &QAction::triggered, this, &DocumentationView::browseForward);
     addAction(mForward);
 
-    mHomeAction = new QAction(QIcon::fromTheme(QStringLiteral("go-home")), i18n("Home"), this);
+    mHomeAction = new QAction(QIcon::fromTheme(QStringLiteral("go-home")), i18nc("@action go to start page", "Home"), this);
     mHomeAction->setEnabled(false);
     connect(mHomeAction, &QAction::triggered, this, &DocumentationView::showHome);
     addAction(mHomeAction);
 
     mProviders = new QComboBox(this);
+    mProviders->setSizeAdjustPolicy(QComboBox::AdjustToContents);
     auto providersAction = new QWidgetAction(this);
     providersAction->setDefaultWidget(mProviders);
     addAction(providersAction);
@@ -99,7 +102,7 @@ void DocumentationView::setupActions()
     mIdentifiers = new QLineEdit(this);
     mIdentifiers->setEnabled(false);
     mIdentifiers->setClearButtonEnabled(true);
-    mIdentifiers->setPlaceholderText(i18n("Search..."));
+    mIdentifiers->setPlaceholderText(i18nc("@info:placeholder", "Search..."));
     mIdentifiers->setCompleter(new QCompleter(mIdentifiers));
 //     mIdentifiers->completer()->setCompletionMode(QCompleter::UnfilteredPopupCompletion);
     mIdentifiers->completer()->setCaseSensitivity(Qt::CaseInsensitive);
@@ -117,8 +120,8 @@ void DocumentationView::setupActions()
     mSeparatorBeforeFind->setSeparator(true);
     addAction(mSeparatorBeforeFind);
 
-    mFind = new QAction(QIcon::fromTheme(QStringLiteral("edit-find")), i18n("Find in Text..."), this);
-    mFind->setToolTip(i18n("Find in text of current documentation page."));
+    mFind = new QAction(QIcon::fromTheme(QStringLiteral("edit-find")), i18nc("@action", "Find in Text..."), this);
+    mFind->setToolTip(i18nc("@info:tooltip", "Find in text of current documentation page"));
     mFind->setEnabled(false);
     connect(mFind, &QAction::triggered, mFindDoc, &DocumentationFindWidget::startSearch);
     addAction(mFind);
@@ -140,6 +143,18 @@ void DocumentationView::initialize()
     if (hasProviders) {
         changedProvider(0);
     }
+}
+
+void DocumentationView::tryBrowseForward()
+{
+    if (mForward->isEnabled())
+        browseForward();
+}
+
+void DocumentationView::tryBrowseBack()
+{
+    if (mBack->isEnabled())
+        browseBack();
 }
 
 void DocumentationView::browseBack()
@@ -272,6 +287,11 @@ void DocumentationView::updateView()
         w = (*mCurrent)->documentationWidget(mFindDoc, this);
         Q_ASSERT(w);
         QWidget::setTabOrder(mIdentifiers, w);
+
+        if (auto* const standardView = qobject_cast<StandardDocumentationView*>(w)) {
+            connect(standardView, &StandardDocumentationView::browseForward, this, &DocumentationView::tryBrowseForward);
+            connect(standardView, &StandardDocumentationView::browseBack, this, &DocumentationView::tryBrowseBack);
+        }
     } else {
         // placeholder widget at location of doc view
         w = new QWidget(this);
@@ -293,6 +313,23 @@ void DocumentationView::changedProvider(int row)
     mIdentifiers->clear();
 
     showHome();
+}
+
+void DocumentationView::mousePressEvent(QMouseEvent* event)
+{
+    switch (event->button()) {
+    case Qt::MouseButton::ForwardButton:
+        tryBrowseForward();
+        event->accept();
+        break;
+    case Qt::MouseButton::BackButton:
+        tryBrowseBack();
+        event->accept();
+        break;
+    default:
+        QWidget::mousePressEvent(event);
+        break;
+    }
 }
 
 ////////////// ProvidersModel //////////////////

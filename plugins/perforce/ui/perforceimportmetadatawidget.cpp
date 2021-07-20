@@ -165,7 +165,11 @@ bool PerforceImportMetadataWidget::validateP4user(const QString&  projectDir) co
         return false;
     }
     if(!processStdout.isEmpty()) {
-        QStringList clientCmdOutput = processStdout.split(QLatin1Char('\n'),QString::SkipEmptyParts);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        const QStringList clientCmdOutput = processStdout.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+#else
+        const QStringList clientCmdOutput = processStdout.split(QLatin1Char('\n'),QString::SkipEmptyParts);
+#endif
         QStringList clientItems;
         clientItems.reserve(clientCmdOutput.size());
         for(QString const& clientLine : clientCmdOutput) {
@@ -186,8 +190,9 @@ bool PerforceImportMetadataWidget::validateP4port(const QString&  projectDir) co
     QTextStream out(stdout);
     const auto& env = p4execEnvironment.toStringList();
     for (const QString& x : env) {
-        out << x << endl;
+        out << x << QLatin1Char('\n');
     }
+    out.flush();
 
     exec.setWorkingDirectory(projectDir);
     exec.setProcessEnvironment(p4execEnvironment);

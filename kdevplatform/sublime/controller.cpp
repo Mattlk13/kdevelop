@@ -22,7 +22,7 @@
 #include <QList>
 #include <QEvent>
 #include <QMouseEvent>
-#include <QApplication>
+#include <QCoreApplication>
 
 #include <KSharedConfig>
 
@@ -105,7 +105,7 @@ Controller::Controller(QObject *parent)
 void Controller::init()
 {
     loadSettings();
-    qApp->installEventFilter(this);
+    QCoreApplication::instance()->installEventFilter(this);
 }
 
 Controller::~Controller()
@@ -364,7 +364,7 @@ bool Controller::eventFilter(QObject *obj, QEvent *ev)
     if (ev->type() == QEvent::MouseButtonPress || ev->type() == QEvent::MouseButtonDblClick)
     {
         auto* mev = static_cast<QMouseEvent*>(ev);
-        int activationButtonMask = Qt::LeftButton | Qt::MidButton | Qt::RightButton;
+        int activationButtonMask = Qt::LeftButton | Qt::MiddleButton | Qt::RightButton;
         if ((mev->button() & activationButtonMask) == 0)
             return false;
     }
@@ -431,11 +431,6 @@ void Controller::notifyViewRemoved(Sublime::AreaIndex*, Sublime::View *view)
 void Controller::notifyViewAdded(Sublime::AreaIndex*, Sublime::View *view)
 {
     emit viewAdded(view);
-}
-
-void Controller::setStatusIcon(Document * document, const QIcon & icon)
-{
-    document->setStatusIcon(icon);
 }
 
 void Controller::loadSettings()

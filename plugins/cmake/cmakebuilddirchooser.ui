@@ -29,7 +29,7 @@
    <item row="0" column="0">
     <widget class="QLabel" name="availableLabel">
      <property name="text">
-      <string>Available build directories:</string>
+      <string comment="@label:listbox">Available build directories:</string>
      </property>
     </widget>
    </item>
@@ -37,7 +37,7 @@
     <widget class="QComboBox" name="availableBuildDirs">
      <item>
       <property name="text">
-       <string>New build directory</string>
+       <string comment="@item:inlistbox">New build directory</string>
       </property>
      </item>
     </widget>
@@ -45,7 +45,7 @@
    <item row="2" column="0">
     <widget class="QLabel" name="label_3">
      <property name="text">
-      <string>Build &amp;directory:</string>
+      <string comment="@label:chooser">Build &amp;directory:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -65,10 +65,23 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="0">
+   <item row="3" column="1">
+    <widget class="KMessageWidget" name="status">
+     <property name="closeButtonVisible">
+      <bool>false</bool>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
     <widget class="QLabel" name="label">
      <property name="text">
-      <string>&amp;Installation prefix:</string>
+      <string comment="@label:chooser">&amp;Installation prefix:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -78,7 +91,7 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="1">
+   <item row="4" column="1">
     <widget class="KUrlRequester" name="installPrefix">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -93,17 +106,17 @@
       </size>
      </property>
      <property name="toolTip">
-      <string>The prefix under which the project will be installed. Leaving this empty will let CMake use its default install prefix.</string>
+      <string comment="@info:tooltip">The prefix under which the project will be installed. Leaving this empty will let CMake use its default install prefix.</string>
      </property>
      <property name="placeholderText">
-      <string>CMake's default install prefix</string>
+      <string comment="@info:placeholder">CMake's default install prefix</string>
      </property>
     </widget>
    </item>
-   <item row="4" column="0">
+   <item row="5" column="0">
     <widget class="QLabel" name="label_2">
      <property name="text">
-      <string>Build &amp;type:</string>
+      <string comment="@label:listbox">Build &amp;type:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -113,7 +126,7 @@
      </property>
     </widget>
    </item>
-   <item row="4" column="1">
+   <item row="5" column="1">
     <widget class="QComboBox" name="buildType">
      <property name="editable">
       <bool>true</bool>
@@ -143,14 +156,14 @@
      </item>
     </widget>
    </item>
-   <item row="5" column="0">
+   <item row="6" column="0">
     <widget class="QLabel" name="label_4">
      <property name="text">
-      <string>Extra arguments:</string>
+      <string comment="@label:listbox">Extra arguments:</string>
      </property>
     </widget>
    </item>
-   <item row="5" column="1">
+   <item row="6" column="1">
     <widget class="KComboBox" name="extraArguments">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -163,10 +176,10 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
+   <item row="7" column="0">
     <widget class="QLabel" name="label_5">
      <property name="text">
-      <string>CMake &amp;executable:</string>
+      <string comment="@label:chooser">CMake &amp;executable:</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
@@ -176,7 +189,7 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="1">
+   <item row="7" column="1">
     <widget class="KUrlRequester" name="cmakeExecutable">
      <property name="sizePolicy">
       <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -186,28 +199,23 @@
      </property>
     </widget>
    </item>
-   <item row="7" column="0" colspan="2">
-    <widget class="QLabel" name="status">
-     <property name="text">
-      <string notr="true">Status Message...</string>
-     </property>
-     <property name="wordWrap">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
   </layout>
  </widget>
  <customwidgets>
   <customwidget>
    <class>KComboBox</class>
    <extends>QComboBox</extends>
-   <header>kcombobox.h</header>
+   <header>KComboBox</header>
   </customwidget>
   <customwidget>
    <class>KUrlRequester</class>
    <extends>QWidget</extends>
-   <header>kurlrequester.h</header>
+   <header>KUrlRequester</header>
+  </customwidget>
+  <customwidget>
+   <class>KMessageWidget</class>
+   <extends>QFrame</extends>
+   <header>KMessageWidget</header>
   </customwidget>
  </customwidgets>
  <resources/>

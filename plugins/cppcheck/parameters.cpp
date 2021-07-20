@@ -66,7 +66,7 @@ QList<KDevelop::Path> includesForProject(KDevelop::IProject* project)
     QSet<KDevelop::Path> includesSet;
     includesForItem(project->projectItem(), includesSet);
 
-    return includesSet.toList();
+    return includesSet.values();
 }
 
 Parameters::Parameters(KDevelop::IProject* project)
@@ -199,7 +199,7 @@ QStringList Parameters::commandLine(QString& infoMessage) const
                     auto match = mocHeaderRegex.match(QString::fromUtf8(qtHeader.readLine()));
                     if (match.hasMatch()) {
                         mocDefineFound = true;
-                        result << QStringLiteral("-DQ_MOC_OUTPUT_REVISION=") + match.captured(1);
+                        result << QLatin1String("-DQ_MOC_OUTPUT_REVISION=") + match.capturedRef(1);
                         break;
                     }
                 }
@@ -242,9 +242,9 @@ QStringList Parameters::commandLine(QString& infoMessage) const
     }
 
     if (m_project && m_project->managerPlugin()) {
-        if (m_project->managerPlugin()->componentName() == QStringLiteral("kdevcmakemanager")) {
+        if (m_project->managerPlugin()->componentName() == QLatin1String("kdevcmakemanager")) {
             result << QStringLiteral("-i")
-                   << m_projectBuildPath.toLocalFile() + QStringLiteral("/CMakeFiles");
+                   << m_projectBuildPath.toLocalFile() + QLatin1String("/CMakeFiles");
         }
     }
 

@@ -20,6 +20,8 @@ Boston, MA 02110-1301, USA.
 #include "executecompositejob.h"
 #include "debug.h"
 
+#include <kcoreaddons_version.h>
+
 namespace KDevelop {
 class ExecuteCompositeJobPrivate
 {
@@ -82,7 +84,12 @@ bool ExecuteCompositeJob::addSubjob(KJob* job)
 
     ++d->m_jobCount;
 
-    connect(job, SIGNAL(percent(KJob*,ulong)), this, SLOT(slotPercent(KJob*,ulong)));
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 80, 0)
+    connect(job, QOverload<KJob*, unsigned long>::of(&KJob::percent),
+#else
+    connect(job, &KJob::percentChanged,
+#endif
+            this, &ExecuteCompositeJob::slotPercent);
     return true;
 }
 
@@ -105,7 +112,12 @@ void ExecuteCompositeJob::slotResult(KJob* job)
 {
     Q_D(ExecuteCompositeJob);
 
-    disconnect(job, SIGNAL(percent(KJob*,ulong)), this, SLOT(slotPercent(KJob*,ulong)));
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 80, 0)
+    disconnect(job, QOverload<KJob*, unsigned long>::of(&KJob::percent),
+#else
+    disconnect(job, &KJob::percentChanged,
+#endif
+               this, &ExecuteCompositeJob::slotPercent);
 
     // jobIndex + 1 because this job just finished
     const float ratio = d->m_jobIndex != -1 ? (d->m_jobIndex + 1.0) / d->m_jobCount : 1.0;

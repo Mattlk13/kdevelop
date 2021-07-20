@@ -204,12 +204,12 @@ bool ParseJob::hasStaticMinimumFeatures()
 TopDUContext::Features ParseJob::staticMinimumFeatures(const IndexedString& url)
 {
     QMutexLocker lock(&minimumFeaturesMutex);
-    auto features = ( TopDUContext::Features )0;
+    TopDUContext::Features features{};
 
     const auto featuresIt = ::staticMinimumFeatures.constFind(url);
     if (featuresIt != ::staticMinimumFeatures.constEnd())
         for (const TopDUContext::Features f : *featuresIt)
-            features = ( TopDUContext::Features )(features | f);
+            features |= f;
 
     return features;
 }
@@ -218,7 +218,7 @@ TopDUContext::Features ParseJob::minimumFeatures() const
 {
     Q_D(const ParseJob);
 
-    return ( TopDUContext::Features )(d->features | staticMinimumFeatures(d->url));
+    return d->features | staticMinimumFeatures(d->url);
 }
 
 void ParseJob::setDuChain(const ReferencedTopDUContext& duChain)
@@ -238,8 +238,11 @@ ReferencedTopDUContext ParseJob::duChain() const
 bool ParseJob::abortRequested() const
 {
     Q_D(const ParseJob);
-
-    return d->abortRequested.load();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    return d->abortRequested.loadRelaxed() != 0;
+#else
+    return d->abortRequested.load() != 0;
+#endif
 }
 
 void ParseJob::requestAbort()
@@ -492,11 +495,11 @@ void ParseJob::translateDUChainToRevision(TopDUContext* context)
         MovingRangeTranslator translator(sourceRevision, targetRevision, moving);
         context->visit(translator);
 
-        QList<ProblemPointer> problems = context->problems();
-        for (QList<ProblemPointer>::iterator problem = problems.begin(); problem != problems.end(); ++problem) {
-            RangeInRevision r = (*problem)->range();
+        const QList<ProblemPointer> problems = context->problems();
+        for (auto& problem : problems) {
+            RangeInRevision r = problem->range();
             translator.translateRange(r);
-            (*problem)->setRange(r);
+            problem->setRange(r);
         }
 
         // Update the modification revision in the meta-data

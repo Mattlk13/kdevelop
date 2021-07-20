@@ -20,7 +20,6 @@
 #include "language/duchain/identifier.h"
 
 #include <KLocalizedString>
-#include <kwidgetsaddons_version.h>
 
 #include "ui_newclass.h"
 
@@ -41,21 +40,12 @@ ClassIdentifierPage::ClassIdentifierPage(QWidget* parent)
 {
     d->classid = new Ui::NewClassDialog;
     d->classid->setupUi(this);
-    d->classid->identifierLineEdit->setPlaceholderText(i18n("Class name, including any namespaces"));
-    d->classid->keditlistwidget->lineEdit()->setPlaceholderText(i18n("Inheritance type and base class name"));
+    d->classid->identifierLineEdit->setPlaceholderText(i18nc("@info:placeholder", "Class name, including any namespaces"));
+    d->classid->keditlistwidget->lineEdit()->setPlaceholderText(i18nc("@info:placeholder", "Inheritance type and base class name"));
 
     d->classid->inheritanceLabel->setBuddy(d->classid->keditlistwidget->lineEdit());
 
     connect(d->classid->identifierLineEdit, &QLineEdit::textChanged, this, &ClassIdentifierPage::checkIdentifier);
-
-#if KWIDGETSADDONS_VERSION < QT_VERSION_CHECK(5,32,0)
-    // workaround for KEditListWidget bug:
-    // ensure keyboard focus is returned to edit line
-    connect(d->classid->keditlistwidget, &KEditListWidget::added,
-            d->classid->keditlistwidget->lineEdit(), QOverload<>::of(&QWidget::setFocus));
-    connect(d->classid->keditlistwidget, &KEditListWidget::removed,
-            d->classid->keditlistwidget->lineEdit(), QOverload<>::of(&QWidget::setFocus));
-#endif
 }
 
 ClassIdentifierPage::~ClassIdentifierPage()

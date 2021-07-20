@@ -100,7 +100,10 @@ public:
         return new DocumentationView(parent, m_providersModel.data());
     }
 
-    Qt::DockWidgetArea defaultPosition() override { return Qt::RightDockWidgetArea; }
+    Qt::DockWidgetArea defaultPosition() const override
+    {
+        return Qt::RightDockWidgetArea;
+    }
     QString id() const override { return QStringLiteral("org.kdevelop.DocumentationView"); }
     QList<QAction*> contextMenuActions(QWidget* viewWidget) const override
     {
@@ -117,14 +120,14 @@ DocumentationController::DocumentationController(Core* core)
     : m_factory(new DocumentationViewFactory)
 {
     m_showDocumentation = core->uiController()->activeMainWindow()->actionCollection()->addAction(QStringLiteral("showDocumentation"));
-    m_showDocumentation->setText(i18n("Show Documentation"));
+    m_showDocumentation->setText(i18nc("@action", "Show Documentation"));
     m_showDocumentation->setIcon(QIcon::fromTheme(QStringLiteral("documentation")));
     connect(m_showDocumentation, &QAction::triggered, this, &DocumentationController::doShowDocumentation);
 
     // registering the tool view here so it registered before the areas are restored
     // and thus also gets treated like the ones registered from plugins
     // cmp. comment about tool views in CorePrivate::initialize
-    core->uiController()->addToolView(i18n("Documentation"), m_factory);
+    core->uiController()->addToolView(i18nc("@title:window", "Documentation"), m_factory);
 }
 
 DocumentationController::~DocumentationController()
@@ -191,6 +194,17 @@ IDocumentation::Ptr DocumentationController::documentationForDeclaration(Declara
     return {};
 }
 
+IDocumentation::Ptr DocumentationController::documentation(const QUrl& url) const
+{
+    const auto providers = this->documentationProviders();
+    for (const IDocumentationProvider* provider : providers) {
+        IDocumentation::Ptr doc = provider->documentation(url);
+        if (doc) {
+            return doc;
+        }
+    }
+    return {};
+}
 
 QList< IDocumentationProvider* > DocumentationController::documentationProviders() const
 {
@@ -221,7 +235,8 @@ QList< IDocumentationProvider* > DocumentationController::documentationProviders
 
 void KDevelop::DocumentationController::showDocumentation(const IDocumentation::Ptr& doc)
 {
-    QWidget* w = ICore::self()->uiController()->findToolView(i18n("Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
+    Q_ASSERT_X(doc, Q_FUNC_INFO, "Null documentation pointer is unsupported.");
+    QWidget* w = ICore::self()->uiController()->findToolView(i18nc("@title:window", "Documentation"), m_factory, KDevelop::IUiController::CreateAndRaise);
     if(!w) {
         qCWarning(SHELL) << "Could not add documentation tool view";
         return;

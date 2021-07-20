@@ -28,33 +28,27 @@
      <item>
       <widget class="QPushButton" name="newButton">
        <property name="toolTip">
-        <string>Creates new branch based on the selected branch</string>
+        <string comment="@info:tooltip">Creates new branch based on the selected branch</string>
        </property>
        <property name="text">
-        <string>New</string>
-       </property>
-       <property name="icon">
-        <iconset theme="list-add"/>
+        <string comment="@action:button new branch">New</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="deleteButton">
        <property name="toolTip">
-        <string>The same as git branch -D</string>
+        <string comment="@info:tooltip">The same as git branch -D</string>
        </property>
        <property name="text">
-        <string>Delete</string>
-       </property>
-       <property name="icon">
-        <iconset theme="edit-delete"/>
+        <string comment="@action:button">Delete</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="renameButton">
        <property name="text">
-        <string>Rename</string>
+        <string comment="@action:button">Rename</string>
        </property>
        <property name="icon">
         <iconset theme="edit-rename"/>
@@ -80,13 +74,10 @@
      <item>
       <widget class="QPushButton" name="diffButton">
        <property name="toolTip">
-        <string>&lt;p&gt;Show changes between the current branch (or staging area, if not empty) and the last commit on the selected branch.&lt;/p&gt;</string>
+        <string comment="@info:tooltip">&lt;p&gt;Show changes between the current branch (or staging area, if not empty) and the last commit on the selected branch.&lt;/p&gt;</string>
        </property>
        <property name="text">
-        <string>Compare to Branch</string>
-       </property>
-       <property name="icon">
-        <iconset theme="text-x-patch"/>
+        <string comment="@action:button">Compare to Branch</string>
        </property>
       </widget>
      </item>
@@ -109,10 +100,10 @@
      <item>
       <widget class="QPushButton" name="checkoutButton">
        <property name="toolTip">
-        <string>Checkout to the selected branch</string>
+        <string comment="@info:tooltip">Checkout to the selected branch</string>
        </property>
        <property name="text">
-        <string>Checkout</string>
+        <string comment="@action:button checkout a version">Checkout</string>
        </property>
        <property name="icon">
         <iconset theme="dialog-ok-apply"/>
@@ -122,10 +113,7 @@
      <item>
       <widget class="QPushButton" name="mergeButton">
        <property name="text">
-        <string>Merge</string>
-       </property>
-       <property name="icon">
-        <iconset theme="merge"/>
+        <string comment="@action:button merge a branch">Merge</string>
        </property>
       </widget>
      </item>
@@ -152,7 +140,7 @@
         <string/>
        </property>
        <property name="placeholderText">
-        <string>Search...</string>
+        <string comment="@info:placeholder">Search...</string>
        </property>
       </widget>
      </item>

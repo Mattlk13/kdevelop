@@ -38,7 +38,9 @@
 
 #include <interfaces/icore.h>
 #include <interfaces/ilanguagecontroller.h>
+#include <interfaces/iuicontroller.h>
 #include <language/backgroundparser/backgroundparser.h>
+#include <sublime/message.h>
 
 #include "duchain/clanghelpers.h"
 #include "duchain/documentfinderhelpers.h"
@@ -94,7 +96,7 @@ void ClangRefactoring::fillContextMenu(ContextMenuExtension& extension, Context*
         return;
     }
 
-    auto action = new QAction(i18n("Rename %1", declaration->qualifiedIdentifier().toString()), parent);
+    auto action = new QAction(i18nc("@action", "Rename %1", declaration->qualifiedIdentifier().toString()), parent);
     action->setData(QVariant::fromValue(IndexedDeclaration(declaration)));
     action->setIcon(QIcon::fromTheme(QStringLiteral("edit-rename")));
     connect(action, &QAction::triggered, this, &ClangRefactoring::executeRenameAction);
@@ -122,7 +124,7 @@ bool ClangRefactoring::validCandidateToMoveIntoSource(Declaration* decl)
         return false;
     }
 
-    if (dynamic_cast<FunctionDefinition*>(decl)) {
+    if (!decl->isDefinition()) {
         return false;
     }
 
@@ -252,7 +254,8 @@ void ClangRefactoring::executeMoveIntoSourceAction()
 
     const auto error = moveIntoSource(iDecl);
     if (!error.isEmpty()) {
-        KMessageBox::error(nullptr, error);
+        auto* message = new Sublime::Message(error, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
     }
 }
 

@@ -77,14 +77,12 @@ void saveDUChainItem(QVector<TopDUContextDynamicData::ArrayWithPosition>& data, 
 
     if (item.d_func()->isDynamic()) {
         //Change from dynamic data to constant data
-
-        enableDUChainReferenceCounting(data.back().array.data(), data.back().array.size());
+        const DUChainReferenceCountingEnabler rcEnabler(data.back().array.data(), data.back().array.size());
         DUChainItemSystem::self().copy(*item.d_func(), target, true);
         Q_ASSERT(!target.isDynamic());
         if (!isSharedDataItem) {
             item.setData(&target);
         }
-        disableDUChainReferenceCounting(data.back().array.data());
     } else {
         //Just copy the data into another place, expensive copy constructors are not needed
 #if defined(__GNUC__) && !defined(__INTEL_COMPILER) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 800)
@@ -136,10 +134,11 @@ void validateItem(const DUChainBaseData* const data, const uchar* const mappedDa
 
 const char* pointerInData(const QVector<TopDUContextDynamicData::ArrayWithPosition>& data, uint totalOffset)
 {
-    for (int a = 0; a < data.size(); ++a) {
-        if (totalOffset < data[a].position)
-            return data[a].array.constData() + totalOffset;
-        totalOffset -= data[a].position;
+    for (auto& awp : data) {
+        if (totalOffset < awp.position) {
+            return awp.array.constData() + totalOffset;
+        }
+        totalOffset -= awp.position;
     }
 
     Q_ASSERT_X(false, Q_FUNC_INFO, "Offset doesn't exist in the data.");
@@ -181,7 +180,7 @@ void loadTopDUContextData(const uint topContextIndex, LoadType loadType, F callb
     }
 
     uint readValue;
-    file.read(( char* )&readValue, sizeof(uint));
+    file.read(reinterpret_cast<char*>(&readValue), sizeof(uint));
     // now readValue is filled with the top-context data size
     Q_ASSERT(readValue >= sizeof(TopDUContextData));
     const QByteArray data = file.read(loadType == FullLoad ? readValue : sizeof(TopDUContextData));
@@ -442,10 +441,10 @@ void TopDUContextDynamicData::DUChainItemStorage<Item>::loadData(QFile* file) co
     Q_ASSERT(items.isEmpty());
 
     uint readValue;
-    file->read(( char* )&readValue, sizeof(uint));
+    file->read(reinterpret_cast<char*>(&readValue), sizeof(uint));
     offsets.resize(readValue);
 
-    file->read(( char* )offsets.data(), sizeof(ItemDataInfo) * offsets.size());
+    file->read(reinterpret_cast<char*>(offsets.data()), sizeof(ItemDataInfo) * offsets.size());
 
     //Fill with zeroes for now, will be initialized on-demand
     items.resize(offsets.size());
@@ -455,8 +454,8 @@ template <class Item>
 void TopDUContextDynamicData::DUChainItemStorage<Item>::writeData(QFile* file)
 {
     uint writeValue = offsets.size();
-    file->write(( char* )&writeValue, sizeof(uint));
-    file->write(( char* )offsets.data(), sizeof(ItemDataInfo) * offsets.size());
+    file->write(reinterpret_cast<const char*>(&writeValue), sizeof(uint));
+    file->write(reinterpret_cast<const char*>(offsets.data()), sizeof(ItemDataInfo) * offsets.size());
 }
 
 //END DUChainItemStorage
@@ -466,7 +465,7 @@ const char* TopDUContextDynamicData::pointerInData(uint totalOffset) const
     Q_ASSERT(!m_mappedData || m_data.isEmpty());
 
     if (m_mappedData && m_mappedDataSize)
-        return ( char* )m_mappedData + totalOffset;
+        return reinterpret_cast<const char*>(m_mappedData) + totalOffset;
 
     return ::pointerInData(m_data, totalOffset);
 }
@@ -554,7 +553,7 @@ void TopDUContextDynamicData::loadData() const
     Q_ASSERT(!m_dataLoaded);
     Q_ASSERT(m_data.isEmpty());
 
-    QFile* file = new QFile(pathForTopContext(m_topContext->ownIndex()));
+    auto* file = new QFile(pathForTopContext(m_topContext->ownIndex()));
     bool open = file->open(QIODevice::ReadOnly);
     Q_UNUSED(open);
     Q_ASSERT(open);
@@ -563,7 +562,7 @@ void TopDUContextDynamicData::loadData() const
     //Skip the offsets, we're already read them
     //Skip top-context data
     uint readValue;
-    file->read(( char* )&readValue, sizeof(uint));
+    file->read(reinterpret_cast<char*>(&readValue), sizeof(uint));
     file->seek(readValue + file->pos());
 
     m_contexts.loadData(file);
@@ -602,7 +601,7 @@ TopDUContext* TopDUContextDynamicData::load(uint topContextIndex)
         }
 
         uint readValue;
-        file.read(( char* )&readValue, sizeof(uint));
+        file.read(reinterpret_cast<char*>(&readValue), sizeof(uint));
         //now readValue is filled with the top-context data size
         QByteArray topContextData = file.read(readValue);
 
@@ -740,7 +739,7 @@ void TopDUContextDynamicData::store()
     if (file.open(QIODevice::WriteOnly)) {
         file.resize(0);
 
-        file.write(( char* )&topContextDataSize, sizeof(uint));
+        file.write(reinterpret_cast<const char*>(&topContextDataSize), sizeof(uint));
         for (const ArrayWithPosition& pos : qAsConst(m_topContextData)) {
             file.write(pos.array.constData(), pos.position);
         }

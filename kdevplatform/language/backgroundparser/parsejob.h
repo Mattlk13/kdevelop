@@ -245,9 +245,15 @@ private:
     const QScopedPointer<class ParseJobPrivate> d_ptr;
     Q_DECLARE_PRIVATE(ParseJob)
 };
+
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+Q_DECLARE_OPERATORS_FOR_FLAGS(ParseJob::SequentialProcessingFlags)
+#endif
+
 }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 0)
 Q_DECLARE_OPERATORS_FOR_FLAGS(KDevelop::ParseJob::SequentialProcessingFlags)
-Q_DECLARE_METATYPE(KDevelop::ParseJob*)
+#endif
 
 #endif

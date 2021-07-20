@@ -1,5 +1,6 @@
 /*
  * Helpers for MI debugger unit tests
+ * Copyright 2009 Niko Sams <niko.sams@gmail.com>
  * Copyright 2016  Aetf <aetf@unlimitedcodeworks.xyz>
  *
  * This program is free software; you can redistribute it and/or
@@ -23,17 +24,42 @@
 #ifndef KDEVDBG_TESTHELPER_H
 #define KDEVDBG_TESTHELPER_H
 
-#include "debuggers-tests-config.h"
-
 #include <debugger/interfaces/idebugsession.h>
+#include <interfaces/ilaunchconfiguration.h>
+
+#include <KConfigGroup>
+#include <KSharedConfig>
 
 #include <QPointer>
 #include <QString>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QUrl>
 
-namespace KDevMI
-{
+class IExecutePlugin;
+class QModelIndex;
+
+#define WAIT_FOR_STATE(session, state) \
+    do { if (!KDevMI::waitForState((session), (state), __FILE__, __LINE__)) return; } while (0)
+
+#define WAIT_FOR_STATE_AND_IDLE(session, state) \
+    do { if (!KDevMI::waitForState((session), (state), __FILE__, __LINE__, true)) return; } while (0)
+
+#define WAIT_FOR(session, condition) \
+    do { \
+        KDevMI::TestWaiter w((session), #condition, __FILE__, __LINE__); \
+        while (w.waitUnless((condition))) /* nothing */ ; \
+    } while(0)
+
+#define COMPARE_DATA(index, expected) \
+    do { if (!KDevMI::compareData((index), (expected), __FILE__, __LINE__)) return; } while (0)
+
+#define SKIP_IF_ATTACH_FORBIDDEN() \
+    do { \
+        if (KDevMI::isAttachForbidden(__FILE__, __LINE__)) \
+            return; \
+    } while(0)
+
+namespace KDevMI {
 
 class MIDebugSession;
 
@@ -57,12 +83,36 @@ public:
     bool waitUnless(bool ok);
 
 private:
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     QPointer<MIDebugSession> session;
     const char* condition;
     const char* file;
     int line;
 };
+
+class TestLaunchConfiguration : public KDevelop::ILaunchConfiguration
+{
+public:
+    explicit TestLaunchConfiguration(const QString& executable = QStringLiteral("debuggee_debugee"),
+                                     const QUrl& workingDirectory = QUrl{})
+        : TestLaunchConfiguration(findExecutable(executable), workingDirectory)
+    {}
+
+    explicit TestLaunchConfiguration(const QUrl& executable, const QUrl& workingDirectory);
+    const KConfigGroup config() const override { return cfg; }
+    KConfigGroup config() override { return cfg; };
+    QString name() const override { return QStringLiteral("Test-Launch"); }
+    KDevelop::IProject* project() const override { return nullptr; }
+    KDevelop::LaunchConfigurationType* type() const override { return nullptr; }
+
+    KConfig* rootConfig() { return c.data(); }
+private:
+    KConfigGroup cfg;
+    KSharedConfigPtr c;
+};
+
+void testEnvironmentSet(MIDebugSession* session, const QString& profileName,
+                        IExecutePlugin* executePlugin);
 
 } // end of namespace KDevMI
 

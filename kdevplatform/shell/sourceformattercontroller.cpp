@@ -73,6 +73,14 @@ QString UseDefault() { return QStringLiteral("UseDefault"); }
 namespace KDevelop
 {
 
+using TextStreamFunction = QTextStream& (*)(QTextStream&);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+constexpr TextStreamFunction endl = Qt::endl;
+#else
+constexpr TextStreamFunction endl = ::endl;
+#endif
+
+
 class SourceFormatterControllerPrivate
 {
 public:
@@ -91,14 +99,15 @@ public:
 
 ISourceFormatter* SourceFormatterControllerPrivate::formatterForConfigEntry(const QString& entry, const QString& mimename) const
 {
-    QStringList formatterinfo = entry.split( QStringLiteral("||"), QString::SkipEmptyParts );
+    const int pos = entry.indexOf(QLatin1String("||"));
 
-    if( formatterinfo.size() != 2 ) {
+    if ((pos <= 0) || (pos + 2 >= entry.size())) {
         qCDebug(SHELL) << "Broken formatting entry for mime:" << mimename << "current value:" << entry;
     }
 
+    const auto formatterName = entry.leftRef(pos);
     auto it = std::find_if(sourceFormatters.begin(), sourceFormatters.end(), [&](ISourceFormatter* iformatter) {
-        return (iformatter->name() == formatterinfo.first());
+        return (iformatter->name() == formatterName);
     });
 
     return (it != sourceFormatters.end()) ? *it : nullptr;
@@ -117,6 +126,11 @@ QString SourceFormatterController::kateOverrideIndentationConfigKey()
 QString SourceFormatterController::styleCaptionKey()
 {
     return QStringLiteral("Caption");
+}
+
+QString SourceFormatterController::styleShowPreviewKey()
+{
+    return QStringLiteral("ShowPreview");
 }
 
 QString SourceFormatterController::styleContentKey()
@@ -147,23 +161,23 @@ SourceFormatterController::SourceFormatterController(QObject *parent)
     if (Core::self()->setupFlags() & Core::NoUi) return;
 
     d->formatTextAction = actionCollection()->addAction(QStringLiteral("edit_reformat_source"));
-    d->formatTextAction->setText(i18n("&Reformat Source"));
-    d->formatTextAction->setToolTip(i18n("Reformat source using AStyle"));
-    d->formatTextAction->setWhatsThis(i18n("Source reformatting functionality using <b>astyle</b> library."));
+    d->formatTextAction->setText(i18nc("@action", "&Reformat Source"));
+    d->formatTextAction->setToolTip(i18nc("@info:tooltip", "Reformat source using AStyle"));
+    d->formatTextAction->setWhatsThis(i18nc("@info:whatsthis", "Source reformatting functionality using <b>astyle</b> library."));
     d->formatTextAction->setEnabled(false);
     connect(d->formatTextAction, &QAction::triggered, this, &SourceFormatterController::beautifySource);
 
     d->formatLine = actionCollection()->addAction(QStringLiteral("edit_reformat_line"));
-    d->formatLine->setText(i18n("Reformat Line"));
-    d->formatLine->setToolTip(i18n("Reformat current line using AStyle"));
-    d->formatLine->setWhatsThis(i18n("Source reformatting of line under cursor using <b>astyle</b> library."));
+    d->formatLine->setText(i18nc("@action", "Reformat Line"));
+    d->formatLine->setToolTip(i18nc("@info:tooltip", "Reformat current line using AStyle"));
+    d->formatLine->setWhatsThis(i18nc("@info:whatsthis", "Source reformatting of line under cursor using <b>astyle</b> library."));
     d->formatLine->setEnabled(false);
     connect(d->formatLine, &QAction::triggered, this, &SourceFormatterController::beautifyLine);
 
     d->formatFilesAction = actionCollection()->addAction(QStringLiteral("tools_astyle"));
-    d->formatFilesAction->setText(i18n("Reformat Files..."));
-    d->formatFilesAction->setToolTip(i18n("Format file(s) using the current theme"));
-    d->formatFilesAction->setWhatsThis(i18n("Formatting functionality using <b>astyle</b> library."));
+    d->formatFilesAction->setText(i18nc("@action", "Reformat Files..."));
+    d->formatFilesAction->setToolTip(i18nc("@info:tooltip", "Format file(s) using the current theme"));
+    d->formatFilesAction->setWhatsThis(i18nc("@info:whatsthis", "Formatting functionality using <b>astyle</b> library."));
     d->formatFilesAction->setEnabled(false);
     connect(d->formatFilesAction, &QAction::triggered,
             this, QOverload<>::of(&SourceFormatterController::formatFiles));
@@ -345,6 +359,7 @@ ISourceFormatter* SourceFormatterController::findFirstFormatterForMimeType(const
 static void populateStyleFromConfigGroup(SourceFormatterStyle* s, const KConfigGroup& stylegrp)
 {
     s->setCaption( stylegrp.readEntry( SourceFormatterController::styleCaptionKey(), QString() ) );
+    s->setUsePreview( stylegrp.readEntry( SourceFormatterController::styleShowPreviewKey(), false ) );
     s->setContent( stylegrp.readEntry( SourceFormatterController::styleContentKey(), QString() ) );
     s->setMimeTypes( stylegrp.readEntry<QStringList>( SourceFormatterController::styleMimeTypesKey(), QStringList() ) );
     s->setOverrideSample( stylegrp.readEntry( SourceFormatterController::styleSampleKey(), QString() ) );
@@ -437,19 +452,20 @@ QString SourceFormatterController::addModelineForCurrentLang(QString input, cons
 
 
     QString modeline(QStringLiteral("// kate: ")
-                   + QStringLiteral("indent-mode ") + indentationMode(mime) + QStringLiteral("; "));
+                   + QLatin1String("indent-mode ") + indentationMode(mime) + QLatin1String("; "));
 
     if(indentation.indentWidth) // We know something about indentation-width
         modeline.append(QStringLiteral("indent-width %1; ").arg(indentation.indentWidth));
 
     if(indentation.indentationTabWidth != 0) // We know something about tab-usage
     {
-        modeline.append(QStringLiteral("replace-tabs %1; ").arg(QLatin1String((indentation.indentationTabWidth == -1) ? "on" : "off")));
+        const auto state = (indentation.indentationTabWidth == -1) ? QLatin1String("on") : QLatin1String("off");
+        modeline += QLatin1String("replace-tabs ") + state + QLatin1String("; ");
         if(indentation.indentationTabWidth > 0)
             modeline.append(QStringLiteral("tab-width %1; ").arg(indentation.indentationTabWidth));
     }
 
-    qCDebug(SHELL) << "created modeline: " << modeline << endl;
+    qCDebug(SHELL) << "created modeline: " << modeline;
 
     QRegExp kateModeline(QStringLiteral("^\\s*//\\s*kate:(.*)$"));
 
@@ -459,10 +475,14 @@ QString SourceFormatterController::addModelineForCurrentLang(QString input, cons
         QString line = is.readLine();
         // replace only the options we care about
         if (kateModeline.indexIn(line) >= 0) { // match
-            qCDebug(SHELL) << "Found a kate modeline: " << line << endl;
+            qCDebug(SHELL) << "Found a kate modeline: " << line;
             modelinefound = true;
             QString options = kateModeline.cap(1);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+            const QStringList optionList = options.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+#else
             const QStringList optionList = options.split(QLatin1Char(';'), QString::SkipEmptyParts);
+#endif
 
             os <<  modeline;
             for (QString s : optionList) {
@@ -470,7 +490,7 @@ QString SourceFormatterController::addModelineForCurrentLang(QString input, cons
                     if(s.startsWith(QLatin1Char(' ')))
                         s.remove(0, 1);
                     os << s << ";";
-                    qCDebug(SHELL) << "Found unknown option: " << s << endl;
+                    qCDebug(SHELL) << "Found unknown option: " << s;
                 }
             }
             os << endl;
@@ -725,12 +745,12 @@ void SourceFormatterController::formatFiles()
 
     auto win = ICore::self()->uiController()->activeMainWindow()->window();
 
-    QMessageBox msgBox(QMessageBox::Question, i18n("Reformat files?"),
+    QMessageBox msgBox(QMessageBox::Question, i18nc("@title:window", "Reformat Files?"),
                        i18n("Reformat all files in the selected folder?"),
                        QMessageBox::Ok|QMessageBox::Cancel, win);
     msgBox.setDefaultButton(QMessageBox::Cancel);
     auto okButton = msgBox.button(QMessageBox::Ok);
-    okButton->setText(i18n("Reformat"));
+    okButton->setText(i18nc("@action:button", "Reformat"));
     msgBox.exec();
 
     if (msgBox.clickedButton() == okButton) {
@@ -775,18 +795,22 @@ KDevelop::ContextMenuExtension SourceFormatterController::contextMenuExtension(K
 
 SourceFormatterStyle SourceFormatterController::styleForUrl(const QUrl& url, const QMimeType& mime)
 {
-    const auto formatter = configForUrl(url).readEntry(mime.name(), QString()).split(QStringLiteral("||"), QString::SkipEmptyParts);
-    if( formatter.count() == 2 )
-    {
-        SourceFormatterStyle s( formatter.at( 1 ) );
-        KConfigGroup fmtgrp = globalConfig().group( formatter.at(0) );
-        if( fmtgrp.hasGroup( formatter.at(1) ) ) {
-            KConfigGroup stylegrp = fmtgrp.group( formatter.at(1) );
-            populateStyleFromConfigGroup(&s, stylegrp);
-        }
-        return s;
+    const QString formatter = configForUrl(url).readEntry(mime.name(), QString());
+    const int pos = formatter.indexOf(QLatin1String("||"));
+    if ((pos <= 0) || (pos + 2 >= formatter.size())) {
+        return SourceFormatterStyle();
     }
-    return SourceFormatterStyle();
+
+    const QString formatterName = formatter.left(pos);
+    const QString styleName = formatter.mid(pos + 2);
+
+    SourceFormatterStyle s(styleName);
+    KConfigGroup fmtgrp = globalConfig().group(formatterName);
+    if (fmtgrp.hasGroup(styleName)) {
+        KConfigGroup stylegrp = fmtgrp.group(styleName);
+        populateStyleFromConfigGroup(&s, stylegrp);
+    }
+    return s;
 }
 
 void SourceFormatterController::disableSourceFormatting(bool disable)

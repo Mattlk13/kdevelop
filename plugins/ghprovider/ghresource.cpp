@@ -168,9 +168,9 @@ void Resource::slotAuthenticate(KJob *job)
     }
 
     const auto metaData = qobject_cast<KIO::StoredTransferJob*>(job)->metaData();
-    if (metaData[QStringLiteral("responsecode")] == QStringLiteral("401")) {
+    if (metaData[QStringLiteral("responsecode")] == QLatin1String("401")) {
         const auto& header = metaData[QStringLiteral("HTTP-Headers")];
-        if (header.contains(QStringLiteral("X-GitHub-OTP: required;"), Qt::CaseInsensitive)) {
+        if (header.contains(QLatin1String("X-GitHub-OTP: required;"), Qt::CaseInsensitive)) {
           emit twoFactorAuthRequested(qobject_cast<KIO::StoredTransferJob*>(job)->outgoingMetaData()[QStringLiteral("customHTTPHeader")]);
           return;
         }

@@ -137,11 +137,10 @@ void AdaptSignatureAssistant::textChanged(KTextEditor::Document* doc, const KTex
      */
 
     Declaration* otherSide = nullptr;
-    auto* definition = dynamic_cast<FunctionDefinition*>(funDecl);
-    if (definition) {
+    if (auto* definition = dynamic_cast<FunctionDefinition*>(funDecl)) {
         m_editingDefinition = true;
         otherSide = definition->declaration();
-    } else if ((definition = FunctionDefinition::definition(funDecl))) {
+    } else if (auto* definition = FunctionDefinition::definition(funDecl)) {
         m_editingDefinition = false;
         otherSide = definition;
     }
@@ -239,11 +238,14 @@ QList<RenameAction*> AdaptSignatureAssistant::getRenameActions(const Signature &
     if (!m_otherSideContext) {
         return renameActions;
     }
+    const auto oldDeclarations = m_otherSideContext->localDeclarations();
     for (int i = newSignature.parameters.size() - 1; i >= 0; --i) {
         if (oldPositions[i] == -1) {
             continue;  //new parameter
         }
-        Declaration *renamedDecl = m_otherSideContext->localDeclarations()[oldPositions[i]];
+        Declaration *renamedDecl = oldDeclarations.value(oldPositions[i]);
+        if (!renamedDecl)
+            continue;
         if (newSignature.parameters[i].second != m_oldSignature.parameters[oldPositions[i]].second) {
             const auto uses = renamedDecl->uses();
             if (!uses.isEmpty()) {

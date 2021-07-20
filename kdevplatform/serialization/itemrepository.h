@@ -200,13 +200,13 @@ public:
 
         file->seek(offset);
 
-        file->write(( char* )&m_monsterBucketExtent, sizeof(unsigned int));
-        file->write(( char* )&m_available, sizeof(unsigned int));
-        file->write(( char* )m_objectMap, sizeof(short unsigned int) * ObjectMapSize);
-        file->write(( char* )m_nextBucketHash, sizeof(short unsigned int) * NextBucketHashSize);
-        file->write(( char* )&m_largestFreeItem, sizeof(short unsigned int));
-        file->write(( char* )&m_freeItemCount, sizeof(unsigned int));
-        file->write(( char* )&m_dirty, sizeof(bool));
+        file->write(reinterpret_cast<const char*>(&m_monsterBucketExtent), sizeof(unsigned int));
+        file->write(reinterpret_cast<const char*>(&m_available), sizeof(unsigned int));
+        file->write(reinterpret_cast<const char*>(m_objectMap), sizeof(short unsigned int) * ObjectMapSize);
+        file->write(reinterpret_cast<const char*>(m_nextBucketHash), sizeof(short unsigned int) * NextBucketHashSize);
+        file->write(reinterpret_cast<const char*>(&m_largestFreeItem), sizeof(short unsigned int));
+        file->write(reinterpret_cast<const char*>(&m_freeItemCount), sizeof(unsigned int));
+        file->write(reinterpret_cast<const char*>(&m_dirty), sizeof(bool));
         file->write(m_data, ItemRepositoryBucketSize + m_monsterBucketExtent * DataSize);
 
         if (static_cast<size_t>(file->pos()) != offset + (1 + m_monsterBucketExtent) * DataSize) {
@@ -227,15 +227,15 @@ public:
             short unsigned int* m = new short unsigned int[ObjectMapSize];
             short unsigned int* h = new short unsigned int[NextBucketHashSize];
 
-            file->read(( char* )&monsterBucketExtent, sizeof(unsigned int));
+            file->read(reinterpret_cast<char*>(&monsterBucketExtent), sizeof(unsigned int));
             char* d = new char[ItemRepositoryBucketSize + monsterBucketExtent * DataSize];
 
-            file->read(( char* )&available, sizeof(unsigned int));
-            file->read(( char* )m, sizeof(short unsigned int) * ObjectMapSize);
-            file->read(( char* )h, sizeof(short unsigned int) * NextBucketHashSize);
-            file->read(( char* )&largestFree, sizeof(short unsigned int));
-            file->read(( char* )&freeItemCount, sizeof(unsigned int));
-            file->read(( char* )&dirty, sizeof(bool));
+            file->read(reinterpret_cast<char*>(&available), sizeof(unsigned int));
+            file->read(reinterpret_cast<char*>(m), sizeof(short unsigned int) * ObjectMapSize);
+            file->read(reinterpret_cast<char*>(h), sizeof(short unsigned int) * NextBucketHashSize);
+            file->read(reinterpret_cast<char*>(&largestFree), sizeof(short unsigned int));
+            file->read(reinterpret_cast<char*>(&freeItemCount), sizeof(unsigned int));
+            file->read(reinterpret_cast<char*>(&dirty), sizeof(bool));
             file->read(d, ItemRepositoryBucketSize);
 
             Q_ASSERT(monsterBucketExtent == m_monsterBucketExtent);
@@ -296,6 +296,11 @@ public:
         unsigned short index = m_objectMap[localHash];
         unsigned short insertedAt = 0;
 
+        const auto createInsertedItem = [&]() {
+            const OptionalDUChainReferenceCountingEnabler<markForReferenceCounting> optionalRc(m_data, dataSize());
+            request.createItem(reinterpret_cast<Item*>(m_data + insertedAt));
+        };
+
         unsigned short follower = 0;
         //Walk the chain of items with the same local hash
         while (index && (follower = followerIndex(index)) && !(request.equals(itemFromIndex(index))))
@@ -320,15 +325,7 @@ public:
             setFollowerIndex(insertedAt, 0);
             Q_ASSERT(m_objectMap[localHash] == 0);
             m_objectMap[localHash] = insertedAt;
-
-            if (markForReferenceCounting)
-                enableDUChainReferenceCounting(m_data, dataSize());
-
-            request.createItem(reinterpret_cast<Item*>(m_data + insertedAt));
-
-            if (markForReferenceCounting)
-                disableDUChainReferenceCounting(m_data);
-
+            createInsertedItem();
             return insertedAt;
         }
 
@@ -436,13 +433,7 @@ public:
 #endif
 
         //Last thing we do, because createItem may recursively do even more transformation of the repository
-        if (markForReferenceCounting)
-            enableDUChainReferenceCounting(m_data, dataSize());
-
-        request.createItem(reinterpret_cast<Item*>(m_data + insertedAt));
-
-        if (markForReferenceCounting)
-            disableDUChainReferenceCounting(m_data);
+        createInsertedItem();
 
 #ifdef DEBUG_CREATEITEM_EXTENTS
         if (m_available >= 8) {
@@ -559,13 +550,10 @@ public:
 
         Item* item = const_cast<Item*>(itemFromIndex(index));
 
-        if (markForReferenceCounting)
-            enableDUChainReferenceCounting(m_data, dataSize());
-
-        ItemRequest::destroy(item, repository);
-
-        if (markForReferenceCounting)
-            disableDUChainReferenceCounting(m_data);
+        {
+            const OptionalDUChainReferenceCountingEnabler<markForReferenceCounting> optionalRc(m_data, dataSize());
+            ItemRequest::destroy(item, repository);
+        }
 
 #ifndef QT_NO_DEBUG
 #if defined(__GNUC__) && !defined(__INTEL_COMPILER) && (((__GNUC__ * 100) + __GNUC_MINOR__) >= 800)
@@ -1039,48 +1027,21 @@ private:
 ///This object needs to be kept alive as long as you change the contents of an item
 ///stored in the repository. It is needed to correctly track the reference counting
 ///within disk-storage.
-///@warning You can not freely copy this around, when you create a copy, the copy source
-///         becomes invalid
 template <class Item, bool markForReferenceCounting>
-class DynamicItem
+class DynamicItem : public OptionalDUChainReferenceCountingEnabler<markForReferenceCounting>
 {
 public:
-    DynamicItem(Item* i, void* start, uint size) : m_item(i)
-        , m_start(start)
+    explicit DynamicItem(Item* i, const void* start, unsigned size)
+        : OptionalDUChainReferenceCountingEnabler<markForReferenceCounting>(start, size)
+        , m_item{i}
     {
-        if (markForReferenceCounting)
-            enableDUChainReferenceCounting(m_start, size);
 //       qDebug() << "enabling" << i << "to" << (void*)(((char*)i)+size);
     }
 
-    ~DynamicItem()
-    {
-        if (m_start) {
-//         qDebug() << "destructor-disabling" << m_item;
-            if (markForReferenceCounting)
-                disableDUChainReferenceCounting(m_start);
-        }
-    }
-
-    DynamicItem(const DynamicItem& rhs) : m_item(rhs.m_item)
-        , m_start(rhs.m_start)
-    {
-//         qDebug() << "stealing" << m_item;
-        Q_ASSERT(rhs.m_start);
-        rhs.m_start = nullptr;
-    }
-
-    DynamicItem& operator=(const DynamicItem&) = delete;
-
-    Item* operator->()
-    {
-        return m_item;
-    }
-
-    Item* m_item;
+    Item* operator->() const { return m_item; }
 
 private:
-    mutable void* m_start;
+    Item* const m_item;
 };
 
 ///@tparam Item See ExampleItem
@@ -1642,9 +1603,11 @@ public:
     {
         Statistics ret;
         uint loadedBuckets = 0;
-        for (int a = 0; a < m_buckets.size(); ++a)
-            if (m_buckets[a])
+        for (auto* bucket : m_buckets) {
+            if (bucket) {
                 ++loadedBuckets;
+            }
+        }
 
 #ifdef DEBUG_MONSTERBUCKETS
         for (int a = 0; a < m_freeSpaceBuckets.size(); ++a) {
@@ -1667,9 +1630,11 @@ public:
         ret.emptyBuckets = 0;
 
         uint loadedMonsterBuckets = 0;
-        for (int a = 0; a < m_buckets.size(); ++a)
-            if (m_buckets[a] && m_buckets[a]->monsterBucketExtent())
-                loadedMonsterBuckets += m_buckets[a]->monsterBucketExtent() + 1;
+        for (auto* bucket : m_buckets) {
+            if (bucket && bucket->monsterBucketExtent()) {
+                loadedMonsterBuckets += bucket->monsterBucketExtent() + 1;
+            }
+        }
 
         uint usedBucketSpace = MyBucket::DataSize* m_currentBucket;
         uint freeBucketSpace = 0, freeUnreachableSpace = 0;
@@ -1751,9 +1716,9 @@ public:
     uint usedMemory() const
     {
         uint used = 0;
-        for (int a = 0; a < m_buckets.size(); ++a) {
-            if (m_buckets[a]) {
-                used += m_buckets[a]->usedMemory();
+        for (auto* bucket : m_buckets) {
+            if (bucket) {
+                used += bucket->usedMemory();
             }
         }
 
@@ -1808,24 +1773,24 @@ public:
                 Q_ASSERT(m_dynamicFile);
 
                 m_file->seek(0);
-                m_file->write(( char* )&m_repositoryVersion, sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&m_repositoryVersion), sizeof(uint));
                 uint hashSize = bucketHashSize;
-                m_file->write(( char* )&hashSize, sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&hashSize), sizeof(uint));
                 uint itemRepositoryVersion  = staticItemRepositoryVersion();
-                m_file->write(( char* )&itemRepositoryVersion, sizeof(uint));
-                m_file->write(( char* )&m_statBucketHashClashes, sizeof(uint));
-                m_file->write(( char* )&m_statItemCount, sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&itemRepositoryVersion), sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&m_statBucketHashClashes), sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&m_statItemCount), sizeof(uint));
 
                 const uint bucketCount = static_cast<uint>(m_buckets.size());
-                m_file->write(( char* )&bucketCount, sizeof(uint));
-                m_file->write(( char* )&m_currentBucket, sizeof(uint));
-                m_file->write(( char* )m_firstBucketForHash, sizeof(short unsigned int) * bucketHashSize);
+                m_file->write(reinterpret_cast<const char*>(&bucketCount), sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(&m_currentBucket), sizeof(uint));
+                m_file->write(reinterpret_cast<const char*>(m_firstBucketForHash), sizeof(short unsigned int) * bucketHashSize);
                 Q_ASSERT(m_file->pos() == BucketStartOffset);
 
                 m_dynamicFile->seek(0);
                 const uint freeSpaceBucketsSize = static_cast<uint>(m_freeSpaceBuckets.size());
-                m_dynamicFile->write(( char* )&freeSpaceBucketsSize, sizeof(uint));
-                m_dynamicFile->write(( char* )m_freeSpaceBuckets.data(), sizeof(uint) * freeSpaceBucketsSize);
+                m_dynamicFile->write(reinterpret_cast<const char*>(&freeSpaceBucketsSize), sizeof(uint));
+                m_dynamicFile->write(reinterpret_cast<const char*>(m_freeSpaceBuckets.data()), sizeof(uint) * freeSpaceBucketsSize);
             }
             //To protect us from inconsistency due to crashes. flush() is not enough. We need to close.
             m_file->close();
@@ -2029,27 +1994,27 @@ private:
         m_metaDataChanged = true;
         if (m_file->size() == 0) {
             m_file->resize(0);
-            m_file->write(( char* )&m_repositoryVersion, sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&m_repositoryVersion), sizeof(uint));
             uint hashSize = bucketHashSize;
-            m_file->write(( char* )&hashSize, sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&hashSize), sizeof(uint));
             uint itemRepositoryVersion  = staticItemRepositoryVersion();
-            m_file->write(( char* )&itemRepositoryVersion, sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&itemRepositoryVersion), sizeof(uint));
 
             m_statBucketHashClashes = m_statItemCount = 0;
 
-            m_file->write(( char* )&m_statBucketHashClashes, sizeof(uint));
-            m_file->write(( char* )&m_statItemCount, sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&m_statBucketHashClashes), sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&m_statItemCount), sizeof(uint));
 
             m_buckets.resize(10);
             m_buckets.fill(nullptr);
             uint bucketCount = m_buckets.size();
-            m_file->write(( char* )&bucketCount, sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(&bucketCount), sizeof(uint));
 
             memset(m_firstBucketForHash, 0, bucketHashSize * sizeof(short unsigned int));
 
             m_currentBucket = 1; //Skip the first bucket, we won't use it so we have the zero indices for special purposes
-            m_file->write(( char* )&m_currentBucket, sizeof(uint));
-            m_file->write(( char* )m_firstBucketForHash, sizeof(short unsigned int) * bucketHashSize);
+            m_file->write(reinterpret_cast<const char*>(&m_currentBucket), sizeof(uint));
+            m_file->write(reinterpret_cast<const char*>(m_firstBucketForHash), sizeof(short unsigned int) * bucketHashSize);
             //We have completely initialized the file now
             if (m_file->pos() != BucketStartOffset) {
                 KMessageBox::error(nullptr,
@@ -2058,7 +2023,7 @@ private:
             }
 
             const uint freeSpaceBucketsSize = 0;
-            m_dynamicFile->write(( char* )&freeSpaceBucketsSize, sizeof(uint));
+            m_dynamicFile->write(reinterpret_cast<const char*>(&freeSpaceBucketsSize), sizeof(uint));
             m_freeSpaceBuckets.clear();
         } else {
             m_file->close();
@@ -2067,11 +2032,11 @@ private:
             //Check that the version is correct
             uint storedVersion = 0, hashSize = 0, itemRepositoryVersion = 0;
 
-            m_file->read(( char* )&storedVersion, sizeof(uint));
-            m_file->read(( char* )&hashSize, sizeof(uint));
-            m_file->read(( char* )&itemRepositoryVersion, sizeof(uint));
-            m_file->read(( char* )&m_statBucketHashClashes, sizeof(uint));
-            m_file->read(( char* )&m_statItemCount, sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&storedVersion), sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&hashSize), sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&itemRepositoryVersion), sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&m_statBucketHashClashes), sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&m_statItemCount), sizeof(uint));
 
             if (storedVersion != m_repositoryVersion || hashSize != bucketHashSize ||
                 itemRepositoryVersion != staticItemRepositoryVersion()) {
@@ -2088,18 +2053,18 @@ private:
             m_metaDataChanged = false;
 
             uint bucketCount = 0;
-            m_file->read(( char* )&bucketCount, sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&bucketCount), sizeof(uint));
             m_buckets.resize(bucketCount);
-            m_file->read(( char* )&m_currentBucket, sizeof(uint));
+            m_file->read(reinterpret_cast<char*>(&m_currentBucket), sizeof(uint));
 
-            m_file->read(( char* )m_firstBucketForHash, sizeof(short unsigned int) * bucketHashSize);
+            m_file->read(reinterpret_cast<char*>(m_firstBucketForHash), sizeof(short unsigned int) * bucketHashSize);
 
             Q_ASSERT(m_file->pos() == BucketStartOffset);
 
             uint freeSpaceBucketsSize = 0;
-            m_dynamicFile->read(( char* )&freeSpaceBucketsSize, sizeof(uint));
+            m_dynamicFile->read(reinterpret_cast<char*>(&freeSpaceBucketsSize), sizeof(uint));
             m_freeSpaceBuckets.resize(freeSpaceBucketsSize);
-            m_dynamicFile->read(( char* )m_freeSpaceBuckets.data(), sizeof(uint) * freeSpaceBucketsSize);
+            m_dynamicFile->read(reinterpret_cast<char*>(m_freeSpaceBuckets.data()), sizeof(uint) * freeSpaceBucketsSize);
         }
 
         m_fileMapSize = 0;
@@ -2233,7 +2198,7 @@ private:
                     offset += BucketStartOffset;
                     m_file->seek(offset);
                     uint monsterBucketExtent;
-                    m_file->read(( char* )(&monsterBucketExtent), sizeof(unsigned int));
+                    m_file->read(reinterpret_cast<char*>((&monsterBucketExtent)), sizeof(unsigned int));
                     m_file->seek(offset);
                     ///FIXME: use the data here instead of copying it again in prepareChange
                     QByteArray data = m_file->read((1 + monsterBucketExtent) * MyBucket::DataSize);

@@ -30,6 +30,7 @@
 
 #include <QVBoxLayout>
 #include <QContextMenuEvent>
+#include <QMouseEvent>
 #include <QMenu>
 
 #ifdef USE_QTWEBKIT
@@ -92,9 +93,7 @@ public:
     void init(StandardDocumentationView* parent)
     {
         m_view = new QWebView(parent);
-        m_view->setContextMenuPolicy(Qt::NoContextMenu);
         QObject::connect(m_view, &QWebView::linkClicked, parent, &StandardDocumentationView::linkClicked);
-    }
 #else
     QWebEngineView* m_view = nullptr;
     StandardDocumentationPage* m_page = nullptr;
@@ -120,12 +119,19 @@ public:
         m_page = new StandardDocumentationPage(profile, parent);
         m_view = new QWebEngineView(parent);
         m_view->setPage(m_page);
+#endif
+        m_view->setContextMenuPolicy(Qt::NoContextMenu);
+
         // workaround for Qt::NoContextMenu broken with QWebEngineView, contextmenu event is always eaten
         // see https://bugreports.qt.io/browse/QTBUG-62345
-        // we have to enforce deferring of event ourselves
+        // we have to enforce deferring of event ourselves in the event filter.
+        // TODO: remove the context menu workaround (most of this comment and ContextMenu-related code in
+        // StandardDocumentationView::eventFilter()) once we require Qt 5.10 or later, because
+        // QTBUG-62345 was fixed in Qt 5.10.0 Beta 4.
+        // The event filter is necessary for handling mouse events since they are swallowed by
+        // QWebView and QWebEngineView.
         m_view->installEventFilter(parent);
     }
-#endif
 };
 
 StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* findWidget, QWidget* parent)
@@ -135,7 +141,7 @@ StandardDocumentationView::StandardDocumentationView(DocumentationFindWidget* fi
     Q_D(StandardDocumentationView);
 
     auto mainLayout = new QVBoxLayout(this);
-    mainLayout->setMargin(0);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
     setLayout(mainLayout);
 
     d->init(this);
@@ -339,7 +345,7 @@ public:
         const QUrl url = job->requestUrl();
 
         auto reply = m_nam->get(QNetworkRequest(url));
-        job->reply("text/html", reply);
+        job->reply(reply->header(QNetworkRequest::ContentTypeHeader).toByteArray(), reply);
     }
 
 private:
@@ -390,7 +396,6 @@ QMenu* StandardDocumentationView::createStandardContextMenu()
 bool StandardDocumentationView::eventFilter(QObject* object, QEvent* event)
 {
     Q_D(StandardDocumentationView);
-
 #ifndef USE_QTWEBKIT
     if (object == d->m_view) {
         // help QWebEngineView properly behave like expected as if Qt::NoContextMenu was set
@@ -398,9 +403,42 @@ bool StandardDocumentationView::eventFilter(QObject* object, QEvent* event)
             event->ignore();
             return true;
         }
+        /* HACK / Workaround for QTBUG-43602
+         * Need to set an eventFilter on the child of WebengineView because it swallows
+         * mouse events.
+         */
+        else if (event->type() == QEvent::ChildAdded) {
+            QObject* child = static_cast<QChildEvent*>(event)->child();
+            if(qobject_cast<QWidget*>(child)) {
+                child->installEventFilter(this);
+            }
+        } else if (event->type() == QEvent::ChildRemoved) {
+            QObject* child = static_cast<QChildEvent*>(event)->child();
+            if(qobject_cast<QWidget*>(child)) {
+                child->removeEventFilter(this);
+            }
+        }
     }
 #endif
-
+    if (event->type() == QEvent::Wheel) {
+        auto* const wheelEvent = static_cast<QWheelEvent*>(event);
+        if (d->m_zoomController && d->m_zoomController->handleWheelEvent(wheelEvent))
+            return true;
+    } else if (event->type() == QEvent::MouseButtonPress) {
+        const auto button = static_cast<QMouseEvent*>(event)->button();
+        switch (button) {
+        case Qt::MouseButton::ForwardButton:
+            emit browseForward();
+            event->accept();
+            return true;
+        case Qt::MouseButton::BackButton:
+            emit browseBack();
+            event->accept();
+            return true;
+        default:
+            break;
+        }
+    }
     return QWidget::eventFilter(object, event);
 }
 
@@ -423,24 +461,25 @@ void StandardDocumentationView::updateZoomFactor(double zoomFactor)
     d->m_view->setZoomFactor(zoomFactor);
 }
 
-void StandardDocumentationView::keyPressEvent(QKeyEvent* event)
+void StandardDocumentationView::keyReleaseEvent(QKeyEvent* event)
 {
+    // Handle keyReleaseEvent instead of the usual keyPressEvent as a workaround
+    // for the conflicting reset font size Ctrl+0 shortcut added into KTextEditor
+    // in version 5.60. This new global shortcut prevents the Qt::Key_0 part of the
+    // shortcut from reaching KeyPress events, but it doesn't affect KeyRelease events.
+    // The end result is that Ctrl+0 always resets font size in the text editor
+    // because its shortcut is global. In addition, Ctrl+0 resets zoom factor in
+    // the current documentation provider if Documentation tool view has focus.
+    // Unfortunately there is no way to reset documentation zoom factor without
+    // simultaneously resetting font size in the text editor.
+    // An alternative workaround - creating one more Ctrl+0 shortcut -
+    // inevitably leads to conflicts with the KTextEditor's global shortcut.
     Q_D(StandardDocumentationView);
 
     if (d->m_zoomController && d->m_zoomController->handleKeyPressEvent(event)) {
         return;
     }
-    QWidget::keyPressEvent(event);
-}
-
-void StandardDocumentationView::wheelEvent(QWheelEvent* event)
-{
-    Q_D(StandardDocumentationView);
-
-    if (d->m_zoomController && d->m_zoomController->handleWheelEvent(event)) {
-        return;
-    }
-    QWidget::wheelEvent(event);
+    QWidget::keyReleaseEvent(event);
 }
 
 #ifndef USE_QTWEBKIT

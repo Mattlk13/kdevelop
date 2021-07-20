@@ -20,72 +20,23 @@
 
 #include "utils.h"
 
+// KDevPlatform
 #include <interfaces/icore.h>
 #include <interfaces/iproject.h>
 #include <interfaces/iprojectcontroller.h>
-#include <project/interfaces/ibuildsystemmanager.h>
-#include <project/projectmodel.h>
-
+// KF
 #include <KLocalizedString>
-
+// Qt
 #include <QFile>
-#include <QJsonDocument>
-#include <QJsonArray>
-#include <QJsonObject>
 #include <QRegularExpression>
+#include <QVector>
 
 namespace Clazy
 {
 
-QString prettyPathName(const QString& path)
+QString prettyPathName(const QUrl& path)
 {
-    return KDevelop::ICore::self()->projectController()->prettyFileName(
-        QUrl::fromLocalFile(path),
-        KDevelop::IProjectController::FormatPlain);
-}
-
-QStringList compileCommandsFiles(const QString& jsonFilePath, QString& error)
-{
-    QStringList paths;
-
-    QFile jsonFile(jsonFilePath);
-    if (!jsonFile.open(QFile::ReadOnly | QFile::Text)) {
-        error = i18n("Unable to open compile commands file '%1' for reading", jsonFilePath);
-        return paths;
-    }
-
-    QJsonParseError jsonError;
-    auto document = QJsonDocument::fromJson(jsonFile.readAll(), &jsonError);
-
-    if (jsonError.error) {
-        error = i18n("JSON error during parsing compile commands file '%1': %2", jsonFilePath, jsonError.errorString());
-        return paths;
-    }
-
-    if (!document.isArray()) {
-        error = i18n("JSON error during parsing compile commands file '%1': document is not an array", jsonFilePath);
-        return paths;
-    }
-
-    const QString KEY_FILE = QStringLiteral("file");
-
-    const auto array = document.array();
-    for (const auto& value : array) {
-        if (!value.isObject()) {
-            continue;
-        }
-
-        const QJsonObject entry = value.toObject();
-        if (entry.contains(KEY_FILE)) {
-            auto path = entry[KEY_FILE].toString();
-            if (QFile::exists(path))
-            {
-                paths += path;
-            }
-        }
-    }
-
-    return paths;
+    return KDevelop::ICore::self()->projectController()->prettyFileName(path, KDevelop::IProjectController::FormatPlain);
 }
 
 // Very simple Markdown parser/converter. Does not provide full Markdown language support and
@@ -125,7 +76,7 @@ public:
         html.clear();
         html += QStringLiteral("<html>");
 
-        auto lines = markdown.split(QLatin1Char('\n'));
+        const auto lines = markdown.split(QLatin1Char('\n'));
         for (auto line : lines) {
             if (line.isEmpty()) {
                 setState(EMPTY);
@@ -138,25 +89,25 @@ public:
                     setState(HEADING);
                     html += match.captured(2);
                     setState(EMPTY);
-                    if (match.captured(1).size() == 1) {
+                    if (match.capturedRef(1).size() == 1) {
                         html += QStringLiteral("<hr>");
                     }
                 }
                 continue;
             }
 
-            if (line.startsWith(QStringLiteral("```"))) {
+            if (line.startsWith(QLatin1String("```"))) {
                 setState((state == PREFORMATTED) ? EMPTY : PREFORMATTED);
                 continue;
             }
 
-            if (line.startsWith(QStringLiteral("    "))) {
+            if (line.startsWith(QLatin1String("    "))) {
                 if (state == EMPTY) {
                     setState(PREFORMATTED);
                 }
             } else if (
-                line.startsWith(QStringLiteral("- ")) ||
-                line.startsWith(QStringLiteral("* "))) {
+                line.startsWith(QLatin1String("- ")) ||
+                line.startsWith(QLatin1String("* "))) {
                 // force close and reopen list - this fixes cases when we don't have
                 // separator line between items
                 setState(EMPTY);

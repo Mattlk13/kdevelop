@@ -71,9 +71,9 @@ CMakeFilesCompilationData importCommands(const Path& commandsFile)
     }
 
     MakeFileResolver resolver;
-    static const QString KEY_COMMAND = QStringLiteral("command");
-    static const QString KEY_DIRECTORY = QStringLiteral("directory");
-    static const QString KEY_FILE = QStringLiteral("file");
+    const QString KEY_COMMAND = QStringLiteral("command");
+    const QString KEY_DIRECTORY = QStringLiteral("directory");
+    const QString KEY_FILE = QStringLiteral("file");
     auto rt = ICore::self()->runtimeController()->currentRuntime();
     const auto values = document.array();
     for (const QJsonValue& value : values) {
@@ -101,6 +101,7 @@ CMakeFilesCompilationData importCommands(const Path& commandsFile)
     }
 
     data.isValid = true;
+    data.rebuildFileForFolderMapping();
     return data;
 }
 
@@ -111,7 +112,15 @@ ImportData import(const Path& commandsFile, const Path &targetsFilePath, const Q
     //we don't have target type information in json, so we just announce all of them as exes
     const auto targets = CMake::enumerateTargets(targetsFilePath, sourceDir, buildPath);
     for(auto it = targets.constBegin(), itEnd = targets.constEnd(); it!=itEnd; ++it) {
-        cmakeTargets[it.key()] = kTransform<QVector<CMakeTarget>>(*it, [](const QString &targetName) { return CMakeTarget{CMakeTarget::Executable, targetName}; });
+        cmakeTargets[it.key()] = kTransform<QVector<CMakeTarget>>(*it, [](const QString &targetName) {
+            return CMakeTarget{
+                CMakeTarget::Executable,
+                targetName,
+                KDevelop::Path::List(),
+                KDevelop::Path::List(),
+                QString()
+            };
+        });
     }
 
     return ImportData {
@@ -167,7 +176,7 @@ void CMakeImportJsonJob::importCompileCommandsJsonFinished()
         return;
     }
 
-    m_data = CMakeProjectData {data.targets, data.compilationData, data.testSuites};
+    m_data = {data.compilationData, data.targets, data.testSuites, {}};
     qCDebug(CMAKE) << "Done importing, found" << data.compilationData.files.count() << "entries for" << project()->path();
 
     emitResult();

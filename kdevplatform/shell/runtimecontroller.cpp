@@ -52,6 +52,10 @@ public:
     }
     KDevelop::Path pathInHost(const KDevelop::Path & runtimePath) const override { return runtimePath; }
     KDevelop::Path pathInRuntime(const KDevelop::Path & localPath) const override { return localPath; }
+    QString findExecutable(const QString& executableName) const override
+    {
+        return QStandardPaths::findExecutable(executableName);
+    }
     void setEnabled(bool /*enabled*/) override {}
     QByteArray getenv(const QByteArray & varname) const override { return qgetenv(varname.constData()); }
     KDevelop::Path buildPath() const override { return {}; }
@@ -85,7 +89,7 @@ void RuntimeController::setupActions()
     KActionCollection* ac = m_core->uiControllerInternal()->defaultMainWindow()->actionCollection();
 
     auto action = new QAction(this);
-    action->setStatusTip(i18n("Allows to select a runtime"));
+    action->setToolTip(i18n("Allows to select a runtime"));
     action->setMenu(m_runtimesMenu.data());
     action->setIcon(QIcon::fromTheme(QStringLiteral("file-library-symbolic")));
     auto updateActionText = [action](IRuntime* currentRuntime){
@@ -134,7 +138,7 @@ void KDevelop::RuntimeController::addRuntimes(KDevelop::IRuntime * runtime)
         runtime->setParent(this);
 
     if (m_core->setupFlags() != Core::NoUi) {
-        QAction* runtimeAction = new QAction(runtime->name(), m_runtimesMenu.data());
+        auto* runtimeAction = new QAction(runtime->name(), m_runtimesMenu.data());
         runtimeAction->setCheckable(true);
         connect(runtimeAction, &QAction::triggered, runtime, [this, runtime]() {
             setCurrentRuntime(runtime);

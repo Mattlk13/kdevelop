@@ -104,7 +104,11 @@ public:
 
         m_filtered.clear();
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        QStringList typedFragments = text.split(QStringLiteral("::"), Qt::SkipEmptyParts);
+#else
         QStringList typedFragments = text.split(QStringLiteral("::"), QString::SkipEmptyParts);
+#endif
         if (typedFragments.isEmpty()) {
             clearFilter();
             return;
@@ -142,17 +146,31 @@ template <class Item, class Parent>
 class PathFilter
 {
 public:
-    ///Clears the filter, but not the data.
-    void clearFilter()
+    /**
+     * Clears the filter and sets new data. The filter-text will be lost.
+     *
+     * The complexity of the callback is necessary to avoid redundant possibly
+     * huge memory allocations, redundant construction and destruction of QVector
+     * elements, which can dominate the time spent in this function.
+     *
+     * @param callback a function that actually sets new data. The callback should
+     * take a single QVector<Item>& argument, modify it without discarding its
+     * capacity, and without redundant element destruction and construction. The
+     * callback should not assign some other QVector to its argument because of
+     * the immediate costly destruction of the existing elements of m_items, then
+     * a very likely allocation and element construction when the other QVector is
+     * modified or during a future call to updateItems(). An exception from the
+     * above performance guideline: the callback may assign a temporary detached
+     * QVector, whose data is about to be destroyed, to its argument.
+     */
+    template<typename UpdateCallback>
+    void updateItems(UpdateCallback callback)
     {
-        m_filtered = m_items;
-        m_oldFilterText.clear();
-    }
-
-    ///Clears the filter and sets new data. The filter-text will be lost.
-    void setItems(const QVector<Item>& data)
-    {
-        m_items = data;
+        // "Detach" m_filtered from m_items to avoid an allocation and element
+        // construction inside the callback; element destruction and deallocation
+        // in clearFilter() where m_items is assigned to m_filtered.
+        m_filtered = {};
+        callback(m_items);
         clearFilter();
     }
 
@@ -217,6 +235,13 @@ public:
     }
 
 private:
+    ///Clears the filter, but not the data.
+    void clearFilter()
+    {
+        m_filtered = m_items;
+        m_oldFilterText.clear();
+    }
+
     QStringList m_oldFilterText;
     QVector<Item> m_filtered;
     QVector<Item> m_items;

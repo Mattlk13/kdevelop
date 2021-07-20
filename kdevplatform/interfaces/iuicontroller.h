@@ -32,6 +32,7 @@ namespace Sublime{
     class Controller;
     class View;
     class Area;
+    class Message;
 }
 
 namespace KDevelop {
@@ -57,7 +58,7 @@ public:
     /**
      * @returns the default position where this tool view should appear
      */
-    virtual Qt::DockWidgetArea defaultPosition() = 0;
+    virtual Qt::DockWidgetArea defaultPosition() const = 0;
     /**
      * Fetch a list of actions to add to the toolbar of the tool view @p view
      * @param viewWidget the view to which the actions should be added
@@ -139,6 +140,19 @@ public:
       * @p message The message
       * @p timeout The timeout in seconds how long to show the message */
     virtual void showErrorMessage(const QString& message, int timeout = 1) = 0;
+    // TODO: convert all these calls into postMessage
+
+    /**
+     * Shows a message in the message area.
+     *
+     * If running in NoGui mode, the message will be discarded.
+     *
+     * Unlike all other functions in this class, this function is thread-safe.
+     * You can call it from the background.
+     *
+     * @p message the message, ownership is transferred
+     */
+    virtual void postMessage(Sublime::Message* message) = 0;
 
     /** @return area for currently active sublime mainwindow or 0 if
     no sublime mainwindow is active.*/

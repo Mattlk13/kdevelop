@@ -50,6 +50,8 @@ public Q_SLOTS:
     void showDocumentation(const KDevelop::IDocumentation::Ptr& doc);
     void emptyHistory();
 
+    void tryBrowseForward();
+    void tryBrowseBack();
     void browseForward();
     void browseBack();
     void changedSelection(const QModelIndex& idx);
@@ -57,6 +59,7 @@ public Q_SLOTS:
     void showHome();
 
 private:
+    void mousePressEvent(QMouseEvent* event) override;
     void setupActions();
     void updateView();
     void returnPressed();

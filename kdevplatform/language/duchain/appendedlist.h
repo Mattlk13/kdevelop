@@ -19,14 +19,15 @@
 #ifndef KDEVPLATFORM_APPENDEDLIST_H
 #define KDEVPLATFORM_APPENDEDLIST_H
 
+#include <QList>
 #include <QMutex>
 #include <QVector>
 
 #include <util/kdevvarlengtharray.h>
 #include <util/stack.h>
 
+#include <ctime>
 #include <iostream>
-#include <time.h>
 
 namespace KDevelop {
 class AbstractItemRepository;
@@ -86,8 +87,7 @@ public:
         if (cnt) //Don't use qDebug, because that may not work during destruction
             std::cout << m_id.constData() << " There were items left on destruction: " << usedItemCount() << "\n";
 
-        for (int a = 0; a < m_items.size(); ++a)
-            delete m_items.at(a);
+        qDeleteAll(m_items);
     }
 
     inline T& item(int index)
@@ -181,9 +181,11 @@ public:
     int usedItemCount() const
     {
         int ret = 0;
-        for (int a = 0; a < m_items.size(); ++a)
-            if (m_items.at(a))
+        for (auto* item : m_items) {
+            if (item) {
                 ++ret;
+            }
+        }
 
         return ret - m_freeIndicesWithData.size();
     }
@@ -258,20 +260,27 @@ private:
 
 #define APPENDED_LIST_COMMON(container, type, name) \
     uint name ## Data; \
-    unsigned int name ## Size() const { if ((name ## Data & KDevelop::DynamicAppendedListRevertMask) == 0) \
-                                            return 0; if (!appendedListsDynamic()) \
-                                            return name ## Data; else \
-                                            return temporaryHash ## container ## name().item(name ## Data).size(); } \
-    KDevVarLengthArray<type, 10>& name ## List() { name ## NeedDynamicList(); \
-                                                   return temporaryHash ## container ## name().item(name ## Data); } \
-    template <class T> bool name ## Equals(const T &rhs) const { unsigned int size = name ## Size(); \
-                                                                 if (size != rhs.name ## Size()) \
-                                                                     return false; for (uint a = 0; a < size; \
-                                                                                        ++a) {if (!(name()[a] == \
-                                                                                                    rhs.name()[a])) \
-                                                                                                  return \
-                                                                                                      false; \
-                                                                 } return true;  } \
+    unsigned int name ## Size() const { \
+        if ((name ## Data & KDevelop::DynamicAppendedListRevertMask) == 0) \
+            return 0; \
+        if (!appendedListsDynamic()) \
+            return name ## Data; \
+        return temporaryHash ## container ## name().item(name ## Data).size(); \
+    } \
+    KDevVarLengthArray<type, 10>& name ## List() { \
+        name ## NeedDynamicList(); \
+        return temporaryHash ## container ## name().item(name ## Data); \
+    } \
+    template <class T> bool name ## Equals(const T &rhs) const { \
+        unsigned int size = name ## Size(); \
+        if (size != rhs.name ## Size()) \
+            return false; \
+        for (uint a = 0; a < size; ++a) { \
+            if (!(name()[a] == rhs.name()[a])) \
+                return false; \
+        } \
+        return true; \
+    } \
     template <class T> void name ## CopyFrom(const T &rhs) { \
         if (rhs.name ## Size() == 0 && (name ## Data & KDevelop::DynamicAppendedListRevertMask) == 0) \
             return; \
@@ -286,7 +295,8 @@ private:
         } else { \
             Q_ASSERT(name ## Data == 0); /* It is dangerous to overwrite the contents of non-dynamic lists(Most probably a mistake) */ \
             name ## Data = rhs.name ## Size(); \
-            type* curr = const_cast<type*>(name());  type* end = curr + name ## Size(); \
+            auto* curr = const_cast<type*>(name()); \
+            type* end = curr + name ## Size(); \
             const type* otherCurr = rhs.name(); \
             for (; curr < end; ++curr, ++otherCurr) \
                 new (curr) type(*otherCurr); /* Call the copy constructors */ \
@@ -305,7 +315,7 @@ private:
             if (name ## Data & KDevelop::DynamicAppendedListRevertMask) \
                 temporaryHash ## container ## name().free(name ## Data); \
         } else { \
-            type* curr = const_cast<type*>(name()); \
+            auto* curr = const_cast<type*>(name()); \
             type* end = curr + name ## Size(); \
             for (; curr < end; ++curr) \
                 curr->~type();                     /*call destructors*/ \

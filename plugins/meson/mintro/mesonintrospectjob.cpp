@@ -50,7 +50,7 @@ MesonIntrospectJob::MesonIntrospectJob(KDevelop::IProject* project, QVector<Meso
         // is required and we have to fake a build directory
         m_buildDir.buildDir = project->path();
         auto* bsm = project->buildSystemManager();
-        MesonManager* manager = dynamic_cast<MesonManager*>(bsm);
+        auto* manager = dynamic_cast<MesonManager*>(bsm);
         if (manager) {
             m_buildDir.mesonExecutable = manager->findMeson();
         }
@@ -235,7 +235,7 @@ QString MesonIntrospectJob::import(BuildDir buildDir)
     auto testsJSON = rawData[QStringLiteral("tests")];
     if (testsJSON.isArray()) {
         m_res_tests = std::make_shared<MesonTestSuites>(testsJSON.toArray(), m_project);
-        if (m_res_options) {
+        if (m_res_tests) {
             qCDebug(KDEV_Meson) << "MINTRO: Imported " << m_res_tests->testSuites().size() << " test suites";
         } else {
             qCWarning(KDEV_Meson) << "MINTRO: Failed to parse tests";

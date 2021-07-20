@@ -24,6 +24,10 @@
 
 #include <KTextEditor/CodeCompletionModel>
 #include <typeinfo>
+#include <utility>
+#include <vector>
+
+#include <util/algorithm.h>
 
 #include "expandingtree/expandingtree.h"
 #include "projectfilequickopen.h"
@@ -70,14 +74,19 @@ QStringList QuickOpenModel::allTypes() const
         types += provider.types;
     }
 
-    return types.toList();
+    return types.values();
 }
 
 void QuickOpenModel::registerProvider(const QStringList& scopes, const QStringList& types, KDevelop::QuickOpenDataProviderBase* provider)
 {
     ProviderEntry e;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    e.scopes = QSet<QString>(scopes.begin(), scopes.end());
+    e.types = QSet<QString>(types.begin(), types.end());
+#else
     e.scopes = QSet<QString>::fromList(scopes);
     e.types = QSet<QString>::fromList(types);
+#endif
     e.provider = provider;
 
     m_providers << e; //.insert( types, e );
@@ -106,8 +115,13 @@ bool QuickOpenModel::removeProvider(KDevelop::QuickOpenDataProviderBase* provide
 
 void QuickOpenModel::enableProviders(const QStringList& _items, const QStringList& _scopes)
 {
-    QSet<QString> items = QSet<QString>::fromList(_items);
-    QSet<QString> scopes = QSet<QString>::fromList(_scopes);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QSet<QString> items(_items.begin(), _items.end());
+    const QSet<QString> scopes(_scopes.begin(), _scopes.end());
+#else
+    const QSet<QString> items = QSet<QString>::fromList(_items);
+    const QSet<QString> scopes = QSet<QString>::fromList(_scopes);
+#endif
     if (m_enabledItems == items && m_enabledScopes == scopes && !items.isEmpty() && !scopes.isEmpty()) {
         return;
     }
@@ -117,36 +131,36 @@ void QuickOpenModel::enableProviders(const QStringList& _items, const QStringLis
 
     //We use 2 iterations here: In the first iteration, all providers that implement QuickOpenFileSetInterface are initialized, then the other ones.
     //The reason is that the second group can refer to the first one.
-    for (ProviderList::iterator it = m_providers.begin(); it != m_providers.end(); ++it) {
-        if (!qobject_cast<QuickOpenFileSetInterface*>((*it).provider)) {
+    for (auto& provider : m_providers) {
+        if (!qobject_cast<QuickOpenFileSetInterface*>(provider.provider)) {
             continue;
         }
-        qCDebug(PLUGIN_QUICKOPEN) << "comparing" << (*it).scopes << (*it).types;
-        if ((scopes.isEmpty() || !(scopes & (*it).scopes).isEmpty()) && (!(items & (*it).types).isEmpty() || items.isEmpty())) {
-            qCDebug(PLUGIN_QUICKOPEN) << "enabling " << (*it).types << " " << (*it).scopes;
-            (*it).enabled = true;
-            (*it).provider->enableData(_items, _scopes);
+        qCDebug(PLUGIN_QUICKOPEN) << "comparing" << provider.scopes << provider.types;
+        if ((scopes.isEmpty() || !(scopes & provider.scopes).isEmpty()) && (!(items & provider.types).isEmpty() || items.isEmpty())) {
+            qCDebug(PLUGIN_QUICKOPEN) << "enabling " << provider.types << " " << provider.scopes;
+            provider.enabled = true;
+            provider.provider->enableData(_items, _scopes);
         } else {
-            qCDebug(PLUGIN_QUICKOPEN) << "disabling " << (*it).types << " " << (*it).scopes;
-            (*it).enabled = false;
-            if ((scopes.isEmpty() || !(scopes & (*it).scopes).isEmpty())) {
-                (*it).provider->enableData(_items, _scopes); //The provider may still provide files
+            qCDebug(PLUGIN_QUICKOPEN) << "disabling " << provider.types << " " << provider.scopes;
+            provider.enabled = false;
+            if ((scopes.isEmpty() || !(scopes & provider.scopes).isEmpty())) {
+                provider.provider->enableData(_items, _scopes); //The provider may still provide files
             }
         }
     }
 
-    for (ProviderList::iterator it = m_providers.begin(); it != m_providers.end(); ++it) {
-        if (qobject_cast<QuickOpenFileSetInterface*>((*it).provider)) {
+    for (auto & provider : m_providers) {
+        if (qobject_cast<QuickOpenFileSetInterface*>(provider.provider)) {
             continue;
         }
-        qCDebug(PLUGIN_QUICKOPEN) << "comparing" << (*it).scopes << (*it).types;
-        if ((scopes.isEmpty() || !(scopes & (*it).scopes).isEmpty()) && (!(items & (*it).types).isEmpty() || items.isEmpty())) {
-            qCDebug(PLUGIN_QUICKOPEN) << "enabling " << (*it).types << " " << (*it).scopes;
-            (*it).enabled = true;
-            (*it).provider->enableData(_items, _scopes);
+        qCDebug(PLUGIN_QUICKOPEN) << "comparing" << provider.scopes << provider.types;
+        if ((scopes.isEmpty() || !(scopes & provider.scopes).isEmpty()) && (!(items & provider.types).isEmpty() || items.isEmpty())) {
+            qCDebug(PLUGIN_QUICKOPEN) << "enabling " << provider.types << " " << provider.scopes;
+            provider.enabled = true;
+            provider.provider->enableData(_items, _scopes);
         } else {
-            qCDebug(PLUGIN_QUICKOPEN) << "disabling " << (*it).types << " " << (*it).scopes;
-            (*it).enabled = false;
+            qCDebug(PLUGIN_QUICKOPEN) << "disabling " << provider.types << " " << provider.scopes;
+            provider.enabled = false;
         }
     }
 
@@ -353,11 +367,10 @@ QVariant QuickOpenModel::data(const QModelIndex& index, int role) const
         {
             if (isExpandable(index)) {
                 //Show the expanded/unexpanded handles
-                cacheIcons();
                 if (isExpanded(index)) {
-                    return m_expandedIcon;
+                    return QIcon::fromTheme(QStringLiteral("arrow-down"));
                 } else {
-                    return m_collapsedIcon;
+                    return QIcon::fromTheme(QStringLiteral("arrow-right"));
                 }
             }
         }
@@ -435,18 +448,16 @@ QuickOpenDataPointer QuickOpenModel::getItem(int row, bool noReset) const
 
 QSet<IndexedString> QuickOpenModel::fileSet() const
 {
-    QSet<IndexedString> merged;
+    std::vector<QSet<IndexedString>> sets;
     for (const ProviderEntry& provider : m_providers) {
         if (m_enabledScopes.isEmpty() || !(m_enabledScopes & provider.scopes).isEmpty()) {
             if (auto* iface = qobject_cast<QuickOpenFileSetInterface*>(provider.provider)) {
-                QSet<IndexedString> ifiles = iface->files();
+                sets.push_back(iface->files());
                 //qCDebug(PLUGIN_QUICKOPEN) << "got file-list with" << ifiles.count() << "entries from data-provider" << typeid(*iface).name();
-                merged += ifiles;
             }
         }
     }
-
-    return merged;
+    return Algorithm::unite(std::move(sets));
 }
 
 QTreeView* QuickOpenModel::treeView() const

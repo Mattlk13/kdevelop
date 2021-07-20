@@ -23,8 +23,6 @@
 
 #include <core.h>
 
-#include <KAboutData>
-
 #include <QPointer>
 
 namespace KDevelop
@@ -69,11 +67,10 @@ public:
     QPointer<TestController> testController;
     QPointer<RuntimeController> runtimeController;
 
-    const KAboutData m_aboutData;
-    Core* const m_core;
-    bool m_cleanedUp;
-    bool m_shuttingDown;
-    Core::Setup m_mode;
+    Core* const m_core = nullptr;
+    bool m_cleanedUp = false;
+    bool m_shuttingDown = false;
+    Core::Setup m_mode = Core::Default;
 };
 
 }

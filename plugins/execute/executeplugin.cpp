@@ -24,7 +24,6 @@
 #include <KConfigGroup>
 #include <KJob>
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KParts/MainWindow>
 #include <KPluginFactory>
 #include <KShell>
@@ -34,26 +33,13 @@
 #include <interfaces/ilaunchconfiguration.h>
 #include <interfaces/iprojectcontroller.h>
 #include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
 
 #include "nativeappconfig.h"
 #include "debug.h"
 #include <project/projectmodel.h>
 #include <project/builderjob.h>
 #include <util/kdevstringhandler.h>
-
-QString ExecutePlugin::_nativeAppConfigTypeId = QStringLiteral("Native Application");
-QString ExecutePlugin::workingDirEntry = QStringLiteral("Working Directory");
-QString ExecutePlugin::executableEntry = QStringLiteral("Executable");
-QString ExecutePlugin::argumentsEntry = QStringLiteral("Arguments");
-QString ExecutePlugin::isExecutableEntry = QStringLiteral("isExecutable");
-QString ExecutePlugin::dependencyEntry = QStringLiteral("Dependencies");
-// TODO: migrate to more consistent key term "EnvironmentProfile"
-QString ExecutePlugin::environmentProfileEntry = QStringLiteral("EnvironmentGroup");
-QString ExecutePlugin::useTerminalEntry = QStringLiteral("Use External Terminal");
-QString ExecutePlugin::terminalEntry = QStringLiteral("External Terminal");
-QString ExecutePlugin::userIdToRunEntry = QStringLiteral("User Id to Run");
-QString ExecutePlugin::dependencyActionEntry = QStringLiteral("Dependency Action");
-QString ExecutePlugin::projectTargetEntry = QStringLiteral("Project Target");
 
 using namespace KDevelop;
 
@@ -125,8 +111,9 @@ KJob* ExecutePlugin::dependencyJob( KDevelop::ILaunchConfiguration* cfg ) const
             }
             else
             {
-                KMessageBox::error(core()->uiController()->activeMainWindow(),
-                                   i18n("Couldn't resolve the dependency: %1", dep.toString()));
+                const QString messageText = i18n("Couldn't resolve the dependency: %1", dep.toString());
+                auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+                ICore::self()->uiController()->postMessage(message);
             }
         }
         auto* job = new KDevelop::BuilderJob();
@@ -240,7 +227,7 @@ QUrl ExecutePlugin::workingDirectory( KDevelop::ILaunchConfiguration* cfg ) cons
 
 QString ExecutePlugin::nativeAppConfigTypeId() const
 {
-    return _nativeAppConfigTypeId;
+    return NativeAppConfigType::sharedId();
 }
 
 

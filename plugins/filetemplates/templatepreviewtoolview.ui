@@ -15,7 +15,11 @@
     <number>0</number>
    </property>
    <item>
-    <widget class="KMessageWidget" name="messageWidget" native="true"/>
+    <widget class="KMessageWidget" name="messageWidget" native="true">
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
    </item>
    <item>
     <widget class="TemplatePreview" name="preview" native="true"/>
@@ -23,7 +27,7 @@
    <item>
     <widget class="QGroupBox" name="groupBox_2">
      <property name="title">
-      <string>Template type</string>
+      <string comment="@title:group">Template Type</string>
      </property>
      <property name="flat">
       <bool>true</bool>
@@ -32,7 +36,7 @@
       <item>
        <widget class="QRadioButton" name="projectRadioButton">
         <property name="text">
-         <string>Project template</string>
+         <string comment="@option:radio">Project template</string>
         </property>
         <property name="checked">
          <bool>true</bool>
@@ -42,35 +46,22 @@
       <item>
        <widget class="QRadioButton" name="classRadioButton">
         <property name="text">
-         <string>Class template</string>
+         <string comment="@option:radio">Class template</string>
         </property>
        </widget>
       </item>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
-         <spacer name="horizontalSpacer">
-          <property name="orientation">
-           <enum>Qt::Horizontal</enum>
-          </property>
-          <property name="sizeType">
-           <enum>QSizePolicy::Maximum</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>40</width>
-            <height>20</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
          <widget class="QLabel" name="emptyLinesPolicyLabel">
           <property name="enabled">
            <bool>false</bool>
           </property>
           <property name="text">
-           <string>&amp;Empty lines policy</string>
+           <string comment="@label:listbox">&amp;Empty lines policy:</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
           </property>
           <property name="buddy">
            <cstring>emptyLinesPolicyComboBox</cstring>
@@ -84,23 +75,23 @@
           </property>
           <item>
            <property name="text">
-            <string>Keep empty lines</string>
+            <string comment="@item:inlistbox empty line policy">Keep Empty Lines</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>Remove repeated empty lines</string>
+            <string comment="@item:inlistbox empty line policy">Remove Repeated Empty Lines</string>
            </property>
           </item>
           <item>
            <property name="text">
-            <string>Remove all empty lines</string>
+            <string comment="@item:inlistbox empty line policy">Remove All Empty Lines</string>
            </property>
           </item>
          </widget>
         </item>
         <item>
-         <spacer name="horizontalSpacer_2">
+         <spacer name="horizontalSpacer">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
@@ -123,7 +114,7 @@
   <customwidget>
    <class>KMessageWidget</class>
    <extends>QFrame</extends>
-   <header>kmessagewidget.h</header>
+   <header>KMessageWidget</header>
    <container>1</container>
   </customwidget>
   <customwidget>

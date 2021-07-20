@@ -48,7 +48,9 @@ AreaDisplay::AreaDisplay(KDevelop::MainWindow* parent)
     layout()->addWidget(m_separator);
 
     layout()->setContentsMargins(0, 0, 0, 0);
-    layout()->addWidget(Core::self()->workingSetControllerInternal()->createSetManagerWidget(m_mainWindow));
+    auto closedWorkingSets = Core::self()->workingSetControllerInternal()->createSetManagerWidget(m_mainWindow);
+    closedWorkingSets->setParent(this);
+    layout()->addWidget(closedWorkingSets);
 
     m_button = new QToolButton(this);
     m_button->setToolTip(i18n(
@@ -75,10 +77,10 @@ void AreaDisplay::newArea(Sublime::Area* area)
 
     auto* m = new QMenu(m_button);
     m->addActions(area->actions());
-    if(currentArea->objectName() != QStringLiteral("code")) {
+    if (currentArea->objectName() != QLatin1String("code")) {
         if(!m->actions().isEmpty())
             m->addSeparator();
-        m->addAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18n("Back to code"), this, SLOT(backToCode()), QKeySequence(Qt::AltModifier | Qt::Key_Backspace));
+        m->addAction(QIcon::fromTheme(QStringLiteral("document-edit")), i18nc("@action:inmenu", "Back to Code"), this, &AreaDisplay::backToCode, QKeySequence(Qt::AltModifier | Qt::Key_Backspace));
     }
     m_button->setMenu(m);
 
@@ -99,15 +101,22 @@ bool AreaDisplay::eventFilter(QObject* obj, QEvent* event)
 {
     if (event->type() == QEvent::Show) {
         m_separator->setVisible(true);
+        // Recalculate menu bar widget sizes after showing the working set button (not done automatically)
+        QMetaObject::invokeMethod(m_mainWindow->menuBar(), &QMenuBar::adjustSize, Qt::QueuedConnection);
     } else if (event->type() == QEvent::Hide) {
         m_separator->setVisible(false);
+        QMetaObject::invokeMethod(m_mainWindow->menuBar(), &QMenuBar::adjustSize, Qt::QueuedConnection);
     }
+
     return QObject::eventFilter(obj, event);
 }
 
 void AreaDisplay::backToCode()
 {
+    auto oldArea = m_mainWindow->area();
+    QString workingSet = oldArea->workingSet();
     ICore::self()->uiController()->switchToArea(QStringLiteral("code"), IUiController::ThisWindow);
+    m_mainWindow->area()->setWorkingSet(workingSet, oldArea->workingSetPersistent(), oldArea);
 }
 
 QSize AreaDisplay::minimumSizeHint() const

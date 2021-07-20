@@ -35,6 +35,7 @@ DefinesAndIncludesConfigPage::DefinesAndIncludesConfigPage(KDevelop::IPlugin* pl
     : ProjectConfigPage<CustomDefinesAndIncludes>(plugin, options, parent)
 {
     auto* layout = new QVBoxLayout( this );
+    layout->setContentsMargins(0, 0, 0, 0);
     configWidget = new ProjectPathsWidget( this );
     configWidget->setProject( project() );
     connect(configWidget, &ProjectPathsWidget::changed, this, &DefinesAndIncludesConfigPage::changed);
@@ -60,7 +61,7 @@ void DefinesAndIncludesConfigPage::saveTo(KConfig* cfg, KDevelop::IProject*)
     settings->writePaths( cfg, configWidget->paths() );
 
     if ( settings->needToReparseCurrentProject( cfg ) ) {
-        KDevelop::ICore::self()->projectController()->reparseProject(project(), true);
+        KDevelop::ICore::self()->projectController()->reparseProject(project());
     }
 }
 
@@ -78,12 +79,12 @@ void DefinesAndIncludesConfigPage::apply()
 
 QString DefinesAndIncludesConfigPage::name() const
 {
-    return i18n("Language Support");
+    return i18nc("@title:tab", "Language Support");
 }
 
 QString DefinesAndIncludesConfigPage::fullName() const
 {
-    return i18n("Configure Language Support");
+    return i18nc("@title:tab", "Configure Language Support");
 }
 
 QIcon DefinesAndIncludesConfigPage::icon() const

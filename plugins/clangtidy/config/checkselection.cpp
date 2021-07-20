@@ -28,10 +28,6 @@
 #include <checkset.h>
 #include <debug.h>
 // KF
-#include <kconfigwidgets_version.h>
-#if KCONFIGWIDGETS_VERSION < QT_VERSION_CHECK(5,32,0)
-#include <KConfigDialogManager>
-#endif
 #if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
 #include <KRecursiveFilterProxyModel>
 #endif
@@ -51,13 +47,8 @@ CheckSelection::CheckSelection(QWidget* parent)
     : QWidget(parent)
     , m_checkListModel(new CheckListModel(this))
 {
-    // since 5.32 the signal is by default taken as set for the used property
-#if KCONFIGWIDGETS_VERSION < QT_VERSION_CHECK(5,32,0)
-    KConfigDialogManager::changedMap()->insert(QStringLiteral("ClangTidy::CheckSelection"), SIGNAL(checksChanged(QStringList)));
-#endif
-
     auto* layout = new QVBoxLayout;
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     auto* checkFilterEdit = new CheckListFilterProxySearchLine(this);
     layout->addWidget(checkFilterEdit);
@@ -92,10 +83,15 @@ CheckSelection::CheckSelection(QWidget* parent)
     header->setSectionResizeMode(CheckListModel::CountColumnId, QHeaderView::ResizeToContents);
 
     connect(m_checkListModel, &CheckListModel::enabledChecksChanged,
-            this, &CheckSelection::checksChanged);
+            this, &CheckSelection::onEnabledChecksChanged);
 }
 
 CheckSelection::~CheckSelection() = default;
+
+void CheckSelection::setEditable(bool editable)
+{
+    m_checkListModel->setEditable(editable);
+}
 
 void CheckSelection::setCheckSet(const CheckSet* checkSet)
 {
@@ -125,7 +121,11 @@ void CheckSelection::expandSubGroupsWithExplicitlyEnabledStates(const QModelInde
 
 void CheckSelection::setChecks(const QString& checks)
 {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    m_checkListModel->setEnabledChecks(checks.split(QLatin1Char(','), Qt::SkipEmptyParts));
+#else
     m_checkListModel->setEnabledChecks(checks.split(QLatin1Char(','), QString::SkipEmptyParts));
+#endif
     expandSubGroupsWithExplicitlyEnabledStates();
 }
 
@@ -147,6 +147,11 @@ bool CheckSelection::event(QEvent* event)
     }
 
     return QWidget::event(event);
+}
+
+void CheckSelection::onEnabledChecksChanged()
+{
+    emit checksChanged(checks());
 }
 
 }

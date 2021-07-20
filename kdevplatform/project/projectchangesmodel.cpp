@@ -40,7 +40,7 @@
 #include <QDir>
 #include <QIcon>
 
-Q_DECLARE_METATYPE(KDevelop::IProject*)
+#include <array>
 
 using namespace KDevelop;
 
@@ -70,7 +70,7 @@ ProjectChangesModel::~ProjectChangesModel()
 
 void ProjectChangesModel::addProject(IProject* p)
 {
-    QStandardItem* it = new QStandardItem(p->name());
+    auto* it = new QStandardItem(p->name());
     it->setData(p->name(), ProjectChangesModel::ProjectNameRole);
     IPlugin* plugin = p->versionControlPlugin();
     if(plugin) {
@@ -139,9 +139,9 @@ void ProjectChangesModel::changes(IProject* project, const QList<QUrl>& urls, IB
     
     if(vcs && vcs->isVersionControlled(urls.first())) { //TODO: filter?
         VcsJob* job=vcs->status(urls, mode);
-        job->setProperty("urls", qVariantFromValue<QList<QUrl>>(urls));
-        job->setProperty("mode", qVariantFromValue<int>(mode));
-        job->setProperty("project", qVariantFromValue(project));
+        job->setProperty("urls", QVariant::fromValue<QList<QUrl>>(urls));
+        job->setProperty("mode", QVariant::fromValue<int>(mode));
+        job->setProperty("project", QVariant::fromValue(project));
         connect(job, &VcsJob::finished, this, &ProjectChangesModel::statusReady);
         
         ICore::self()->runController()->registerJob(job);
@@ -173,7 +173,12 @@ void ProjectChangesModel::statusReady(KJob* job)
     }
 
     IBasicVersionControl::RecursionMode mode = IBasicVersionControl::RecursionMode(job->property("mode").toInt());
-    const QSet<QUrl> uncertainUrls = urls(itProject).toSet().subtract(foundUrls);
+    const QList<QUrl> projectUrls = urls(itProject);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QSet<QUrl> uncertainUrls = QSet<QUrl>(projectUrls.begin(), projectUrls.end()).subtract(foundUrls);
+#else
+    const QSet<QUrl> uncertainUrls = projectUrls.toSet().subtract(foundUrls);
+#endif
     const QList<QUrl> sourceUrls = job->property("urls").value<QList<QUrl>>();
     for (const QUrl& url : sourceUrls) {
         if(url.isLocalFile() && QDir(url.toLocalFile()).exists()) {
@@ -247,7 +252,7 @@ void ProjectChangesModel::reloadAll()
 
 void ProjectChangesModel::jobUnregistered(KJob* job)
 {
-    static const QList<VcsJob::JobType> readOnly = QList<VcsJob::JobType>{
+    static const std::array<VcsJob::JobType, 7> readOnly = {
         KDevelop::VcsJob::Add,
         KDevelop::VcsJob::Remove,
         KDevelop::VcsJob::Pull,
@@ -258,7 +263,7 @@ void ProjectChangesModel::jobUnregistered(KJob* job)
     };
 
     auto* vcsjob = qobject_cast<VcsJob*>(job);
-    if(vcsjob && readOnly.contains(vcsjob->type())) {
+    if (vcsjob && std::find(readOnly.begin(), readOnly.end(), vcsjob->type()) != readOnly.end()) {
         reloadAll();
     }
 }
@@ -283,7 +288,7 @@ void ProjectChangesModel::branchNameReady(VcsJob* job)
     auto* project = qobject_cast<IProject*>(job->property("project").value<QObject*>());
     if(job->status()==VcsJob::JobSucceeded) {
         QString name = job->fetchResults().toString();
-        QString branchName = name.isEmpty() ? i18n("no branch") : name;
+        const QString branchName = name.isEmpty() ? i18nc("@item:intext", "no branch") : name;
         projectItem(project)->setText(i18nc("project name (branch name)", "%1 (%2)", project->name(), branchName));
     } else {
         projectItem(project)->setText(project->name());

@@ -36,7 +36,9 @@
 #include <execute/iexecuteplugin.h>
 #include <interfaces/icore.h>
 #include <interfaces/idebugcontroller.h>
+#include <interfaces/iuicontroller.h>
 #include <interfaces/ilaunchconfiguration.h>
+#include <sublime/message.h>
 #include <util/environmentprofilelist.h>
 
 #include <KConfigGroup>
@@ -344,11 +346,10 @@ void DebugSession::ensureDebuggerListening()
 void DebugSession::handleFileExecAndSymbols(const MI::ResultRecord& r)
 {
     if (r.reason == QLatin1String("error")) {
-        KMessageBox::error(
-            qApp->activeWindow(),
-            i18n("<b>Could not start debugger:</b><br />")+
-            r[QStringLiteral("msg")].literal(),
-            i18n("Startup error"));
+        const QString messageText = i18n("<b>Could not start debugger:</b><br />")+
+            r[QStringLiteral("msg")].literal();
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -356,10 +357,10 @@ void DebugSession::handleFileExecAndSymbols(const MI::ResultRecord& r)
 void DebugSession::handleTargetSelect(const MI::ResultRecord& r)
 {
     if (r.reason == QLatin1String("error")) {
-        KMessageBox::error(qApp->activeWindow(),
-            i18n("<b>Error connecting to remote target:</b><br />")+
-            r[QStringLiteral("msg")].literal(),
-            i18n("Startup error"));
+        const QString messageText = i18n("<b>Error connecting to remote target:</b><br />")+
+            r[QStringLiteral("msg")].literal();
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -369,13 +370,12 @@ void DebugSession::handleCoreFile(const QStringList &s)
     qCDebug(DEBUGGERLLDB) << s;
     for (const auto &line : s) {
         if (line.startsWith(QLatin1String("error:"))) {
-            KMessageBox::error(
-                qApp->activeWindow(),
-                i18n("<b>Failed to load core file</b>"
+            const QString messageText = i18n("<b>Failed to load core file</b>"
                 "<p>Debugger reported the following error:"
                 "<p><tt>%1",
-                s.join(QLatin1Char('\n'))),
-                i18n("Startup error"));
+                s.join(QLatin1Char('\n')));
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
             stopDebugger();
             return;
         }
@@ -432,7 +432,7 @@ void DebugSession::handleVersion(const QStringList& s)
     int version[] = {0, 0, 0};
     if (match.hasMatch()) {
         for (int i = 0; i != 3; ++i) {
-            version[i] = match.captured(i+1).toInt();
+            version[i] = match.capturedRef(i+1).toInt();
         }
     }
 
@@ -453,11 +453,10 @@ void DebugSession::handleVersion(const QStringList& s)
             qFatal("You need a graphical application.");
         }
 
-        KMessageBox::error(
-            qApp->activeWindow(),
-            i18n("<b>You need lldb-mi from LLDB 3.8.1 or higher.</b><br />"
-            "You are using: %1", s.first()),
-            i18n("LLDB Error"));
+        const QString messageText = i18n("<b>You need lldb-mi from LLDB 3.8.1 or higher.</b><br />"
+            "You are using: %1", s.first());
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -472,8 +471,8 @@ void DebugSession::updateAllVariables()
     // we have to pick out top level variables first, as refetching will delete child
     // variables.
     QList<LldbVariable*> toplevels;
-    for (auto it = m_allVariables.begin(), ite = m_allVariables.end(); it != ite; ++it) {
-        auto *var = qobject_cast<LldbVariable*>(it.value());
+    for (auto* variable : qAsConst(m_allVariables)) {
+        auto *var = qobject_cast<LldbVariable*>(variable);
         if (var->topLevel()) {
             toplevels << var;
         }

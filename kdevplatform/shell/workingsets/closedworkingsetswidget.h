@@ -23,7 +23,6 @@
 #define KDEVPLATFORM_CLOSEDWORKINGSETSWIDGET_H
 
 #include <QWidget>
-#include <QHBoxLayout>
 #include <QMap>
 #include <QPointer>
 
@@ -53,13 +52,12 @@ public:
 
 private Q_SLOTS:
     void areaChanged(Sublime::Area* area);
-    void changedWorkingSet(Sublime::Area* area, const QString& from, const QString& to);
+    void changedWorkingSet(Sublime::Area *area, Sublime::Area*, const QString &from, const QString &to);
     void addWorkingSet(WorkingSet* set);
     void removeWorkingSet( WorkingSet* );
 
 private:
     MainWindow* const m_mainWindow;
-    QHBoxLayout* m_layout;
     QPointer<Sublime::Area> m_connectedArea;
     QMap<WorkingSet*, WorkingSetToolButton*> m_buttons;
 };

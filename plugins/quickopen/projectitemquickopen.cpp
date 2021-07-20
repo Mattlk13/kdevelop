@@ -122,8 +122,8 @@ Path findProjectForForPath(const IndexedString& path)
 uint addedItems(const AddedItems& items)
 {
     uint add = 0;
-    for(auto it = items.constBegin(); it != items.constEnd(); ++it) {
-        add += it.value().count();
+    for (auto& item : items) {
+        add += item.count();
     }
     return add;
 }
@@ -142,10 +142,14 @@ void ProjectItemDataProvider::setFilterText(const QString& text)
     m_addedItems.clear();
     m_addedItemsCountCache.markDirty();
 
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    QStringList search(text.split(QStringLiteral("::"), Qt::SkipEmptyParts));
+#else
     QStringList search(text.split(QStringLiteral("::"), QString::SkipEmptyParts));
-    for (int a = 0; a < search.count(); ++a) {
-        if (search[a].endsWith(QLatin1Char(':'))) { //Don't get confused while the :: is being typed
-            search[a].chop(1);
+#endif
+    for (auto& s : search) {
+        if (s.endsWith(QLatin1Char(':'))) { //Don't get confused while the :: is being typed
+            s.chop(1);
         }
     }
 
@@ -354,8 +358,8 @@ uint ProjectItemDataProvider::unfilteredItemCount() const
 QStringList ProjectItemDataProvider::supportedItemTypes()
 {
     const QStringList ret{
-        i18n("Classes"),
-        i18n("Functions"),
+        i18nc("@item quick open item type", "Classes"),
+        i18nc("@item quick open item type", "Functions"),
     };
     return ret;
 }
@@ -363,12 +367,12 @@ QStringList ProjectItemDataProvider::supportedItemTypes()
 void ProjectItemDataProvider::enableData(const QStringList& items, const QStringList& scopes)
 {
     //FIXME: property support different scopes
-    if (scopes.contains(i18n("Project"))) {
+    if (scopes.contains(i18nc("@item quick open scope", "Project"))) {
         m_itemTypes = NoItems;
-        if (items.contains(i18n("Classes"))) {
+        if (items.contains(i18nc("@item quick open item type", "Classes"))) {
             m_itemTypes = ( ItemTypes )(m_itemTypes | Classes);
         }
-        if (items.contains(i18n("Functions"))) {
+        if (items.contains(i18nc("@item quick open item type", "Functions"))) {
             m_itemTypes = ( ItemTypes )(m_itemTypes | Functions);
         }
     } else {

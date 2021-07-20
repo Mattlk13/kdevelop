@@ -70,7 +70,7 @@ void WorkingSetToolButton::intersectSet()
 
     m_set->setPersistent(true);
 
-    filterViews(Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileList().toSet() & m_set->fileList().toSet());
+    filterViews(Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileSet() & m_set->fileSet());
 }
 
 void WorkingSetToolButton::subtractSet()
@@ -79,14 +79,14 @@ void WorkingSetToolButton::subtractSet()
 
     m_set->setPersistent(true);
 
-    filterViews(Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileList().toSet() - m_set->fileList().toSet());
+    filterViews(Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileSet() - m_set->fileSet());
 }
 
 void WorkingSetToolButton::mergeSet()
 {
     Q_ASSERT(m_set);
 
-    const QSet<QString> loadFiles = m_set->fileList().toSet() - Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileList().toSet();
+    const QSet<QString> loadFiles = m_set->fileSet() - Core::self()->workingSetControllerInternal()->workingSet(mainWindow()->area()->workingSet())->fileSet();
     for (const QString& file : loadFiles) {
         Core::self()->documentController()->openDocument(QUrl::fromUserInput(file));
     }
@@ -100,7 +100,7 @@ void WorkingSetToolButton::duplicateSet()
         return;
     WorkingSet* set = Core::self()->workingSetControllerInternal()->newWorkingSet(QStringLiteral("clone"));
     set->setPersistent(true);
-    set->saveFromArea(mainWindow()->area(), mainWindow()->area()->rootIndex());
+    set->saveFromArea(mainWindow()->area());
     mainWindow()->area()->setWorkingSet(set->id());
 }
 
@@ -115,14 +115,14 @@ void WorkingSetToolButton::loadSet()
     mainWindow()->area()->setWorkingSet(QString(m_set->id()));
 }
 
-void WorkingSetToolButton::closeSet(bool ask)
+void WorkingSetToolButton::closeSet()
 {
     Q_ASSERT(m_set);
 
     m_set->setPersistent(true);
-    m_set->saveFromArea(mainWindow()->area(), mainWindow()->area()->rootIndex());
+    m_set->saveFromArea(mainWindow()->area());
 
-    if(ask && !Core::self()->documentControllerInternal()->saveAllDocumentsForWindow(mainWindow(), KDevelop::IDocument::Default, true))
+    if(!Core::self()->documentControllerInternal()->saveAllDocumentsForWindow(mainWindow(), KDevelop::IDocument::Default, true))
         return;
     mainWindow()->area()->setWorkingSet(QString());
 }

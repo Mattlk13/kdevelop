@@ -10,12 +10,12 @@
 
 #include "openprojectpage.h"
 
-#include <QHBoxLayout>
+#include <QVBoxLayout>
 
-#include <kio_version.h>
 #include <KDirOperator>
 #include <KFileItem>
 #include <KFileWidget>
+#include <kio_version.h>
 #include <KLocalizedString>
 #include <KUrlComboBox>
 
@@ -29,7 +29,8 @@ OpenProjectPage::OpenProjectPage( const QUrl& startUrl, const QStringList& filte
     QWidget* parent )
         : QWidget( parent )
 {
-    auto* layout = new QHBoxLayout( this );
+    auto* layout = new QVBoxLayout( this );
+    layout->setContentsMargins(0, 0, 0, 0);
 
     fileWidget = new KFileWidget( startUrl, this);
 
@@ -50,8 +51,12 @@ OpenProjectPage::OpenProjectPage( const QUrl& startUrl, const QStringList& filte
     // Emitted when clicking on a file in the fileview area
     connect( fileWidget, &KFileWidget::fileHighlighted, this, &OpenProjectPage::highlightFile );
 
+#if KIO_VERSION < QT_VERSION_CHECK(5, 79, 0)
     connect(fileWidget->dirOperator()->dirLister(), QOverload<const QUrl&>::of(&KDirLister::completed),
             this, &OpenProjectPage::dirChanged);
+#else
+    connect(fileWidget->dirOperator()->dirLister(), &KDirLister::listingDirCompleted, this, &OpenProjectPage::dirChanged);
+#endif
 
     connect( fileWidget, &KFileWidget::accepted, this, &OpenProjectPage::accepted);
 }
@@ -77,11 +82,7 @@ void OpenProjectPage::dirChanged(const QUrl& /*url*/)
         const KFileItemList items = fileWidget->dirOperator()->dirLister()->items();
         for (const KFileItem& item : items) {
             if(item.url().path().endsWith(ShellExtension::getInstance()->projectFileExtension()) && item.isFile()) {
-#if KIO_VERSION >= QT_VERSION_CHECK(5,33,0)
                 fileWidget->setSelectedUrl(item.url());
-#else
-                fileWidget->setSelection(item.url().url());
-#endif
             }
         }
     }

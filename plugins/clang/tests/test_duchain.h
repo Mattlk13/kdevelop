@@ -87,7 +87,11 @@ private Q_SLOTS:
     void testActiveDocumentsGetBestPriority();
     void testUsesCreatedForDeclarations();
     void testReparseIncludeGuard();
+    void testIncludeGuardHeaderHeaderOnly();
+    void testIncludeGuardHeaderHeaderOnly_data();
+    void testIncludeGuardHeaderWarning();
     void testExternC();
+    void testIncludeExternC();
     void testLambda();
     void testReparseUnchanged_data();
     void testReparseUnchanged();
@@ -106,6 +110,10 @@ private Q_SLOTS:
     void testHasInclude();
 
     void testSameFunctionDefinition();
+    void testSizeAlignOf();
+    void testSizeAlignOfUpdate();
+    void testBitWidth();
+    void testBitWidthUpdate();
 
 private:
     QScopedPointer<TestEnvironmentProvider> m_provider;

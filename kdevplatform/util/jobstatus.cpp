@@ -21,6 +21,7 @@
 
 #include "jobstatus.h"
 
+#include <kcoreaddons_version.h>
 #include <KJob>
 #include <KLocalizedString>
 
@@ -29,33 +30,13 @@ using namespace KDevelop;
 class KDevelop::JobStatusPrivate
 {
 public:
-    explicit JobStatusPrivate(JobStatus* q) : q(q) {}
-
-    void slotPercent(KJob* job, unsigned long percent);
-
-    JobStatus* q;
-
-    KJob* m_job;
-
     QString m_statusName;
 };
 
-void JobStatusPrivate::slotPercent(KJob* job, long unsigned int percent)
-{
-    Q_UNUSED(job);
-
-    emit q->showProgress(q, 0, 100, percent);
-}
-
 JobStatus::JobStatus(KJob* job, const QString& statusName, QObject* parent)
     : QObject(parent)
-    , d_ptr(new JobStatusPrivate(this))
+    , d_ptr(new JobStatusPrivate{statusName})
 {
-    Q_D(JobStatus);
-
-    d->m_job = job;
-    d->m_statusName = statusName;
-
     connect(job, &KJob::infoMessage, this, [this](KJob*, const QString& plain, const QString&) {
         emit showMessage(this, plain);
     });
@@ -66,8 +47,11 @@ JobStatus::JobStatus(KJob* job, const QString& statusName, QObject* parent)
         emit hideProgress(this);
         deleteLater();
     });
-    // no new-signal-slot syntax possible :(
-    connect(job, SIGNAL(percent(KJob*,ulong)), this, SLOT(slotPercent(KJob*,ulong)));
+#if KCOREADDONS_VERSION < QT_VERSION_CHECK(5, 80, 0)
+    connect(job, QOverload<KJob*, unsigned long>::of(&KJob::percent), this, &JobStatus::slotPercent);
+#else
+    connect(job, &KJob::percentChanged, this, &JobStatus::slotPercent);
+#endif
 }
 
 JobStatus::~JobStatus()
@@ -79,6 +63,12 @@ QString JobStatus::statusName() const
     Q_D(const JobStatus);
 
     return d->m_statusName;
+}
+
+void JobStatus::slotPercent(KJob* job, unsigned long percent)
+{
+    Q_UNUSED(job)
+    emit showProgress(this, 0, 100, percent);
 }
 
 #include "moc_jobstatus.cpp"

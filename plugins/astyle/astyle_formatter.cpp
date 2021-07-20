@@ -46,21 +46,16 @@ QString AStyleFormatter::formatSource(const QString &text, const QString& leftCo
     init(&is);
 
     while(hasMoreLines())
-        os << QString::fromUtf8(nextLine().c_str()) << endl;
+        os << QString::fromUtf8(nextLine().c_str()) << QLatin1Char('\n');
 
     init(nullptr);
 
     return extractFormattedTextFromContext(output, text, leftContext, rightContext, m_options[QStringLiteral("FillCount")].toInt());
 }
 
-void AStyleFormatter::setOption(const QString &key, const QVariant &value)
-{
-    m_options[key] = value;
-}
-
 void AStyleFormatter::updateFormatter()
 {
-    qCDebug(KDEV_ASTYLE) << "Updating option with: " << ISourceFormatter::optionMapToString(m_options) << endl;
+    qCDebug(KDEV_ASTYLE) << "Updating option with: " << ISourceFormatter::optionMapToString(m_options);
     // fill
     int wsCount = m_options[QStringLiteral("FillCount")].toInt();
     if(m_options[QStringLiteral("Fill")].toString() == QLatin1String("Tabs")) {
@@ -68,11 +63,8 @@ void AStyleFormatter::updateFormatter()
         bool force = m_options[QStringLiteral("FillForce")].toBool();
         AStyleFormatter::setTabSpaceConversionMode(false);
         AStyleFormatter::setTabIndentation(wsCount, force );
-        m_indentString = QStringLiteral("\t");
     } else {
         AStyleFormatter::setSpaceIndentation(wsCount);
-        m_indentString.fill(QLatin1Char(' '), wsCount);
-
         AStyleFormatter::setTabSpaceConversionMode(m_options[QStringLiteral("FillForce")].toBool());
     }
 
@@ -272,11 +264,11 @@ bool AStyleFormatter::predefinedStyle( const QString & style )
         setNamespaceIndent(false);
         return true;
     } else if (style == QLatin1String("KDELibs")) {
-        // https://community.kde.org/Policies/Kdelibs_Coding_Style
+        // https://community.kde.org/Policies/Frameworks_Coding_Style
         resetStyle();
         setSpaceIndentation(4);
         setBracketFormatMode(astyle::LINUX_MODE);
-        setPointerAlignment(astyle::PTR_ALIGN_TYPE);
+        setPointerAlignment(astyle::PTR_ALIGN_NAME);
         setLabelIndent(true);
         setOperatorPaddingMode(true);
         setParensInsidePaddingMode(false);
@@ -310,16 +302,11 @@ bool AStyleFormatter::predefinedStyle( const QString & style )
     return false;
 }
 
-QVariant AStyleFormatter::option(const QString &key)
+QVariant AStyleFormatter::option(const QString &key) const
 {
     if(!m_options.contains(key))
-        qCDebug(KDEV_ASTYLE) << "Missing option name " << key << endl;
+        qCDebug(KDEV_ASTYLE) << "Missing option name " << key;
     return m_options[key];
-}
-
-QString AStyleFormatter::indentString()
-{
-    return QString::fromUtf8(getIndentString().c_str());
 }
 
 void AStyleFormatter::loadStyle(const QString &content)
@@ -328,7 +315,7 @@ void AStyleFormatter::loadStyle(const QString &content)
     updateFormatter();
 }
 
-QString AStyleFormatter::saveStyle()
+QString AStyleFormatter::saveStyle() const
 {
     return ISourceFormatter::optionMapToString(m_options);
 }

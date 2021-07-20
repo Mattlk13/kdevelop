@@ -33,8 +33,8 @@
 #include <KIO/MkdirJob>
 #include <KJobWidgets>
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KTextEditor/Document>
+#include <kio_version.h>
 
 #include <interfaces/iproject.h>
 #include <vcs/interfaces/ibasicversioncontrol.h>
@@ -42,6 +42,8 @@
 #include <vcs/vcsjob.h>
 #include <interfaces/icore.h>
 #include <interfaces/idocumentcontroller.h>
+#include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
 
 using namespace KDevelop;
 
@@ -51,7 +53,11 @@ bool KDevelop::removeUrl(const KDevelop::IProject* project, const QUrl& url, con
 
     QWidget* window = QApplication::activeWindow();
 
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+    auto job = KIO::statDetails(url, KIO::StatJob::DestinationSide, KIO::StatNoDetails);
+#else
     auto job = KIO::stat(url, KIO::StatJob::DestinationSide, 0);
+#endif
     KJobWidgets::setWindow(job, window);
     if (!job->exec()) {
         qCWarning(PROJECT) << "tried to remove non-existing url:" << url << project << isFolder;
@@ -75,9 +81,11 @@ bool KDevelop::removeUrl(const KDevelop::IProject* project, const QUrl& url, con
     auto deleteJob = KIO::del(url);
     KJobWidgets::setWindow(deleteJob, window);
     if (!deleteJob->exec() && url.isLocalFile() && (QFileInfo::exists(url.toLocalFile()))) {
-        KMessageBox::error( window,
+        const QString messageText =
             isFolder ? i18n( "Cannot remove folder <i>%1</i>.", url.toDisplayString(QUrl::PreferLocalFile) )
-                        : i18n( "Cannot remove file <i>%1</i>.", url.toDisplayString(QUrl::PreferLocalFile) ) );
+                        : i18n( "Cannot remove file <i>%1</i>.", url.toDisplayString(QUrl::PreferLocalFile) );
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         return false;
     }
     return true;
@@ -90,11 +98,16 @@ bool KDevelop::removePath(const KDevelop::IProject* project, const KDevelop::Pat
 
 bool KDevelop::createFile(const QUrl& file)
 {
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+    auto statJob = KIO::statDetails(file, KIO::StatJob::DestinationSide, KIO::StatNoDetails);
+#else
     auto statJob = KIO::stat(file, KIO::StatJob::DestinationSide, 0);
+#endif
     KJobWidgets::setWindow(statJob, QApplication::activeWindow());
     if (statJob->exec()) {
-        KMessageBox::error( QApplication::activeWindow(),
-                            i18n( "The file <i>%1</i> already exists.", file.toDisplayString(QUrl::PreferLocalFile) ) );
+        const QString messageText = i18n("The file <i>%1</i> already exists.", file.toDisplayString(QUrl::PreferLocalFile));
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         return false;
     }
 
@@ -102,8 +115,9 @@ bool KDevelop::createFile(const QUrl& file)
         auto uploadJob = KIO::storedPut(QByteArray("\n"), file, -1);
         KJobWidgets::setWindow(uploadJob, QApplication::activeWindow());
         if (!uploadJob->exec()) {
-            KMessageBox::error( QApplication::activeWindow(),
-                                i18n( "Cannot create file <i>%1</i>.", file.toDisplayString(QUrl::PreferLocalFile) ) );
+            const QString messageText = i18n("Cannot create file <i>%1</i>.", file.toDisplayString(QUrl::PreferLocalFile));
+            auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+            ICore::self()->uiController()->postMessage(message);
             return false;
         }
     }
@@ -120,7 +134,9 @@ bool KDevelop::createFolder(const QUrl& folder)
     auto mkdirJob = KIO::mkdir(folder);
     KJobWidgets::setWindow(mkdirJob, QApplication::activeWindow());
     if (!mkdirJob->exec()) {
-        KMessageBox::error( QApplication::activeWindow(), i18n( "Cannot create folder <i>%1</i>.", folder.toDisplayString(QUrl::PreferLocalFile) ) );
+        const QString messageText = i18n("Cannot create folder <i>%1</i>.", folder.toDisplayString(QUrl::PreferLocalFile));
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         return false;
     }
     return true;
@@ -221,8 +237,8 @@ bool KDevelop::copyPath(const KDevelop::IProject* project, const KDevelop::Path&
 Path KDevelop::proposedBuildFolder(const Path& sourceFolder)
 {
     Path proposedBuildFolder;
-    if (sourceFolder.path().contains(QStringLiteral("/src/"))) {
-        const QString srcBuildPath = sourceFolder.path().replace(QStringLiteral("/src/"), QStringLiteral("/build/"));
+    if (sourceFolder.path().contains(QLatin1String("/src/"))) {
+        const QString srcBuildPath = sourceFolder.path().replace(QLatin1String("/src/"), QLatin1String("/build/"));
         Q_ASSERT(!srcBuildPath.isEmpty());
         if (QDir(srcBuildPath).exists()) {
             proposedBuildFolder = Path(srcBuildPath);

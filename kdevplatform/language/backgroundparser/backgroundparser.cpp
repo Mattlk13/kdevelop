@@ -68,23 +68,21 @@ const bool separateThreadForHighPriority = true;
  */
 QString elidedPathLeft(const QString& path, int width)
 {
-    static const QChar separator = QDir::separator();
-    static const QString placeholder = QStringLiteral("...");
+    const QLatin1String placeholder("...");
 
     if (path.size() <= width) {
         return path;
     }
 
     int start = (path.size() - width) + placeholder.size();
-    int pos = path.indexOf(separator, start);
+    int pos = path.indexOf(QDir::separator(), start);
     if (pos == -1) {
         pos = start; // no separator => just cut off the path at the beginning
     }
     Q_ASSERT(path.size() - pos >= 0 && path.size() - pos <= width);
 
     QStringRef elidedText = path.rightRef(path.size() - pos);
-    QString result = placeholder;
-    result.append(elidedText);
+    const QString result = placeholder + elidedText;
     return result;
 }
 
@@ -124,7 +122,7 @@ struct DocumentParseTarget
 inline uint qHash(const DocumentParseTarget& target)
 {
     return target.features * 7 + target.priority * 13 + target.sequentialProcessingFlags * 17
-           + reinterpret_cast<size_t>(target.notifyWhenReady.data());
+           + static_cast<uint>(reinterpret_cast<quintptr>(target.notifyWhenReady.data()));
 }
 
 struct DocumentParsePlan
@@ -158,9 +156,9 @@ struct DocumentParsePlan
     TopDUContext::Features features() const
     {
         //Pick the best features
-        auto ret = ( TopDUContext::Features )0;
+        TopDUContext::Features ret{};
         for (const DocumentParseTarget& target : targets) {
-            ret = ( TopDUContext::Features ) (ret | target.features);
+            ret |= target.features;
         }
 
         return ret;
@@ -380,8 +378,6 @@ public:
             auto* decorator = new ThreadWeaver::QObjectDecorator(job);
 
             QObject::connect(decorator, &ThreadWeaver::QObjectDecorator::done,
-                             m_parser, &BackgroundParser::parseComplete);
-            QObject::connect(decorator, &ThreadWeaver::QObjectDecorator::failed,
                              m_parser, &BackgroundParser::parseComplete);
             QObject::connect(job, &ParseJob::progress,
                              m_parser, &BackgroundParser::parseProgress, Qt::QueuedConnection);
@@ -799,8 +795,8 @@ void BackgroundParser::updateProgressData()
         d->m_maxParseJobs = 0;
     } else {
         float additionalProgress = 0;
-        for (auto it = d->m_jobProgress.constBegin(); it != d->m_jobProgress.constEnd(); ++it) {
-            additionalProgress += *it;
+        for (float progress : qAsConst(d->m_jobProgress)) {
+            additionalProgress += progress;
         }
 
         d->m_progressMax = d->m_maxParseJobs * 1000;

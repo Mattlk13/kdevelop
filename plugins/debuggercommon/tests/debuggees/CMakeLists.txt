@@ -9,8 +9,11 @@ function(add_debuggable_executable target)
         # COMPILE_FLAGS_DEBUG should already have the desired flags
         set_target_properties(${target} PROPERTIES COMPILE_FLAGS_RELEASE "/DEBUG /Od")
     else()
-        set_target_properties(${target} PROPERTIES COMPILE_FLAGS "${CMAKE_CXX_FLAGS_DEBUG} -O0")
+        # explicitly disable sanitizers, in case they got enabled globally
+        set_target_properties(${target} PROPERTIES COMPILE_FLAGS "-g -O0 -fno-sanitize=address,undefined")
+        set_target_properties(${target} PROPERTIES LINK_FLAGS "-g -O0 -fno-sanitize=address,undefined")
     endif()
+    set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 endfunction()
 
 add_debuggable_executable(debuggee_debugee SRCS debugee.cpp)
@@ -82,11 +85,14 @@ target_link_libraries(debuggee_qchar Qt5::Core)
 add_debuggable_executable(debuggee_quuid SRCS quuid.cpp)
 target_link_libraries(debuggee_quuid Qt5::Core)
 
+add_debuggable_executable(debuggee_qvariant SRCS qvariant.cpp)
+target_link_libraries(debuggee_qvariant Qt5::Core)
+
 add_debuggable_executable(debuggee_qlistpod SRCS qlistpod.cpp)
 target_link_libraries(debuggee_qlistpod Qt5::Core)
 
 add_debuggable_executable(debuggee_ktexteditortypes SRCS ktexteditortypes.cpp)
-target_link_libraries(debuggee_ktexteditortypes Qt5::Core KF5::TextEditor KDev::Util)
+target_link_libraries(debuggee_ktexteditortypes Qt5::Core KF5::TextEditor)
 
 add_debuggable_executable(debuggee_kdeveloptypes SRCS kdeveloptypes.cpp)
 target_link_libraries(debuggee_kdeveloptypes Qt5::Core KF5::TextEditor KDev::Util)

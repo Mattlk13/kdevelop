@@ -128,7 +128,24 @@ Identifier makeId(CXCursor cursor)
         // NOTE: using the QString overload of the Identifier ctor here, so that the template name gets parsed
         return Identifier(ClangString(clang_getCursorDisplayName(cursor)).toString());
     }
-    return Identifier(ClangString(clang_getCursorSpelling(cursor)).toIndexed());
+
+    const ClangString spelling(clang_getCursorSpelling(cursor));
+    if (!spelling.isEmpty() && spelling.c_str()[0] == '[') {
+        // skip unexposed DecompositionDecl, we want to get hold of the BindingsDecl inside instead
+        return Identifier();
+    }
+
+    auto name = spelling.toIndexed();
+    if (name.isEmpty() && CursorKindTraits::isClass(cursor.kind)) {
+        // try to use the type name for typedef'ed anon structs etc. as a fallback
+        auto type = ClangString(clang_getTypeSpelling(clang_getCursorType(cursor))).toString();
+        // but don't associate a super long name for anon structs without a typedef
+        if (!type.startsWith(QLatin1String("(anonymous "))) {
+            name = IndexedString(type);
+        }
+    }
+
+    return Identifier(name);
 }
 
 #if CINDEX_VERSION_MINOR >= 100 // FIXME https://bugs.llvm.org/show_bug.cgi?id=35333
@@ -364,6 +381,7 @@ struct Visitor
         auto kdevType = createType<TK>(type, cursor);
         if (kdevType) {
             setTypeModifiers<TK>(type, kdevType);
+            setTypeSize(type, kdevType);
         }
         return kdevType;
     }
@@ -449,6 +467,9 @@ struct Visitor
     {
         auto decl = createDeclarationCommon<CK, DeclType>(cursor, id);
         auto type = createType<CK>(cursor);
+        if (type) {
+            setTypeSize(clang_getCursorType(cursor), type);
+        }
 
         DUChainWriteLocker lock;
         if (context)
@@ -854,6 +875,7 @@ struct Visitor
 
     template<CXTypeKind TK>
     void setTypeModifiers(CXType type, AbstractType* kdevType) const;
+    void setTypeSize(CXType type, AbstractType* kdevType) const;
 
     const CXFile m_file;
     const IncludeFileContexts &m_includes;
@@ -901,6 +923,33 @@ void Visitor::setTypeModifiers(CXType type, AbstractType* kdevType) const
     kdevType->setModifiers(modifiers);
 }
 //END setTypeModifiers
+
+void Visitor::setTypeSize(CXType type, AbstractType* kdevType) const
+{
+    if (CINDEX_VERSION_MINOR < 59) {
+        // clang_Type_getSizeOf is unstable, see https://bugs.kde.org/show_bug.cgi?id=431391
+        return;
+    }
+
+
+    if (kdevType->whichType() == AbstractType::TypeFunction)
+        return;
+
+    type = clang_getCanonicalType(type);
+    if (type.kind == CXType_Elaborated)
+        return;
+
+    auto sizeOf = clang_Type_getSizeOf(type);
+    if (sizeOf >= 0) {
+        kdevType->setSizeOf(sizeOf);
+
+        // clang_Type_getAlignOf sometimes crashes, so better guard
+        // it and only call it when we got a size
+        auto alignOf = clang_Type_getAlignOf(type);
+        if (alignOf >= 0)
+            kdevType->setAlignOf(alignOf);
+    }
+}
 
 //BEGIN dispatchCursor
 
@@ -993,7 +1042,7 @@ void Visitor::setDeclData(CXCursor cursor, MacroDefinition* decl) const
     // And no way to get the actual definition text range
     // Should be quite easy to expose that in libclang, though
     // Let' still get some basic support for this and parse on our own, it's not that difficult
-    const QString contents = QString::fromUtf8(ClangUtils::getRawContents(unit, range));
+    const QString contents = ClangUtils::getRawContents(unit, range);
     const int firstOpeningParen = contents.indexOf(QLatin1Char('('));
     const int firstWhitespace = contents.indexOf(QLatin1Char(' '));
     const bool isFunctionLike = (firstOpeningParen != -1) && (firstOpeningParen < firstWhitespace);
@@ -1040,19 +1089,18 @@ void Visitor::setDeclData(CXCursor cursor, ClassMemberDeclaration *decl) const
 
 #if CINDEX_VERSION_MINOR >= 30
     auto offset = clang_Cursor_getOffsetOfField(cursor);
-    if (offset >= 0) { // don't add this info to the json tests, it invalidates the comment structure
-        auto type = clang_getCursorType(cursor);
-        auto sizeOf = clang_Type_getSizeOf(type);
-        auto alignOf = clang_Type_getAlignOf(type);
-
-        if (sizeOf >= 0)
-            decl->setSizeOf(sizeOf);
-        if (offset >= 0)
-            decl->setBitOffsetOf(offset);
-        if (alignOf >= 0)
-            decl->setAlignOf(alignOf);
+    if (offset >= 0) {
+        decl->setBitOffsetOf(offset);
     }
 #endif
+
+#if CINDEX_VERSION_MINOR >= 16
+    decl->setBitWidth(clang_getFieldDeclBitWidth(cursor));
+#endif
+
+    if (clang_isCursorDefinition(cursor)) {
+        decl->setDeclarationIsDefinition(true);
+    }
 }
 
 template<CXCursorKind CK, EnableIf<CursorKindTraits::isClassTemplate(CK)>>
@@ -1081,17 +1129,6 @@ void Visitor::setDeclData(CXCursor cursor, ClassDeclaration* decl) const
     if (clang_isCursorDefinition(cursor)) {
         decl->setDeclarationIsDefinition(true);
     }
-
-#if CINDEX_VERSION_MINOR >= 30
-    auto type = clang_getCursorType(cursor);
-    auto sizeOf = clang_Type_getSizeOf(type);
-    auto alignOf = clang_Type_getAlignOf(type);
-
-    if (sizeOf >= 0)
-        decl->setSizeOf(sizeOf);
-    if (alignOf >= 0)
-        decl->setAlignOf(alignOf);
-#endif
 }
 
 template<CXCursorKind CK>
@@ -1402,7 +1439,7 @@ RangeInRevision rangeInRevisionForUse(CXCursor cursor, CXCursorKind referencedCu
     } else {
         // Workaround for wrong use range returned by clang for macro expansions
         const auto contents = ClangUtils::getRawContents(clang_Cursor_getTranslationUnit(cursor), useRange);
-        const int firstOpeningParen = contents.indexOf('(');
+        const int firstOpeningParen = contents.indexOf(QLatin1Char('('));
         if (firstOpeningParen != -1) {
             range.end.column = range.start.column + firstOpeningParen;
             range.end.line = range.start.line;
@@ -1510,10 +1547,15 @@ CXChildVisitResult visitCursor(CXCursor cursor, CXCursor parent, CXClientData da
     auto location = clang_getCursorLocation(cursor);
     CXFile file;
     clang_getFileLocation(location, &file, nullptr, nullptr, nullptr);
-    // don't skip MemberRefExpr with invalid location, see also:
-    // http://lists.cs.uiuc.edu/pipermail/cfe-dev/2015-May/043114.html
-    if (!ClangUtils::isFileEqual(file, visitor->m_file) && (file || kind != CXCursor_MemberRefExpr)) {
-        return CXChildVisit_Continue;
+    if (!ClangUtils::isFileEqual(file, visitor->m_file)) {
+        // don't skip MemberRefExpr with invalid location, see also:
+        // http://lists.cs.uiuc.edu/pipermail/cfe-dev/2015-May/043114.html
+        const auto invalidMemberRefExpr = !file && kind == CXCursor_MemberRefExpr;
+        // also don't skip unexposed declarations, which may e.g. be an `extern "C"` directive
+        const auto unexposedDecl = file && kind == CXCursor_UnexposedDecl;
+        if (!invalidMemberRefExpr && !unexposedDecl) {
+            return CXChildVisit_Continue;
+        }
     }
 
 #define UseCursorKind(CursorKind, ...) case CursorKind: return visitor->dispatchCursor<CursorKind>(__VA_ARGS__);

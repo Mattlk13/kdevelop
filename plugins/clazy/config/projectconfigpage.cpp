@@ -1,6 +1,7 @@
 /* This file is part of KDevelop
 
    Copyright 2018 Anton Anikin <anton@anikin.xyz>
+   Copyright 2020 Friedrich W. H. Kossebau <kossebau@kde.org>
 
    This program is free software; you can redistribute it and/or
    modify it under the terms of the GNU General Public
@@ -19,37 +20,46 @@
 */
 
 #include "projectconfigpage.h"
-#include "ui_projectconfigpage.h"
 
+// plugin
 #include "checksdb.h"
-#include "checkswidget.h"
 #include "plugin.h"
+#include "globalsettings.h"
 #include "projectsettings.h"
-
+#include "checksetselectionmanager.h"
+// KDevPlatform
 #include <interfaces/iproject.h>
-
+// KF
 #include <KLocalizedString>
+#include <KShell>
 
 namespace Clazy
 {
 
-ProjectConfigPage::ProjectConfigPage(Plugin* plugin, KDevelop::IProject* project, QWidget* parent)
-    : ConfigPage(plugin, new ProjectSettings, parent)
-    , m_parameters(new JobParameters(project))
+ProjectConfigPage::ProjectConfigPage(Plugin* plugin, KDevelop::IProject* project,
+                                     CheckSetSelectionManager* checkSetSelectionManager,
+                                     QWidget* parent)
+    : ConfigPage(plugin, nullptr, parent)
+    , m_checkSetSelections(checkSetSelectionManager->checkSetSelections())
+    , m_defaultCheckSetSelectionId(checkSetSelectionManager->defaultCheckSetSelectionId())
 {
     Q_ASSERT(plugin);
 
-    Ui::ProjectConfigPage ui;
-    ui.setupUi(this);
+    m_settings = new ProjectSettings;
+    m_settings->setSharedConfig(project->projectConfiguration());
+    m_settings->load();
+    setConfigSkeleton(m_settings);
+
+    m_ui.setupUi(this);
 
     if (plugin->checksDB()->isValid()) {
-        ui.dbError->setVisible(false);
+        m_ui.dbError->setVisible(false);
     } else {
-        ui.dbError->setText(plugin->checksDB()->error());
-        ui.dbError->setVisible(true);
+        m_ui.dbError->setText(plugin->checksDB()->error());
+        m_ui.dbError->setVisible(true);
 
-        ui.tabWidget->setVisible(false);
-        ui.commandLineWidget->setVisible(false);
+        m_ui.tabWidget->setVisible(false);
+        m_ui.commandLineWidget->setVisible(false);
         return;
     }
 
@@ -58,68 +68,43 @@ ProjectConfigPage::ProjectConfigPage(Plugin* plugin, KDevelop::IProject* project
 
     // =============================================================================================
 
-    auto checksWidget = new ChecksWidget(plugin->checksDB());
-    checksWidget->setObjectName(QStringLiteral("kcfg_checks"));
-    connect(checksWidget, &ChecksWidget::checksChanged, m_parameters.data(), &JobParameters::setChecks);
+    m_ui.kcfg_checkSetSelection->setCheckSetSelections(m_checkSetSelections, m_defaultCheckSetSelectionId);
+    m_ui.checks->setChecksDb(plugin->checksDB());
+    connect(m_ui.checks, &ChecksWidget::checksChanged,
+            this, &ProjectConfigPage::updateCommandLine);
 
-    auto checksLayout = new QVBoxLayout(ui.checksTab);
-    checksLayout->addWidget(checksWidget);
-
-    // =============================================================================================
-
-    connect(ui.kcfg_onlyQt, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setOnlyQt(state != Qt::Unchecked);
-    });
-
-    connect(ui.kcfg_qtDeveloper, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setQtDeveloper(state != Qt::Unchecked);
-    });
-
-    connect(ui.kcfg_qt4Compat, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setQt4Compat(state != Qt::Unchecked);
-    });
-
-    connect(ui.kcfg_visitImplicitCode, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setVisitImplicitCode(state != Qt::Unchecked);
-    });
-
-    connect(ui.kcfg_ignoreIncludedFiles, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setIgnoreIncludedFiles(state != Qt::Unchecked);
-    });
-
-    ui.kcfg_headerFilter->setPlaceholderText(ui.kcfg_headerFilter->toolTip());
-    connect(ui.kcfg_headerFilter, &QLineEdit::textChanged,
-            m_parameters.data(), &JobParameters::setHeaderFilter);
-
-    connect(ui.kcfg_enableAllFixits, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setEnableAllFixits(state != Qt::Unchecked);
-    });
-
-    connect(ui.kcfg_noInplaceFixits, &QCheckBox::stateChanged, this, [this](int state) {
-            m_parameters->setNoInplaceFixits(state != Qt::Unchecked);
-    });
+    connect(m_ui.kcfg_checkSetSelection, &CheckSetSelectionComboBox::selectionChanged,
+            this, &ProjectConfigPage::onSelectionChanged);
+    connect(m_ui.checks, &ChecksWidget::checksChanged,
+            this, &ProjectConfigPage::onChecksChanged);
 
     // =============================================================================================
 
-    ui.kcfg_extraAppend->setPlaceholderText(ui.kcfg_extraAppend->toolTip());
-    connect(ui.kcfg_extraAppend, &QLineEdit::textChanged,
-            m_parameters.data(), &JobParameters::setExtraAppend);
-
-    ui.kcfg_extraPrepend->setPlaceholderText(ui.kcfg_extraPrepend->toolTip());
-    connect(ui.kcfg_extraPrepend, &QLineEdit::textChanged,
-            m_parameters.data(), &JobParameters::setExtraPrepend);
-
-    ui.kcfg_extraClazy->setPlaceholderText(ui.kcfg_extraClazy->toolTip());
-    connect(ui.kcfg_extraClazy, &QLineEdit::textChanged,
-            m_parameters.data(), &JobParameters::setExtraClazy);
-
-    // =============================================================================================
-
-    auto updateCommandLine = [this, ui]() {
-        ui.commandLineWidget->setText(m_parameters->commandLine().join(QLatin1Char(' ')));
+    QCheckBox* const commandLineCheckBoxes[] = {
+        m_ui.kcfg_onlyQt,
+        m_ui.kcfg_qtDeveloper,
+        m_ui.kcfg_qt4Compat,
+        m_ui.kcfg_visitImplicitCode,
+        m_ui.kcfg_ignoreIncludedFiles,
+        m_ui.kcfg_enableAllFixits,
+        m_ui.kcfg_noInplaceFixits,
     };
+    for (auto* checkBox : commandLineCheckBoxes) {
+        connect(checkBox, &QCheckBox::stateChanged,
+                this, &ProjectConfigPage::updateCommandLine);
+    }
+    QLineEdit* const commandLineLineEdits[] = {
+        m_ui.kcfg_headerFilter,
+        m_ui.kcfg_extraAppend,
+        m_ui.kcfg_extraPrepend,
+        m_ui.kcfg_extraClazy,
+    };
+    for (auto* lineEdit : commandLineLineEdits) {
+        lineEdit->setPlaceholderText(lineEdit->toolTip());
+        connect(lineEdit, &QLineEdit::textChanged,
+                this, &ProjectConfigPage::updateCommandLine);
+    }
 
-    connect(m_parameters.data(), &JobParameters::changed, this, updateCommandLine);
     updateCommandLine();
 }
 
@@ -132,7 +117,120 @@ QIcon ProjectConfigPage::icon() const
 
 QString ProjectConfigPage::name() const
 {
-    return i18n("Clazy");
+    return i18nc("@title:tab", "Clazy");
+}
+
+void ProjectConfigPage::updateCommandLine()
+{
+    QStringList arguments;
+
+    arguments << GlobalSettings::executablePath().toLocalFile();
+
+    const auto checks = m_ui.checks->checks();
+    if (!checks.isEmpty()) {
+        arguments << QLatin1String("-checks=") + checks;
+    }
+
+    if (m_ui.kcfg_onlyQt->isChecked()) {
+        arguments << QStringLiteral("-only-qt");
+    }
+
+    if (m_ui.kcfg_qtDeveloper->isChecked()) {
+        arguments << QStringLiteral("-qt-developer");
+    }
+
+    if (m_ui.kcfg_qt4Compat->isChecked()) {
+        arguments << QStringLiteral("-qt4-compat");
+    }
+
+    if (m_ui.kcfg_visitImplicitCode->isChecked()) {
+        arguments << QStringLiteral("-visit-implicit-code");
+    }
+
+    if (m_ui.kcfg_ignoreIncludedFiles->isChecked()) {
+        arguments << QStringLiteral("-ignore-included-files");
+    }
+
+    const auto headerFilter = m_ui.kcfg_headerFilter->text();
+    if (!headerFilter.isEmpty()) {
+        arguments << QLatin1String("-header-filter=") + headerFilter;
+    }
+
+    if (m_ui.kcfg_enableAllFixits->isChecked()) {
+        arguments << QStringLiteral("-enable-all-fixits");
+    }
+
+    if (m_ui.kcfg_noInplaceFixits->isChecked()) {
+        arguments << QStringLiteral("-no-inplace-fixits");
+    }
+
+    const auto extraAppend = m_ui.kcfg_extraAppend->text();
+    if (!extraAppend.isEmpty()) {
+        arguments << QLatin1String("-extra-arg=") + extraAppend;
+    }
+
+    const auto extraPrepend = m_ui.kcfg_extraPrepend->text();
+    if (!extraPrepend.isEmpty()) {
+        arguments << QLatin1String("-extra-arg-before1") + extraPrepend;
+    }
+
+    const auto extraClazy = m_ui.kcfg_extraClazy->text();
+    if (!extraClazy.isEmpty()) {
+        arguments << KShell::splitArgs(extraClazy);
+    }
+
+    arguments << QStringLiteral("-p <build directory>");
+
+    m_ui.commandLineWidget->setText(arguments.join(QLatin1Char(' ')));
+}
+
+void ProjectConfigPage::defaults()
+{
+    ConfigPage::defaults();
+    onSelectionChanged(m_ui.kcfg_checkSetSelection->selection());
+}
+
+void ProjectConfigPage::reset()
+{
+    ConfigPage::reset();
+
+    onSelectionChanged(m_ui.kcfg_checkSetSelection->selection());
+}
+
+void ProjectConfigPage::apply()
+{
+    ConfigPage::apply();
+}
+
+void ProjectConfigPage::onSelectionChanged(const QString& selectionId)
+{
+    QString checks;
+    bool editable = false;
+    if (selectionId.isEmpty()) {
+        checks = m_ui.kcfg_checks->checks();
+        editable = true;
+    } else {
+        const  QString effectiveSelectionId = (selectionId == QLatin1String("Default")) ? m_defaultCheckSetSelectionId : selectionId;
+        for (auto& selection : m_checkSetSelections) {
+            if (selection.id() == effectiveSelectionId) {
+                checks = selection.selectionAsString();
+                break;
+            }
+        }
+    }
+
+    m_ui.checks->setEditable(editable);
+    m_ui.checks->setChecks(checks);
+}
+
+void ProjectConfigPage::onChecksChanged(const QString& checks)
+{
+    const bool isCustomSelected =  m_ui.kcfg_checkSetSelection->selection().isEmpty();
+    if (!isCustomSelected) {
+        return;
+    }
+
+    m_ui.kcfg_checks->setChecks(checks);
 }
 
 }

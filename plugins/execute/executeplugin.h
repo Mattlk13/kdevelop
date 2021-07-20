@@ -40,19 +40,13 @@ class ExecutePlugin : public KDevelop::IPlugin, public IExecutePlugin
     explicit ExecutePlugin(QObject *parent, const QVariantList & = QVariantList() );
     ~ExecutePlugin() override;
 
-    static QString _nativeAppConfigTypeId;
-    static QString workingDirEntry;
-    static QString executableEntry;
-    static QString argumentsEntry;
-    static QString isExecutableEntry;
-    static QString dependencyEntry;
-    static QString environmentProfileEntry;
-    static QString useTerminalEntry;
-    static QString terminalEntry;
-    static QString userIdToRunEntry;
-    static QString dependencyActionEntry;
-    static QString projectTargetEntry;
-    
+    static constexpr const char* projectTargetEntry = "Project Target";
+    static constexpr const char* argumentsEntry = "Arguments";
+    static constexpr const char* configuredByCTest = "ConfiguredByCTest";
+    static constexpr const char* killBeforeExecutingAgain = "Kill Before Executing Again";
+    static constexpr const char* dependencyActionEntry = "Dependency Action";
+    static constexpr const char* dependencyEntry = "Dependencies";
+
     void unload() override;
     
     QUrl executable( KDevelop::ILaunchConfiguration*, QString& err ) const override;

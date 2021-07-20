@@ -22,17 +22,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 QTDIR=/opt/qt5
 
 if [ -z "$KDEVELOP_VERSION" ]; then
-    KDEVELOP_VERSION=5.4
+    KDEVELOP_VERSION=5.6
 fi
 if [ -z "$KDEV_PG_QT_VERSION" ]; then
-    KDEV_PG_QT_VERSION=v2.2.0
+    KDEV_PG_QT_VERSION=v2.2.1
 fi
-KF5_VERSION=v5.54.0
-KDE_PLASMA_BREEZE_VERSION=v5.13.5 # latest version still supporting Qt 5.9
-LIBKSYSGUARD_VERSION=v5.15.5 # latest version still supporting Qt 5.9
-KDE_APPLICATION_VERSION=v19.04.3
-GRANTLEE_VERSION=v5.1.0
-OKTETA_VERSION=v0.26.2
+KF5_VERSION=v5.73.0
+LIBKSYSGUARD_VERSION=v5.18.5 # 5.19 needs Qt 5.14
+BREEZESTYLE_VERSION=v5.19.5
+KDE_RELEASESERVICE_VERSION=v20.08.1
+GRANTLEE_VERSION=v5.2.0
+OKTETA_VERSION=v0.26.4
 
 export LLVM_ROOT=/opt/llvm/
 export PATH=/opt/rh/python27/root/usr/bin/:$PATH
@@ -87,10 +87,13 @@ if [ -z "$SKIP_PRUNE" ]; then
 fi
 
 # start building the deps
+# usage: build_project <repourl> <repodirectory> <branch/tag>
 function build_project
 { (
-    PROJECT=$1
-    VERSION=$2
+    REPOURL=$1
+    PROJECT=$2
+    VERSION=$3
+    shift
     shift
     shift
 
@@ -107,11 +110,7 @@ function build_project
         git fetch --tags
         cd ..
     else
-        if [ -z "$CUSTOM_GIT_URL" ]; then
-            git clone git://anongit.kde.org/$PROJECT
-        else
-            git clone $CUSTOM_GIT_URL
-        fi
+        git clone $REPOURL $PROJECT
     fi
 
     cd $PROJECT
@@ -144,11 +143,19 @@ function build_project
     ninja install
 ) }
 
+function build_kde_project
+{ (
+    REPOPATH=$1
+    PROJECT=${1#*/}
+    shift
+    build_project https://invent.kde.org/$REPOPATH.git $PROJECT $@
+) }
+
 function build_framework
 { (
     PROJECT=$1
     shift
-    build_project $PROJECT $KF5_VERSION $@
+    build_kde_project frameworks/$PROJECT $KF5_VERSION $@
 ) }
 
 # KDE Frameworks
@@ -158,11 +165,11 @@ build_framework extra-cmake-modules -DBUILD_HTML_DOCS=OFF -DBUILD_MAN_DOCS=OFF
 build_framework kconfig
 build_framework kguiaddons
 build_framework ki18n
-build_framework kitemviews
-build_framework sonnet
+build_framework kitemviews -DBUILD_DESIGNERPLUGIN=OFF
+build_framework sonnet -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kwindowsystem
-build_framework kwidgetsaddons
-build_framework kcompletion
+build_framework kwidgetsaddons -DBUILD_DESIGNERPLUGIN=OFF
+build_framework kcompletion -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kdbusaddons
 build_framework karchive
 build_framework kcoreaddons
@@ -171,26 +178,26 @@ build_framework kcrash
 build_framework kservice
 build_framework kcodecs
 build_framework kauth
-build_framework kconfigwidgets
-build_framework kiconthemes
-build_framework ktextwidgets
+build_framework kconfigwidgets -DBUILD_DESIGNERPLUGIN=OFF
+build_framework kiconthemes -DBUILD_DESIGNERPLUGIN=OFF
+build_framework ktextwidgets -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kglobalaccel
-build_framework kxmlgui
+build_framework kxmlgui -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kbookmarks
 build_framework solid
-build_framework kio
+build_framework kio -DBUILD_DESIGNERPLUGIN=OFF
 build_framework kparts
 build_framework kitemmodels
 build_framework threadweaver
 build_framework attica
+build_framework kpackage
 build_framework knewstuff
 build_framework syntax-highlighting
 build_framework ktexteditor
-build_framework kpackage
 build_framework kdeclarative
 build_framework kcmutils
 (PATCH_FILE=$SCRIPT_DIR/knotifications_no_phonon.patch build_framework knotifications)
-build_framework knotifyconfig
+(PATCH_FILE=$SCRIPT_DIR/knotifyconfig_no_phonon.patch build_framework knotifyconfig)
 build_framework kdoctools
 build_framework breeze-icons -DBINARY_ICONS_RESOURCE=1
 build_framework kpty
@@ -198,27 +205,26 @@ build_framework kinit
 fi
 
 # KDE Plasma
-build_project libksysguard $LIBKSYSGUARD_VERSION
-build_project kdecoration $KDE_PLASMA_BREEZE_VERSION # needed by breeze
-build_project breeze $KDE_PLASMA_BREEZE_VERSION
+build_kde_project plasma/libksysguard $LIBKSYSGUARD_VERSION
+(PATCH_FILE=$SCRIPT_DIR/breeze-noconstexpr.patch build_kde_project plasma/breeze $BREEZESTYLE_VERSION -DWITH_DECORATIONS=OFF -DWITH_WALLPAPERS=OFF)
 
 # KDE Applications
-build_project libkomparediff2 $KDE_APPLICATION_VERSION
-build_project kate $KDE_APPLICATION_VERSION -DDISABLE_ALL_OPTIONAL_SUBDIRECTORIES=TRUE -DBUILD_addons=TRUE -DBUILD_snippets=TRUE -DBUILD_kate-ctags=TRUE # for snippet plugin, see T3826
-build_project konsole $KDE_APPLICATION_VERSION
-build_project okteta $OKTETA_VERSION -DBUILD_DESIGNERPLUGIN=OFF -DBUILD_OKTETAKASTENLIBS=OFF
+build_kde_project sdk/libkomparediff2 $KDE_RELEASESERVICE_VERSION
+build_kde_project utilities/kate $KDE_RELEASESERVICE_VERSION -DDISABLE_ALL_OPTIONAL_SUBDIRECTORIES=TRUE -DBUILD_addons=TRUE -DBUILD_snippets=TRUE -DBUILD_kate-ctags=TRUE
+build_kde_project utilities/konsole $KDE_RELEASESERVICE_VERSION
+build_kde_project utilities/okteta $OKTETA_VERSION -DBUILD_DESIGNERPLUGIN=OFF -DBUILD_OKTETAKASTENLIBS=OFF
 
 # Extra
-(CUSTOM_GIT_URL=https://github.com/steveire/grantlee.git PATCH_FILE=$SCRIPT_DIR/grantlee_avoid_recompilation.patch build_project grantlee $GRANTLEE_VERSION)
+build_project https://github.com/steveire/grantlee.git  grantlee $GRANTLEE_VERSION -DBUILD_TESTS=OFF
 
 # KDevelop
-build_project kdevelop-pg-qt $KDEV_PG_QT_VERSION
-build_project kdevelop $KDEVELOP_VERSION
-build_project kdev-php $KDEVELOP_VERSION
+build_kde_project kdevelop/kdevelop-pg-qt $KDEV_PG_QT_VERSION
+build_kde_project kdevelop/kdevelop $KDEVELOP_VERSION
+build_kde_project kdevelop/kdev-php $KDEVELOP_VERSION
 
 # Build kdev-python
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH/kdevelop.appdir/usr/lib/
-build_project kdev-python $KDEVELOP_VERSION
+build_kde_project kdevelop/kdev-python $KDEVELOP_VERSION
 
 # Install some colorschemes
 cd $BUILD
@@ -382,7 +388,7 @@ cp /kdevelop.appdir/usr/lib/libexec/kf5/* /kdevelop.appdir/usr/bin/
 
 cd /
 if [ ! -d appimage-exec-wrapper ]; then
-    git clone git://anongit.kde.org/scratch/brauch/appimage-exec-wrapper
+    git clone https://invent.kde.org/brauch/appimage-exec-wrapper.git
 fi;
 cd /appimage-exec-wrapper/
 make clean
@@ -390,6 +396,11 @@ make
 
 cd /kdevelop.appdir
 cp -v /appimage-exec-wrapper/exec.so exec_wrapper.so
+
+# Disabled plugins (yet build and bundled, as more complicated to remove from build):
+# * KDevWelcomePage - issues with Qt failing to load SSL during news feed fetching
+#                     thus causing KDevelop to hang while creating network connections
+# * KDevManPage - man:/ kio-slave & deps not bundled yet
 
 cat > AppRun << EOF
 #!/bin/bash
@@ -422,8 +433,8 @@ export APPIMAGE_STARTUP_XDG_DATA_DIRS=\$XDG_DATA_DIRS
 export APPIMAGE_STARTUP_PATH=\$PATH
 export APPIMAGE_STARTUP_PYTHONHOME=\$PYTHONHOME
 
-export KDEV_CLANG_BUILTIN_DIR=\$DIR/opt/llvm/lib/clang/8.0.0/include
-export KDEV_DISABLE_PLUGINS=KDevWelcomePage
+export KDEV_CLANG_BUILTIN_DIR=\$DIR/opt/llvm/lib/clang/${LLVM_VERSION}/include
+export KDEV_DISABLE_PLUGINS="KDevWelcomePage;KDevManPage"
 
 cd \$HOME
 

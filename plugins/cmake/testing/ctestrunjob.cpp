@@ -22,6 +22,7 @@
 #include "qttestdelegate.h"
 #include <debug.h>
 
+#include <algorithm>
 #include <interfaces/ilaunchconfiguration.h>
 #include <interfaces/icore.h>
 #include <interfaces/itestcontroller.h>
@@ -61,25 +62,25 @@ static KJob* createTestJob(const QString& launchModeId, const QStringList& argum
     qCDebug(CMAKE) << "got mode and type:" << type << type->id() << mode << mode->id();
     Q_ASSERT(type && mode);
 
-    ILauncher* launcher = nullptr;
-    const auto launchers = type->launchers();
-    for (ILauncher* l : launchers) {
-        //qCDebug(CMAKE) << "available launcher" << l << l->id() << l->supportedModes();
-        if (l->supportedModes().contains(mode->id())) {
-            launcher = l;
-            break;
-        }
-    }
+    ILauncher* launcher = [type, mode]() {
+        const auto launchers = type->launchers();
+        auto it = std::find_if(launchers.begin(), launchers.end(), [mode](ILauncher *l) {
+            return l->supportedModes().contains(mode->id());
+        });
+        Q_ASSERT(it != launchers.end());
+        return *it;
+    }();
     Q_ASSERT(launcher);
 
-    ILaunchConfiguration* ilaunch = nullptr;
-    const QList<ILaunchConfiguration*> launchConfigurations = ICore::self()->runController()->launchConfigurations();
-    for (ILaunchConfiguration* l : launchConfigurations) {
-        if (l->type() == type && l->config().readEntry("ConfiguredByCTest", false)) {
-            ilaunch = l;
-            break;
-        }
-    }
+    auto ilaunch = [type]() {
+        const auto launchConfigurations = ICore::self()->runController()->launchConfigurations();
+        auto it = std::find_if(launchConfigurations.begin(), launchConfigurations.end(),
+                            [type](ILaunchConfiguration* l) {
+                                return (l->type() == type && l->config().readEntry("ConfiguredByCTest", false));
+                            });
+        return it == launchConfigurations.end() ? nullptr : *it;
+    }();
+
     if (!ilaunch) {
         ilaunch = ICore::self()->runController()->createLaunchConfiguration( type,
                                                 qMakePair( mode->id(), launcher->id() ),
@@ -120,20 +121,22 @@ void CTestRunJob::start()
 
     if (auto* cjob = qobject_cast<ExecuteCompositeJob*>(m_job)) {
         auto* outputJob = cjob->findChild<OutputJob*>();
-        Q_ASSERT(outputJob);
-        outputJob->setVerbosity(m_verbosity);
+        if (outputJob) {
+            outputJob->setVerbosity(m_verbosity);
 
-        QString testName = m_suite->name();
-        QString title;
-        if (cases_selected.count() == 1)
-            title = i18nc("running test %1, %2 test case", "CTest %1: %2", testName, cases_selected.value(0));
-        else
-            title = i18ncp("running test %1, %2 number of test cases", "CTest %2 (%1)", "CTest %2 (%1)", cases_selected.count(), testName);
+            QString testName = m_suite->name();
+            QString title;
+            if (cases_selected.count() == 1)
+                title = i18nc("running test %1, %2 test case", "CTest %1: %2", testName, cases_selected.value(0));
+            else
+                title = i18ncp("running test %1, %2 number of test cases", "CTest %2 (%1)", "CTest %2 (%1)",
+                               cases_selected.count(), testName);
 
-        outputJob->setTitle(title);
+            outputJob->setTitle(title);
 
-        m_outputModel = qobject_cast<OutputModel*>(outputJob->model());
-        connect(m_outputModel, &QAbstractItemModel::rowsInserted, this, &CTestRunJob::rowsInserted);
+            m_outputModel = qobject_cast<OutputModel*>(outputJob->model());
+            connect(m_outputModel, &QAbstractItemModel::rowsInserted, this, &CTestRunJob::rowsInserted);
+        }
     }
     connect(m_job, &KJob::finished, this, &CTestRunJob::processFinished);
 
@@ -187,11 +190,11 @@ void CTestRunJob::processFinished(KJob* job)
 
 void CTestRunJob::rowsInserted(const QModelIndex &parent, int startRow, int endRow)
 {
-    // This regular expression matches the name of the testcase (whatever between "::" and "(", indeed )
+    // This regular expression matches the name of the testcase (whatever between the last "::" and "(", indeed )
     // For example, from:
     //      PASS   : ExpTest::testExp(sum)
     // matches "testExp"
-    static QRegExp caseRx(QStringLiteral("::(.*)\\("), Qt::CaseSensitive, QRegExp::RegExp2);
+    static QRegExp caseRx(QStringLiteral("::([^:]*)\\("), Qt::CaseSensitive, QRegExp::RegExp2);
     for (int row = startRow; row <= endRow; ++row)
     {
         QString line = m_outputModel->data(m_outputModel->index(row, 0, parent), Qt::DisplayRole).toString();

@@ -25,6 +25,8 @@
 
 #include <util/path.h>
 
+#include <vector>
+
 namespace KDevelop {
 class IProject;
 class ProjectFileItem;
@@ -35,8 +37,9 @@ class ProjectFileItem;
  */
 struct ProjectFile
 {
-    ProjectFile()
-    {}
+    ProjectFile() = default;
+    explicit ProjectFile(const KDevelop::ProjectFileItem*);
+
     KDevelop::Path path;
     // project root folder url
     KDevelop::Path projectPath;
@@ -51,9 +54,22 @@ struct ProjectFile
 inline bool operator<(const ProjectFile& left, const ProjectFile& right)
 {
     if (left.outsideOfProject != right.outsideOfProject) {
+        // place the less interesting generated files at the end
         return !left.outsideOfProject;
     }
-    return left.path < right.path;
+    const int comparison = left.path.compare(right.path, Qt::CaseInsensitive);
+    if (comparison != 0) {
+        return comparison < 0;
+    }
+    // Only paths that are completely, case-sensitively equal are considered
+    // duplicates. Comparing indexed paths here when the paths are
+    // case-insensitively equal ensures that:
+    // * the duplicates are adjacent and thus detected by std::unique;
+    // * binary search algorithms find only case-sensitively equal elements.
+    // OpenFilesDataProvider default-initializes all its indexed paths making
+    // them all equal to each other. This is fine because OpenFilesDataProvider
+    // doesn't use std::unique or binary search algorithms.
+    return left.indexedPath < right.indexedPath;
 }
 
 Q_DECLARE_TYPEINFO(ProjectFile, Q_MOVABLE_TYPE);
@@ -82,8 +98,9 @@ public:
     QString project() const;
 
     KDevelop::Path projectPath() const;
+
 private:
-    ProjectFile m_file;
+    const ProjectFile m_file;
 };
 
 class BaseFileDataProvider
@@ -134,7 +151,7 @@ private:
     // project files sorted by their url
     // this is done so we can limit ourselves to a relatively fast
     // filtering without any expensive sorting in reset().
-    QVector<ProjectFile> m_projectFiles;
+    std::vector<ProjectFile> m_projectFiles;
 };
 
 /**

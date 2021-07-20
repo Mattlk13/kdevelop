@@ -19,18 +19,25 @@
 
 #include "../manpagedocumentation.h"
 #include "../manpagemodel.h"
-
+// KDevPlatform
+#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
 #include <tests/modeltest.h>
-
+#endif
+// Qt
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+#include <QAbstractItemModelTester>
+#endif
 #include <QDebug>
 #include <QSignalSpy>
 #include <QTest>
+#include <QStandardPaths>
 
 class TestManPageModel : public QObject
 {
     Q_OBJECT
 
 private Q_SLOTS:
+    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
     void testModel();
     void testDocumentation();
 };
@@ -38,15 +45,16 @@ private Q_SLOTS:
 void TestManPageModel::testModel()
 {
     ManPageModel model;
-    QSignalSpy spy(&model, SIGNAL(manPagesLoaded()));
-    spy.wait();
 
-    if (model.isLoaded()) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+    new QAbstractItemModelTester(&model, this);
+#else
+    new ModelTest(&model);
+#endif
+
+    QTRY_VERIFY(model.isLoaded() || model.hasError());
+    if (model.isLoaded())
         QVERIFY(model.rowCount() > 0);
-        new ModelTest(&model);
-    } else {
-        QCOMPARE(model.rowCount(), 0);
-    }
 }
 
 void TestManPageModel::testDocumentation()

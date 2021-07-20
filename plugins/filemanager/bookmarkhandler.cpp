@@ -27,8 +27,12 @@
 #include <interfaces/icore.h>
 #include <interfaces/isession.h>
 
+#include <kbookmarks_version.h>
+#if KBOOKMARKS_VERSION < QT_VERSION_CHECK(5, 69, 0)
 #include <KActionCollection>
+#endif
 
+#include <QMenu>
 
 BookmarkHandler::BookmarkHandler( FileManager *parent, QMenu* kpopupmenu )
     : QObject( parent ),
@@ -45,10 +49,15 @@ BookmarkHandler::BookmarkHandler( FileManager *parent, QMenu* kpopupmenu )
     KBookmarkManager *manager = KBookmarkManager::managerForFile( bookmarksPath.toLocalFile(), QStringLiteral( "kdevplatform" ) );
     manager->setUpdate( true );
 
+#if KBOOKMARKS_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+    m_bookmarkMenu = new KBookmarkMenu(manager, this, m_menu);
+    const auto actions = m_menu->actions();
+#else
     m_bookmarkMenu = new KBookmarkMenu( manager, this, m_menu, parent->actionCollection() );
+    const auto actions = parent->actionCollection()->actions();
+#endif
 
      //remove shortcuts as they might conflict with others (eg. Ctrl+B)
-    const auto actions = parent->actionCollection()->actions();
     for (QAction* action : actions) {
         action->setShortcut(QKeySequence());
     }

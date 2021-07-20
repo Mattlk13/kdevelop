@@ -11,6 +11,12 @@
 
 #include <serialization/indexedstring.h>
 
+#include <util/wildcardhelpers.h>
+
+#include <algorithm>
+#include <atomic>
+#include <queue>
+#include <utility>
 
 using KDevelop::IndexedString;
 
@@ -32,22 +38,36 @@ static bool isInDirectory(const QUrl& url, const QUrl& dir, int maxDepth)
     return false;
 }
 
-// the abort parameter must be volatile so that it
-// is evaluated every time - optimization might prevent that
-
-static QList<QUrl> thread_getProjectFiles(const QUrl& dir, int depth, const QStringList& include,
-                                         const QStringList& exlude, volatile bool &abort)
+namespace {
+class FileFinder
 {
-    ///@todo This is not thread-safe!
-    KDevelop::IProject *project = KDevelop::ICore::self()->projectController()->findProjectForUrl( dir );
-    QList<QUrl> res;
-    if(!project)
-        return res;
+public:
+    explicit FileFinder(const QStringList& include, const QStringList& exclude,
+                        const std::atomic<bool>& abort)
+        : m_include{include}
+        , m_exclude{exclude}
+        , m_abort{abort}
+    {}
 
-    const QSet<IndexedString> fileSet = project->fileSet();
-    for (const IndexedString& item : fileSet) {
-        if(abort)
+    void getProjectFiles(const QSet<IndexedString>& projectFileSet,
+                         const QUrl& dir, int depth, QList<QUrl>& results);
+    void findFiles(const QDir& dir, int depth, QList<QUrl>& results);
+
+private:
+    bool shouldAbort() const { return m_abort.load(std::memory_order_relaxed); }
+
+    const QStringList& m_include;
+    const QStringList& m_exclude;
+    const std::atomic<bool>& m_abort;
+};
+
+void FileFinder::getProjectFiles(const QSet<IndexedString>& projectFileSet,
+                                 const QUrl& dir, int depth, QList<QUrl>& results)
+{
+    for (const IndexedString& item : projectFileSet) {
+        if (shouldAbort()) {
             break;
+        }
         QUrl url = item.toUrl();
         if( url != dir )
         {
@@ -66,34 +86,33 @@ static QList<QUrl> thread_getProjectFiles(const QUrl& dir, int depth, const QStr
                     continue;
             }
         }
-        if( QDir::match(include, url.fileName()) && !QDir::match(exlude, url.toLocalFile()) )
-            res << url;
+        if (QDir::match(m_include, url.fileName()) && !WildcardHelpers::match(m_exclude, url.toLocalFile())) {
+            results.push_back(std::move(url));
+        }
     }
-
-    return res;
 }
 
-static QList<QUrl> thread_findFiles(const QDir& dir, int depth, const QStringList& include,
-                                   const QStringList& exclude, volatile bool &abort)
+void FileFinder::findFiles(const QDir& dir, int depth, QList<QUrl>& results)
 {
-    QFileInfoList infos = dir.entryInfoList(include, QDir::NoDotAndDotDot|QDir::Files|QDir::Readable);
+    QFileInfoList infos = dir.entryInfoList(m_include, QDir::NoDotAndDotDot|QDir::Files|QDir::Readable|QDir::Hidden);
 
     if(!QFileInfo(dir.path()).isDir())
         infos << QFileInfo(dir.path());
 
-    QList<QUrl> dirFiles;
     for (const QFileInfo& currFile : qAsConst(infos)) {
         QString currName = currFile.canonicalFilePath();
-        if(!QDir::match(exclude, currName))
-            dirFiles << QUrl::fromLocalFile(currName);
+        if (!WildcardHelpers::match(m_exclude, currName)) {
+            results.push_back(QUrl::fromLocalFile(currName));
+        }
     }
     if(depth != 0)
     {
-        static const QDir::Filters dirFilter = QDir::NoDotAndDotDot|QDir::AllDirs|QDir::Readable|QDir::NoSymLinks;
+        constexpr QDir::Filters dirFilter = QDir::NoDotAndDotDot|QDir::AllDirs|QDir::Readable|QDir::NoSymLinks|QDir::Hidden;
         const auto dirs = dir.entryInfoList(QStringList(), dirFilter);
         for (const QFileInfo& currDir : dirs) {
-            if(abort)
+            if (shouldAbort()) {
                 break;
+            }
             QString canonical = currDir.canonicalFilePath();
             if (!canonical.startsWith(dir.canonicalPath()))
                 continue;
@@ -102,58 +121,106 @@ static QList<QUrl> thread_findFiles(const QDir& dir, int depth, const QStringLis
                 depth--;
             }
 
-            dirFiles << thread_findFiles(canonical, depth, include, exclude, abort);
+            findFiles(canonical, depth, results);
         }
     }
-    return dirFiles;
 }
+
+using FileSetCollection = std::queue<QSet<IndexedString>>;
+
+FileSetCollection getProjectFileSets(const QList<QUrl>& dirs)
+{
+    FileSetCollection fileSets;
+    for (const QUrl& dir : dirs) {
+        const auto* const project = KDevelop::ICore::self()->projectController()->findProjectForUrl(dir);
+        // Store an empty file set when project==nullptr because each element
+        // of fileSets must correspond to an element of dirs at the same index.
+        fileSets.push(project ? project->fileSet() : FileSetCollection::value_type{});
+    }
+    return fileSets;
+}
+
+} // namespace
+
+class GrepFindFilesThreadPrivate
+{
+public:
+    const QList<QUrl> m_startDirs;
+    FileSetCollection m_projectFileSets;
+    const QString m_patString;
+    const QString m_exclString;
+    const int m_depth;
+    std::atomic<bool> m_tryAbort;
+    QList<QUrl> m_files;
+};
 
 GrepFindFilesThread::GrepFindFilesThread(QObject* parent,
                                          const QList<QUrl>& startDirs,
                                          int depth, const QString& pats,
                                          const QString& excl,
                                          bool onlyProject)
-: QThread(parent)
-, m_startDirs(startDirs)
-, m_patString(pats)
-, m_exclString(excl)
-, m_depth(depth)
-, m_project(onlyProject)
-, m_tryAbort(false)
+    : QThread(parent)
+    , d_ptr(new GrepFindFilesThreadPrivate{
+                startDirs,
+                onlyProject ? getProjectFileSets(startDirs) : FileSetCollection{},
+                pats, excl, depth, {false}, {}})
 {
     setTerminationEnabled(false);
 }
 
+GrepFindFilesThread::~GrepFindFilesThread() = default;
+
 void GrepFindFilesThread::tryAbort()
 {
-    m_tryAbort = true;
+    Q_D(GrepFindFilesThread);
+
+    d->m_tryAbort.store(true, std::memory_order_relaxed);
 }
 
 bool GrepFindFilesThread::triesToAbort() const
 {
-    return m_tryAbort;
+    Q_D(const GrepFindFilesThread);
+
+    return d->m_tryAbort.load(std::memory_order_relaxed);
 }
 
 void GrepFindFilesThread::run()
 {
-    QStringList include = GrepFindFilesThread::parseInclude(m_patString);
-    QStringList exclude = GrepFindFilesThread::parseExclude(m_exclString);
+    Q_D(GrepFindFilesThread);
 
-    qCDebug(PLUGIN_GREPVIEW) << "running with start dir" << m_startDirs;
+    const QStringList include = GrepFindFilesThread::parseInclude(d->m_patString);
+    const QStringList exclude = GrepFindFilesThread::parseExclude(d->m_exclString);
 
-    for (const QUrl& directory : qAsConst(m_startDirs)) {
-        if(m_project)
-            m_files += thread_getProjectFiles(directory, m_depth, include, exclude, m_tryAbort);
-        else
-        {
-            m_files += thread_findFiles(directory.toLocalFile(), m_depth, include, exclude, m_tryAbort);
+    qCDebug(PLUGIN_GREPVIEW) << "running with start dir" << d->m_startDirs;
+
+    FileFinder finder(include, exclude, d->m_tryAbort);
+    // m_projectFileSets contains a project file set for each element of m_startDirs at a
+    // corresponding index if this search is limited to project files; is empty otherwise.
+    Q_ASSERT(d->m_projectFileSets.empty() ||
+                d->m_projectFileSets.size() == static_cast<std::size_t>(d->m_startDirs.size()));
+    for (const QUrl& directory : d->m_startDirs) {
+        if (d->m_projectFileSets.empty()) {
+            finder.findFiles(directory.toLocalFile(), d->m_depth, d->m_files);
+        } else {
+            finder.getProjectFiles(d->m_projectFileSets.front(), directory, d->m_depth, d->m_files);
+            // Removing the no longer needed file set from the collection as
+            // soon as possible may save some memory or prevent a copy on write
+            // if the project's file set is changed during the search.
+            d->m_projectFileSets.pop();
         }
     }
 }
 
-QList<QUrl> GrepFindFilesThread::files() const {
-    auto tmpList = QList<QUrl>::fromSet(m_files.toSet());
+QList<QUrl> GrepFindFilesThread::takeFiles()
+{
+    Q_D(GrepFindFilesThread);
+    Q_ASSERT(isFinished());
+
+    QList<QUrl> tmpList;
+    d->m_files.swap(tmpList);
+
     std::sort(tmpList.begin(), tmpList.end());
+    tmpList.erase(std::unique(tmpList.begin(), tmpList.end()), tmpList.end());
     return tmpList;
 }
 
@@ -161,7 +228,11 @@ QStringList GrepFindFilesThread::parseExclude(const QString& excl)
 {
     QStringList exclude;
     // Split around commas or spaces
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto excludesList = excl.splitRef(QRegExp(QStringLiteral(",|\\s")), Qt::SkipEmptyParts);
+#else
     const auto excludesList = excl.split(QRegExp(QStringLiteral(",|\\s")), QString::SkipEmptyParts);
+#endif
     exclude.reserve(excludesList.size());
     for (const auto& sub : excludesList) {
         exclude << QStringLiteral("*%1*").arg(sub);
@@ -172,5 +243,9 @@ QStringList GrepFindFilesThread::parseExclude(const QString& excl)
 QStringList GrepFindFilesThread::parseInclude(const QString& inc)
 {
     // Split around commas or spaces
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    return inc.split(QRegExp(QStringLiteral(",|\\s")), Qt::SkipEmptyParts);
+#else
     return inc.split(QRegExp(QStringLiteral(",|\\s")), QString::SkipEmptyParts);
+#endif
 }

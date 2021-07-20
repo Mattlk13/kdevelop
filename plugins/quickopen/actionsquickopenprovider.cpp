@@ -59,22 +59,20 @@ public:
     }
     QIcon icon() const override
     {
-        // note: not the best icon, but can't find anything better
-        static const QIcon fallbackIcon = QIcon::fromTheme(QStringLiteral("system-run"));
-
         const QIcon icon = m_action->icon();
         if (icon.isNull()) {
-            return fallbackIcon;
+            // note: not the best fallback icon, but can't find anything better
+            return QIcon::fromTheme(QStringLiteral("system-run"));
         }
 
         return icon;
     }
 
 private:
-    QAction* m_action;
+    QAction* const m_action;
 
     ///needed because it won't have the "E&xit" ampersand
-    QString m_display;
+    const QString m_display;
 };
 
 ActionsQuickOpenProvider::ActionsQuickOpenProvider()
@@ -99,7 +97,7 @@ void ActionsQuickOpenProvider::setFilterText(const QString& text)
             QString display = action->text();
             QRegularExpressionMatch match = mnemonicRx.match(display);
             if (match.hasMatch()) {
-                display = match.captured(1) + match.captured(2);
+                display = match.capturedRef(1) + match.capturedRef(2);
             }
 
             if (display.contains(text, Qt::CaseInsensitive)) {

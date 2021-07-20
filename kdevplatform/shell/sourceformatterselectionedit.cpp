@@ -103,7 +103,7 @@ SourceFormatterSelectionEdit::SourceFormatterSelectionEdit(QWidget* parent)
     d->view->setStatusBarEnabled(false);
 
     auto *layout2 = new QVBoxLayout(d->ui.textEditor);
-    layout2->setMargin(0);
+    layout2->setContentsMargins(0, 0, 0, 0);
     layout2->addWidget(d->view);
     d->ui.textEditor->setLayout(layout2);
     d->view->show();
@@ -113,6 +113,7 @@ SourceFormatterSelectionEdit::SourceFormatterSelectionEdit(QWidget* parent)
     if (iface) {
         iface->setConfigValue(QStringLiteral("dynamic-word-wrap"), false);
         iface->setConfigValue(QStringLiteral("icon-bar"), false);
+        iface->setConfigValue(QStringLiteral("scrollbar-minimap"), false);
     }
 
     SourceFormatterController* controller = Core::self()->sourceFormatterControllerInternal();
@@ -217,23 +218,25 @@ void SourceFormatterSelectionEdit::loadSettings(const KConfigGroup& config)
 {
     Q_D(SourceFormatterSelectionEdit);
 
-    for (auto languageIter = d->languages.begin(); languageIter != d->languages.end(); ++languageIter) {
+    for (auto& l : d->languages) {
         // Pick the first appropriate mimetype for this language
-        LanguageSettings& l = languageIter.value();
         const QList<QMimeType> mimetypes = l.mimetypes;
         for (const QMimeType& mimetype : mimetypes) {
-            QStringList formatterAndStyleName = config.readEntry(mimetype.name(), QString()).split(QStringLiteral("||"), QString::KeepEmptyParts);
-            FormatterMap::const_iterator formatterIter = d->formatters.constFind(formatterAndStyleName.first());
+            const QString formatter = config.readEntry(mimetype.name(), QString());
+            const int pos = formatter.indexOf(QLatin1String("||"));
+            const QString formatterName = formatter.left(pos);
+            FormatterMap::const_iterator formatterIter = d->formatters.constFind(formatterName);
             if (formatterIter == d->formatters.constEnd()) {
-                qCDebug(SHELL) << "Reference to unknown formatter" << formatterAndStyleName.first();
+                qCDebug(SHELL) << "Reference to unknown formatter" << formatterName;
                 Q_ASSERT(!l.formatters.empty());        // otherwise there should be no entry for 'name'
                 l.selectedFormatter = *l.formatters.begin();
                 selectAvailableStyle(l);
             } else {
                 l.selectedFormatter = formatterIter.value();
-                SourceFormatter::StyleMap::const_iterator styleIter = l.selectedFormatter->styles.constFind(formatterAndStyleName.at( 1 ));
+                const QString styleName = formatter.mid(pos + 2);
+                SourceFormatter::StyleMap::const_iterator styleIter = l.selectedFormatter->styles.constFind(styleName);
                 if (styleIter == l.selectedFormatter->styles.constEnd()) {
-                    qCDebug(SHELL) << "No style" << formatterAndStyleName.at( 1 ) << "found for formatter" << formatterAndStyleName.first();
+                    qCDebug(SHELL) << "No style" << styleName << "found for formatter" << formatterName;
                     selectAvailableStyle(l);
                 } else {
                     l.selectedStyle = styleIter.value();
@@ -326,6 +329,7 @@ void SourceFormatterSelectionEdit::saveSettings(KConfigGroup& config) const
             {
                 KConfigGroup stylegrp = fmtgrp.group( style->name() );
                 stylegrp.writeEntry( SourceFormatterController::styleCaptionKey(), style->caption() );
+                stylegrp.writeEntry( SourceFormatterController::styleShowPreviewKey(), style->usePreview() );
                 stylegrp.writeEntry( SourceFormatterController::styleContentKey(), style->content() );
                 stylegrp.writeEntry( SourceFormatterController::styleMimeTypesKey(), style->mimeTypesVariant() );
                 stylegrp.writeEntry( SourceFormatterController::styleSampleKey(), style->overrideSample() );
@@ -466,7 +470,7 @@ void SourceFormatterSelectionEdit::deleteStyle()
     if (!otherLanguageNames.empty() &&
         KMessageBox::warningContinueCancel(this,
         i18n("The style %1 is also used for the following languages:\n%2.\nAre you sure you want to delete it?",
-        styleIter.value()->caption(), otherLanguageNames.join(QLatin1Char('\n'))), i18n("Style being deleted")) != KMessageBox::Continue) {
+        styleIter.value()->caption(), otherLanguageNames.join(QLatin1Char('\n'))), i18nc("@title:window", "Deleting Style")) != KMessageBox::Continue) {
         return;
     }
     d->ui.styleList->takeItem(d->ui.styleList->currentRow());
@@ -518,7 +522,7 @@ void SourceFormatterSelectionEdit::newStyle()
     }
     // Increase number for next style
     idx++;
-    SourceFormatterStyle* s = new SourceFormatterStyle( QStringLiteral( "%1%2" ).arg( Strings::userStylePrefix() ).arg( idx ) );
+    auto* s = new SourceFormatterStyle(QStringLiteral("%1%2").arg(Strings::userStylePrefix()).arg(idx));
     if( item ) {
         SourceFormatterStyle* existstyle = fmt->styles[ item->data( STYLE_ROLE ).toString() ];
         s->setCaption( i18n( "New %1", existstyle->caption() ) );

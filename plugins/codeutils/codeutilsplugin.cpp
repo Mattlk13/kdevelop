@@ -60,12 +60,13 @@ CodeUtilsPlugin::CodeUtilsPlugin ( QObject* parent, const QVariantList& )
 
     QAction* action = actionCollection()->addAction( QStringLiteral("document_declaration") );
     // i18n: action name; 'Document' is a verb
-    action->setText( i18n( "Document Declaration" ) );
-    actionCollection()->setDefaultShortcut(action, i18n( "Alt+Shift+d" ));
+    action->setText(i18nc("@action", "Document Declaration"));
+    actionCollection()->setDefaultShortcut(action, i18nc("default shortcut for \"Document Declaration\"", "Alt+Shift+d"));
     connect( action, &QAction::triggered, this, &CodeUtilsPlugin::documentDeclaration );
-    action->setToolTip( i18n( "Add Doxygen skeleton for declaration under cursor." ) );
+    action->setToolTip(i18nc("@info:tooltip", "Add Doxygen skeleton for declaration under cursor."));
     // i18n: translate title same as the action name
-    action->setWhatsThis( i18n( "Adds a basic Doxygen comment skeleton in front of "
+    action->setWhatsThis(i18nc("@info:whatthis",
+                                "Adds a basic Doxygen comment skeleton in front of "
                                 "the declaration under the cursor, e.g. with all the "
                                 "parameter of a function." ) );
     action->setIcon( QIcon::fromTheme( QStringLiteral("documentinfo") ) );
@@ -118,18 +119,18 @@ void CodeUtilsPlugin::documentDeclaration()
     lock.unlock();
 
     // TODO: Choose the template based on the language
-    QString templateName = QStringLiteral("doxygen_cpp");
+    QLatin1String templateName = QLatin1String("doxygen_cpp");
     auto languages = core()->languageController()->languagesForUrl(view->document()->url());
     if (!languages.isEmpty())
     {
         QString languageName = languages.first()->name();
         if (languageName == QLatin1String("Php"))
         {
-            templateName = QStringLiteral("phpdoc_php");
+            templateName = QLatin1String("phpdoc_php");
         }
         else if (languageName == QLatin1String("Python"))
         {
-            templateName = QStringLiteral("rest_python");
+            templateName = QLatin1String("rest_python");
             // Python docstrings appear inside functions and classes, not above them
             insertPos = Cursor(line+1, 0);
         }

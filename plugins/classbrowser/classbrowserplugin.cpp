@@ -63,7 +63,7 @@ public:
         return new ClassWidget(parent, m_plugin);
     }
 
-    Qt::DockWidgetArea defaultPosition() override
+    Qt::DockWidgetArea defaultPosition() const override
     {
         return Qt::LeftDockWidgetArea;
     }
@@ -82,10 +82,10 @@ ClassBrowserPlugin::ClassBrowserPlugin(QObject* parent, const QVariantList&)
     , m_factory(new ClassBrowserFactory(this))
     , m_activeClassTree(nullptr)
 {
-    core()->uiController()->addToolView(i18n("Classes"), m_factory);
+    core()->uiController()->addToolView(i18nc("@title:window", "Classes"), m_factory);
     setXMLFile(QStringLiteral("kdevclassbrowser.rc"));
 
-    m_findInBrowser = new QAction(i18n("Find in &Class Browser"), this);
+    m_findInBrowser = new QAction(i18nc("@action", "Find in &Class Browser"), this);
     connect(m_findInBrowser, &QAction::triggered, this, &ClassBrowserPlugin::findInClassBrowser);
 }
 
@@ -133,7 +133,7 @@ KDevelop::ContextMenuExtension ClassBrowserPlugin::contextMenuExtension(KDevelop
 
 void ClassBrowserPlugin::findInClassBrowser()
 {
-    ICore::self()->uiController()->findToolView(i18n("Classes"), m_factory, KDevelop::IUiController::CreateAndRaise);
+    ICore::self()->uiController()->findToolView(i18nc("@title:window", "Classes"), m_factory, KDevelop::IUiController::CreateAndRaise);
 
     Q_ASSERT(qobject_cast<QAction*>(sender()));
 
@@ -161,10 +161,7 @@ void ClassBrowserPlugin::showDefinition(const DeclarationPointer& declaration)
     Declaration* decl = declaration.data();
     // If it's a function, find the function definition to go to the actual declaration.
     if (decl && decl->isFunctionDeclaration()) {
-        auto* funcDefinition = dynamic_cast<FunctionDefinition*>(decl);
-        if (funcDefinition == nullptr)
-            funcDefinition = FunctionDefinition::definition(decl);
-        if (funcDefinition)
+        if (auto* funcDefinition = FunctionDefinition::definition(decl))
             decl = funcDefinition;
     }
 

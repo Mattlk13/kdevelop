@@ -57,8 +57,8 @@ public:
     explicit VcsEventWidgetPrivate( VcsEventWidget* w )
         : q( w )
     {
-        m_copyAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18n("Copy Revision Id"), q);
-        m_copyAction->setShortcut(Qt::ControlModifier+Qt::Key_C);
+        m_copyAction = new QAction(QIcon::fromTheme(QStringLiteral("edit-copy")), i18nc("@action:inmenu", "Copy Revision Id"), q);
+        m_copyAction->setShortcut(Qt::CTRL | Qt::Key_C);
         QObject::connect(m_copyAction, &QAction::triggered, q, [&] { copyRevision(); });
     }
 
@@ -89,10 +89,10 @@ void VcsEventWidgetPrivate::eventViewCustomContextMenuRequested( const QPoint &p
 
     QMenu menu( m_ui->eventView );
     menu.addAction(m_copyAction);
-    auto diffToPreviousAction = menu.addAction(i18n("Diff to previous revision"));
+    auto diffToPreviousAction = menu.addAction(i18nc("@action:inmenu", "Diff to Previous Revision"));
     QObject::connect(diffToPreviousAction, &QAction::triggered, q, [&] { diffToPrevious(); });
 
-    auto diffRevisionsAction = menu.addAction(i18n("Diff between revisions"));
+    auto diffRevisionsAction = menu.addAction(i18nc("@action:inmenu", "Diff between Revisions"));
     QObject::connect(diffRevisionsAction, &QAction::triggered, q, [&] { diffRevisions(); });
     diffRevisionsAction->setEnabled(m_ui->eventView->selectionModel()->selectedRows().size()>=2);
 
@@ -145,13 +145,13 @@ void VcsEventWidgetPrivate::diffToPrevious()
 
     auto* widget = new VcsDiffWidget( job );
     widget->setRevisions( prev, ev.revision() );
-    QDialog* dlg = new QDialog( q );
+    auto* dlg = new QDialog( q );
 
     widget->connect(widget, &VcsDiffWidget::destroyed, dlg, &QDialog::deleteLater);
 
-    dlg->setWindowTitle( i18n("Difference To Previous") );
+    dlg->setWindowTitle( i18nc("@title:window", "Difference To Previous") );
 
-    QDialogButtonBox *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok);
+    auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok);
     auto mainWidget = new QWidget;
     auto *mainLayout = new QVBoxLayout;
     dlg->setLayout(mainLayout);
@@ -178,7 +178,7 @@ void VcsEventWidgetPrivate::diffRevisions()
     widget->setRevisions( ev1.revision(), ev2.revision() );
 
     auto dlg = new QDialog( q );
-    dlg->setWindowTitle( i18n("Difference between Revisions") );
+    dlg->setWindowTitle( i18nc("@title:window", "Difference between Revisions") );
 
     widget->connect(widget, &VcsDiffWidget::destroyed, dlg, &QDialog::deleteLater);
 

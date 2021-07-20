@@ -18,7 +18,7 @@
        <item>
         <widget class="QToolButton" name="previousFile">
          <property name="toolTip">
-          <string>Previous file</string>
+          <string comment="@info:tooltip">Previous file</string>
          </property>
          <property name="icon">
           <iconset theme="arrow-left">
@@ -29,7 +29,7 @@
        <item>
         <widget class="QToolButton" name="previousHunk">
          <property name="toolTip">
-          <string>Previous difference</string>
+          <string comment="@info:tooltip">Previous difference</string>
          </property>
          <property name="icon">
           <iconset theme="arrow-up">
@@ -40,7 +40,7 @@
        <item>
         <widget class="QToolButton" name="nextHunk">
          <property name="toolTip">
-          <string>Next difference</string>
+          <string comment="@info:tooltip">Next difference</string>
          </property>
          <property name="icon">
           <iconset theme="arrow-down">
@@ -51,7 +51,7 @@
        <item>
         <widget class="QToolButton" name="nextFile">
          <property name="toolTip">
-          <string>Next file</string>
+          <string comment="@info:tooltip">Next file</string>
          </property>
          <property name="icon">
           <iconset theme="arrow-right">
@@ -73,9 +73,12 @@
         </spacer>
        </item>
        <item>
-        <widget class="QPushButton" name="updateButton">
+        <widget class="QToolButton" name="updateButton">
          <property name="text">
-          <string>Update</string>
+          <string comment="@action:button">Update</string>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
          </property>
          <property name="icon">
           <iconset theme="view-refresh">
@@ -84,9 +87,12 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="testsButton">
+        <widget class="QToolButton" name="testsButton">
          <property name="text">
-          <string>Run Tests</string>
+          <string comment="@action:button">Run Tests</string>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
          </property>
          <property name="icon">
           <iconset theme="preflight-verifier">
@@ -117,17 +123,26 @@
        <item>
         <widget class="QToolButton" name="exportReview">
          <property name="text">
-          <string>Export Diff...</string>
+          <string comment="@action:button">Export Diff...</string>
          </property>
          <property name="popupMode">
           <enum>QToolButton::InstantPopup</enum>
          </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
+         </property>
+         <property name="icon">
+          <iconset theme="document-share"/>
+         </property>
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="cancelReview">
+        <widget class="QToolButton" name="cancelReview">
          <property name="text">
-          <string>Cancel Review</string>
+          <string comment="@action:button">Cancel Review</string>
+         </property>
+         <property name="toolButtonStyle">
+          <enum>Qt::ToolButtonTextBesideIcon</enum>
          </property>
          <property name="icon">
           <iconset theme="dialog-cancel">
@@ -138,7 +153,7 @@
        <item>
         <widget class="QToolButton" name="finishReview">
          <property name="text">
-          <string>Finish Review</string>
+          <string comment="@action:button">Finish Review</string>
          </property>
          <property name="toolButtonStyle">
           <enum>Qt::ToolButtonTextBesideIcon</enum>
@@ -157,7 +172,7 @@
      <item>
       <widget class="QGroupBox" name="filesGroup">
        <property name="title">
-        <string>Changes</string>
+        <string comment="@title:group">Changes</string>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>

@@ -246,6 +246,8 @@ private:
 
     friend class VariableProvider;
     VariableProvider m_textHintProvider;
+
+    QVector<KTextEditor::View*> m_textHintProvidedViews;
 };
 
 }

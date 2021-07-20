@@ -74,7 +74,7 @@ public:
 
     void start() override
     {
-        QMessageBox::critical(nullptr, i18n("Importing project failed"), m_error);
+        QMessageBox::critical(nullptr, i18nc("@title:window", "Project Import Failed"), m_error);
 
         setError(KJob::UserDefinedError + 1); // Indicate that there was an error
         setErrorText(m_error);
@@ -168,7 +168,7 @@ bool MesonManager::reload(KDevelop::ProjectFolderItem* item)
                 return;
             }
 
-            KDevelop::ICore::self()->projectController()->projectConfigurationChanged(project);
+            emit KDevelop::ICore::self()->projectController()->projectConfigurationChanged(project);
             KDevelop::ICore::self()->projectController()->reparseProject(project);
         });
     }
@@ -243,7 +243,7 @@ void MesonManager::onMesonInfoChanged(QString path, QString projectName)
             return;
         }
 
-        KDevelop::ICore::self()->projectController()->projectConfigurationChanged(foundProject);
+        emit KDevelop::ICore::self()->projectController()->projectConfigurationChanged(foundProject);
         KDevelop::ICore::self()->projectController()->reparseProject(foundProject);
     });
 }

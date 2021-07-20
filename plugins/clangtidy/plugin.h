@@ -24,20 +24,13 @@
 
 // plugin
 #include "checkset.h"
-#include <debug.h>
 // KDevPlatform
 #include <interfaces/iplugin.h>
-// Qt
-#include <QPointer>
-#include <QVariant>
-
-class KJob;
-class QAction;
 
 namespace ClangTidy
 {
-
-class ProblemModel;
+class Analyzer;
+class CheckSetSelectionManager;
 
 /**
  * \class
@@ -75,26 +68,12 @@ public:
      * parameters.
      */
     QStringList allAvailableChecks() { return m_checkSet.all(); }
-    bool isRunning() const;
-    void runClangTidy(const QUrl& url, bool allFiles = false);
-
-private Q_SLOTS:
-    void runClangTidy(bool allFiles = false);
-    void runClangTidyFile();
-    void runClangTidyAll();
-    void result(KJob* job);
-    void updateActions();
+    CheckSet& checkSet() { return m_checkSet; }
 
 private:
-    void showModel();
-
-private:
-    QPointer<KJob> m_runningJob;
-
-    QAction* m_checkFileAction;
-    QAction* m_checkProjectAction;
-    QScopedPointer<ProblemModel> m_model;
+    Analyzer* m_analyzer;
     CheckSet m_checkSet;
+    CheckSetSelectionManager* m_checkSetSelectionManager;
 };
 
 } // namespace ClangTidy

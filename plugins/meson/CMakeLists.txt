@@ -1,5 +1,13 @@
 add_definitions(-DTRANSLATION_DOMAIN=\"kdevmesonmanager\")
 
+find_package(Meson 0.51 QUIET)
+set_package_properties(Meson PROPERTIES
+    DESCRIPTION "The Meson build system"
+    URL "https://mesonbuild.com"
+    PURPOSE "Recommended: required by the Meson project manager plugin"
+    TYPE RUNTIME
+)
+
 set(mesonbuilder_SRCS
     mesonbuilder.cpp
     mesonconfig.cpp
@@ -49,7 +57,6 @@ ecm_qt_declare_logging_category(mesonbuilder_SRCS
 )
 
 kdevplatform_add_plugin(kdevmesonmanager
-                        JSON kdevmesonmanager.json
                         SOURCES ${mesonbuilder_SRCS})
 
 target_link_libraries(kdevmesonmanager
@@ -59,9 +66,4 @@ target_link_libraries(kdevmesonmanager
     KDev::Project
     KDev::Util
     KDev::OutputView
-)
-
-set_target_properties(kdevmesonmanager PROPERTIES
-    CXX_STANDARD 14
-    CXX_STANDARD_REQUIRED YES
 )

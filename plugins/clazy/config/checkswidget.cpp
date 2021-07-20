@@ -41,16 +41,19 @@ enum ItemType {
     CheckType
 };
 
-ChecksWidget::ChecksWidget(QSharedPointer<const ChecksDB> db, QWidget* parent)
+ChecksWidget::ChecksWidget(QWidget* parent)
     : QWidget(parent)
     , m_ui(new Ui::ChecksWidget)
 {
     m_ui->setupUi(this);
 
     m_ui->filterEdit->addTreeWidget(m_ui->checksTree);
-    m_ui->filterEdit->setPlaceholderText(i18n("Search checks..."));
+    m_ui->filterEdit->setPlaceholderText(i18nc("@info:placeholder", "Search checks..."));
     connect(m_ui->filterEdit, &KTreeWidgetSearchLine::searchUpdated, this, &ChecksWidget::searchUpdated);
+}
 
+void ChecksWidget::setChecksDb(const QSharedPointer<const ChecksDB>& db)
+{
     auto resetMenu = new QMenu(this);
     m_ui->resetButton->setMenu(resetMenu);
 
@@ -118,15 +121,19 @@ void ChecksWidget::setChecks(const QString& checks)
         setState(m_ui->checksTree->topLevelItem(i), Qt::Unchecked);
     }
 
-    const QStringList checksList = checks.split(QLatin1Char(','), QString::SkipEmptyParts);
-    for (auto checkName : checksList) {
-        checkName = checkName.trimmed();
-        if (checkName == QStringLiteral("manual")) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const auto checksList = checks.splitRef(QLatin1Char(','), Qt::SkipEmptyParts);
+#else
+    const auto checksList = checks.splitRef(QLatin1Char(','), QString::SkipEmptyParts);
+#endif
+    for (auto& rawCheckName : checksList) {
+        QString checkName = rawCheckName.trimmed().toString();
+        if (checkName == QLatin1String("manual")) {
             continue;
         }
 
         auto state = Qt::Checked;
-        if (checkName.startsWith(QStringLiteral("no-"))) {
+        if (checkName.startsWith(QLatin1String("no-"))) {
             checkName.remove(0, 3);
             state = Qt::Unchecked;
         }
@@ -184,7 +191,7 @@ void ChecksWidget::updateChecks()
         auto levelItem = m_ui->checksTree->topLevelItem(i);
         auto levelName = levelItem->data(0, CheckRole).toString();
 
-        if (levelName == QStringLiteral("manual")) {
+        if (levelName == QLatin1String("manual")) {
             // Manual level is "fake level" so we clear the name and will store only
             // selected checks.
             levelItems.clear();
@@ -293,6 +300,22 @@ void ChecksWidget::searchUpdated(const QString& searchString)
     }
 
     m_ui->checksTree->setCurrentItem(firstVisibleLevel);
+}
+
+void ChecksWidget::setEditable(bool editable)
+{
+    if (m_isEditable == editable) {
+        return;
+    }
+
+    m_isEditable = editable;
+
+    m_ui->resetButton->setEnabled(editable);
+    for (auto* item : qAsConst(m_items)) {
+        auto flags = item->flags();
+        flags.setFlag(Qt::ItemIsUserCheckable, m_isEditable);
+        item->setFlags(flags);
+    }
 }
 
 }

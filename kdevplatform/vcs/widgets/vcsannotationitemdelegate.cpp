@@ -24,6 +24,7 @@
 #include <vcsannotation.h>
 #include <debug.h>
 
+#include <ktexteditor_version.h>
 #include <KTextEditor/AnnotationInterface>
 #include <KTextEditor/View>
 #include <KTextEditor/ConfigInterface>
@@ -51,7 +52,11 @@ VcsAnnotationItemDelegate::VcsAnnotationItemDelegate(KTextEditor::View* view, KT
 {
     // dump background brushes on schema change
     Q_ASSERT(qobject_cast<KTextEditor::ConfigInterface*>(view));
+#if KTEXTEDITOR_VERSION >= QT_VERSION_CHECK(5, 79, 0)
+    connect(view, &KTextEditor::View::configChanged, this, &VcsAnnotationItemDelegate::resetBackgrounds);
+#else
     connect(view, SIGNAL(configChanged()), this, SLOT(resetBackgrounds()));
+#endif
 
     view->installEventFilter(this);
 }
@@ -66,20 +71,23 @@ static QString ageOfDate(const QDate& date)
         --ageInYears;
     }
     if (ageInYears > 0) {
-        return i18ncp("age", "%1 year", "%1 years", ageInYears);
+        return i18ncp("@item age", "%1 year", "%1 years", ageInYears);
     }
     int ageInMonths = now.month() - date.month();
+    if (now.day() < date.day()) {
+        --ageInMonths;
+    }
     if (ageInMonths < 0) {
         ageInMonths += 12;
     }
     if (ageInMonths > 0) {
-        return i18ncp("age", "%1 month", "%1 months", ageInMonths);
+        return i18ncp("@item age", "%1 month", "%1 months", ageInMonths);
     }
     const int ageInDays = date.daysTo(now);
     if (ageInDays > 0) {
-        return i18ncp("age", "%1 day", "%1 days", ageInDays);
+        return i18ncp("@item age", "%1 day", "%1 days", ageInDays);
     }
-    return i18n("Today");
+    return i18nc("@item age", "Today");
 }
 
 void VcsAnnotationItemDelegate::doMessageLineLayout(const KTextEditor::StyleOptionAnnotationItem& option,
@@ -248,7 +256,7 @@ void VcsAnnotationItemDelegate::paint(QPainter* painter, const KTextEditor::Styl
 {
     Q_ASSERT(painter);
     // we cannot use custom roles and data() API (cmp. VcsAnnotationModel dox), so accessing custom API instead
-    VcsAnnotationModel* vcsModel = qobject_cast<VcsAnnotationModel*>(model);
+    auto* vcsModel = qobject_cast<VcsAnnotationModel*>(model);
     Q_ASSERT(vcsModel);
     if (!painter || !vcsModel) {
         return;
@@ -330,8 +338,6 @@ bool VcsAnnotationItemDelegate::helpEvent(QHelpEvent* event, KTextEditor::View* 
     if (!model || event->type() != QEvent::ToolTip) {
         return false;
     }
-
-    const QString annotationGroupId = model->data(line, (Qt::ItemDataRole)KTextEditor::AnnotationModel::GroupIdentifierRole).toString();
 
     const QVariant data = model->data(line, Qt::ToolTipRole);
     if (!data.isValid()) {

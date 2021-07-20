@@ -4,6 +4,7 @@ add_definitions(-DTRANSLATION_DOMAIN=\"kdevplatform\")
 
 set(KDevPlatformUtil_LIB_SRCS
     autoorientedsplitter.cpp
+    filesystemhelpers.cpp
     foregroundlock.cpp
     formattinghelpers.cpp
     zoomcontroller.cpp
@@ -29,10 +30,6 @@ set(KDevPlatformUtil_LIB_SRCS
     expandablelineedit.cpp
 )
 
-set (KDevPlatformUtil_LIB_UI
-    runoptions.ui
-)
-
 if(NOT WIN32)
     add_subdirectory(dbus_socket_transformer)
 endif()
@@ -50,7 +47,6 @@ declare_qt_logging_category(KDevPlatformUtil_LIB_SRCS
     CATEGORY_BASENAME "util"
 )
 
-ki18n_wrap_ui(KDevPlatformUtil_LIB_SRCS ${KDevPlatformUtil_LIB_US})
 kdevplatform_add_library(KDevPlatformUtil SOURCES ${KDevPlatformUtil_LIB_SRCS})
 target_link_libraries(KDevPlatformUtil
 PUBLIC
@@ -72,10 +68,13 @@ install(FILES .zshrc PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXEC
 ########### install files ###############
 
 install( FILES
+    algorithm.h
     autoorientedsplitter.h
+    filesystemhelpers.h
     foregroundlock.h
     formattinghelpers.h
     zoomcontroller.h
+    wildcardhelpers.h
     kdevstringhandler.h
     ksharedobject.h
     focusedtreeview.h

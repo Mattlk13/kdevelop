@@ -26,14 +26,21 @@
 #include "duchain/cmakeparsejob.h"
 #include "cmakeimportjsonjob.h"
 #include "debug.h"
-#include "settings/cmakepreferences.h"
 #include "cmakecodecompletionmodel.h"
 #include "cmakenavigationwidget.h"
 #include "icmakedocumentation.h"
 #include "cmakemodelitems.h"
 #include "testing/ctestutils.h"
+#include "testing/ctestsuite.h"
+#include "testing/ctestfindjob.h"
 #include "cmakeserverimportjob.h"
 #include "cmakeserver.h"
+#include "cmakefileapi.h"
+#include "cmakefileapiimportjob.h"
+
+#ifndef CMAKEMANAGER_NO_SETTINGS
+#include "settings/cmakepreferences.h"
+#endif
 
 #include <QApplication>
 #include <QDir>
@@ -47,6 +54,7 @@
 #include <QAction>
 #include <KMessageBox>
 #include <KTextEditor/Document>
+#include <KDirWatch>
 
 #include <interfaces/icore.h>
 #include <interfaces/idocumentcontroller.h>
@@ -56,6 +64,8 @@
 #include <interfaces/iruntimecontroller.h>
 #include <interfaces/iruntime.h>
 #include <interfaces/iruncontroller.h>
+#include <interfaces/itestcontroller.h>
+#include <interfaces/iuicontroller.h>
 #include <interfaces/contextmenuextension.h>
 #include <interfaces/context.h>
 #include <interfaces/idocumentation.h>
@@ -70,14 +80,11 @@
 #include <language/duchain/use.h>
 #include <language/duchain/duchain.h>
 #include <makefileresolver/makefileresolver.h>
-
-Q_DECLARE_METATYPE(KDevelop::IProject*)
+#include <sublime/message.h>
 
 using namespace KDevelop;
 
 K_PLUGIN_FACTORY_WITH_JSON(CMakeSupportFactory, "kdevcmakemanager.json", registerPlugin<CMakeManager>(); )
-
-const QString DIALOG_CAPTION = i18n("KDevelop - CMake Support");
 
 CMakeManager::CMakeManager( QObject* parent, const QVariantList& )
     : KDevelop::AbstractFileManagerPlugin( QStringLiteral("kdevcmakemanager"), parent )
@@ -96,11 +103,6 @@ CMakeManager::CMakeManager( QObject* parent, const QVariantList& )
     connect(ICore::self()->projectController(), &IProjectController::projectClosing, this, &CMakeManager::projectClosing);
     connect(ICore::self()->runtimeController(), &IRuntimeController::currentRuntimeChanged, this, &CMakeManager::reloadProjects);
     connect(this, &KDevelop::AbstractFileManagerPlugin::folderAdded, this, &CMakeManager::folderAdded);
-
-//     m_fileSystemChangeTimer = new QTimer(this);
-//     m_fileSystemChangeTimer->setSingleShot(true);
-//     m_fileSystemChangeTimer->setInterval(100);
-//     connect(m_fileSystemChangeTimer,SIGNAL(timeout()),SLOT(filesystemBuffererTimeout()));
 }
 
 CMakeManager::~CMakeManager()
@@ -112,22 +114,11 @@ CMakeManager::~CMakeManager()
 
 bool CMakeManager::hasBuildInfo(ProjectBaseItem* item) const
 {
-    return m_projects[item->project()].compilationData.files.contains(item->path());
+    return m_projects[item->project()].data.compilationData.files.contains(item->path());
 }
 
 Path CMakeManager::buildDirectory(KDevelop::ProjectBaseItem *item) const
 {
-//     CMakeFolderItem *fi=dynamic_cast<CMakeFolderItem*>(item);
-//     Path ret;
-//     ProjectBaseItem* parent = fi ? fi->formerParent() : item->parent();
-//     if (parent)
-//         ret=buildDirectory(parent);
-//     else
-//         ret=Path(CMake::currentBuildDir(item->project()));
-//
-//     if(fi)
-//         ret.addPath(fi->buildDir());
-//     return ret;
     return Path(CMake::currentBuildDir(item->project()));
 }
 
@@ -150,9 +141,28 @@ public:
     }
 
     void start() override {
-        server.reset(new CMakeServer(project));
-        connect(server.data(), &CMakeServer::connected, this, &ChooseCMakeInterfaceJob::successfulConnection);
-        connect(server.data(), &CMakeServer::finished, this, &ChooseCMakeInterfaceJob::failedConnection);
+        auto tryCMakeServer = [this]() {
+            qCDebug(CMAKE) << "try cmake server for import";
+            server.reset(new CMakeServer(project));
+            connect(server.data(), &CMakeServer::connected, this, &ChooseCMakeInterfaceJob::successfulConnection);
+            connect(server.data(), &CMakeServer::finished, this, &ChooseCMakeInterfaceJob::failedConnection);
+        };
+        if (CMake::FileApi::supported(CMake::currentCMakeExecutable(project).toLocalFile())) {
+            qCDebug(CMAKE) << "Using cmake-file-api for import of" << project->path();
+            addSubjob(manager->builder()->configure(project));
+            auto* importJob = new CMake::FileApi::ImportJob(project, this);
+            connect(importJob, &CMake::FileApi::ImportJob::dataAvailable, this, [this, tryCMakeServer](const CMakeProjectData& data) {
+                if (!data.compilationData.isValid) {
+                    tryCMakeServer();
+                } else {
+                    manager->integrateData(data, project);
+                }
+            });
+            addSubjob(importJob);
+            ExecuteCompositeJob::start();
+        } else {
+            tryCMakeServer();
+        }
     }
 
 private:
@@ -160,7 +170,7 @@ private:
         auto job = new CMakeServerImportJob(project, server, this);
         connect(job, &CMakeServerImportJob::result, this, [this, job](){
             if (job->error() == 0) {
-                manager->integrateData(job->projectData(), job->project());
+                manager->integrateData(job->projectData(), job->project(), server);
             }
         });
         addSubjob(job);
@@ -204,9 +214,8 @@ KJob* CMakeManager::createImportJob(ProjectFolderItem* item)
     auto job = new ChooseCMakeInterfaceJob(project, this);
     connect(job, &KJob::result, this, [this, job, project](){
         if (job->error() != 0) {
-            qCWarning(CMAKE) << "couldn't load project successfully" << project->name();
-            m_projects.remove(project);
-            showConfigureErrorMessage(job->errorText());
+            qCWarning(CMAKE) << "couldn't load project successfully" << project->name() << job->error() << job->errorText();
+            showConfigureErrorMessage(project->name(), job->errorText());
         }
     });
 
@@ -222,11 +231,6 @@ KJob* CMakeManager::createImportJob(ProjectFolderItem* item)
     return composite;
 }
 
-// QList<ProjectFolderItem*> CMakeManager::parse(ProjectFolderItem*)
-// { return QList< ProjectFolderItem* >(); }
-//
-//
-
 QList<KDevelop::ProjectTargetItem*> CMakeManager::targets() const
 {
     QList<KDevelop::ProjectTargetItem*> ret;
@@ -239,35 +243,55 @@ QList<KDevelop::ProjectTargetItem*> CMakeManager::targets() const
 
 CMakeFile CMakeManager::fileInformation(KDevelop::ProjectBaseItem* item) const
 {
-    const auto & data = m_projects[item->project()].compilationData;
-    QHash<KDevelop::Path, CMakeFile>::const_iterator it = data.files.constFind(item->path());
+    const auto& data = m_projects[item->project()].data.compilationData;
 
-    if (it == data.files.constEnd()) {
-        // if the item path contains a symlink, then we will not find it in the lookup table
+    auto toCanonicalPath = [](const Path &path) -> Path {
+        // if the path contains a symlink, then we will not find it in the lookup table
         // as that only only stores canonicalized paths. Thus, we fallback to
         // to the canonicalized path and see if that brings up any matches
-        const auto canonicalized = Path(QFileInfo(item->path().toLocalFile()).canonicalFilePath());
-        it = data.files.constFind(canonicalized);
-    }
+        const auto localPath = path.toLocalFile();
+        const auto canonicalPath = QFileInfo(localPath).canonicalFilePath();
+        return (localPath == canonicalPath) ? path : Path(canonicalPath);
+    };
 
-    if (it != data.files.constEnd()) {
-        return *it;
-    } else {
-        // otherwise look for siblings and use the include paths of any we find
-        const Path folder = item->folder() ? item->path() : item->path().parent();
-
-        for( it = data.files.constBegin(); it != data.files.constEnd(); ++it) {
-            if (folder.isDirectParentOf(it.key())) {
-                return *it;
+    auto path = item->path();
+    if (!item->folder()) {
+        // try to look for file meta data directly
+        auto it = data.files.find(path);
+        if (it == data.files.end()) {
+            // fallback to canonical path lookup
+            auto canonical = toCanonicalPath(path);
+            if (canonical != path) {
+                it = data.files.find(canonical);
             }
         }
+        if (it != data.files.end()) {
+            return *it;
+        }
+        // else look for a file in the parent folder
+        path = path.parent();
     }
 
-    // last-resort fallback: bubble up the parent chain, and keep looking for include paths
-    if (auto parent = item->parent()) {
-        return fileInformation(parent);
+    while (true) {
+        // try to look for a file in the current folder path
+        auto it = data.fileForFolder.find(path);
+        if (it == data.fileForFolder.end()) {
+            // fallback to canonical path lookup
+            auto canonical = toCanonicalPath(path);
+            if (canonical != path) {
+                it = data.fileForFolder.find(canonical);
+            }
+        }
+        if (it != data.fileForFolder.end()) {
+            return data.files[it.value()];
+        }
+        if (!path.hasParent()) {
+            break;
+        }
+        path = path.parent();
     }
 
+    qCDebug(CMAKE) << "no information found for" << item->path();
     return {};
 }
 
@@ -316,8 +340,8 @@ bool CMakeManager::reload(KDevelop::ProjectFolderItem* folder)
             if (job->error())
                 return;
 
-            KDevelop::ICore::self()->projectController()->projectConfigurationChanged(project);
-            KDevelop::ICore::self()->projectController()->reparseProject(project, true);
+            emit KDevelop::ICore::self()->projectController()->projectConfigurationChanged(project);
+            KDevelop::ICore::self()->projectController()->reparseProject(project);
         });
     }
 
@@ -326,145 +350,180 @@ bool CMakeManager::reload(KDevelop::ProjectFolderItem* folder)
 
 static void populateTargets(ProjectFolderItem* folder, const QHash<KDevelop::Path, QVector<CMakeTarget>>& targets)
 {
-    static QSet<QString> standardTargets = {
-        QStringLiteral("edit_cache"), QStringLiteral("rebuild_cache"),
-        QStringLiteral("list_install_components"),
-        QStringLiteral("test"), //not really standard, but applicable for make and ninja
-        QStringLiteral("install")
+    auto isValidTarget = [](const CMakeTarget& target) -> bool {
+        if (target.type != CMakeTarget::Custom)
+            return true;
 
+        // utility targets with empty sources are strange (e.g. _QCH) -> skip them
+        if (target.sources.isEmpty())
+            return false;
+
+        auto match
+            = [](const auto& needles, auto&& op) { return std::any_of(std::begin(needles), std::end(needles), op); };
+        auto startsWith = [&](const auto& needle) { return target.name.startsWith(needle); };
+        auto endsWith = [&](const auto& needle) { return target.name.endsWith(needle); };
+        auto equals = [&](const auto& needle) { return target.name == needle; };
+
+        const auto invalidPrefixes = { QLatin1String("install/") };
+        const auto invalidSuffixes
+            = { QLatin1String("_automoc"), QLatin1String("_autogen"), QLatin1String("_autogen_timestamp_deps") };
+        const auto standardTargets
+            = { QLatin1String("edit_cache"), QLatin1String("rebuild_cache"), QLatin1String("list_install_components"),
+                QLatin1String("test"), // not really standard, but applicable for make and ninja
+                QLatin1String("install") };
+        return !match(invalidPrefixes, startsWith) && !match(invalidSuffixes, endsWith)
+            && !match(standardTargets, equals);
     };
-    QList<CMakeTarget> dirTargets = kFilter<QList<CMakeTarget>>(targets[folder->path()], [](const CMakeTarget& target) -> bool {
-        return target.type != CMakeTarget::Custom ||
-              (!target.name.endsWith(QLatin1String("_automoc"))
-            && !target.name.endsWith(QLatin1String("_autogen"))
-            && !standardTargets.contains(target.name)
-            && !target.name.startsWith(QLatin1String("install/"))
-              );
-    });
 
+    auto isValidTargetSource = [](const Path& source) {
+        const auto& segments = source.segments();
+        const auto lastSegment = source.lastPathSegment();
+        // skip non-existent cmake internal rule files
+        if (lastSegment.endsWith(QLatin1String(".rule"))) {
+            return false;
+        }
+
+        const auto secondToLastSegment = segments.value(segments.size() - 2);
+        // ignore generated cmake-internal files
+        if (secondToLastSegment == QLatin1String("CMakeFiles")) {
+            return false;
+        }
+
+        // also skip *_autogen/timestamp files
+        if (lastSegment == QLatin1String("timestamp") && secondToLastSegment.endsWith(QLatin1String("_autogen"))) {
+            return false;
+        }
+
+        return true;
+    };
+
+    // start by deleting all targets, the type may have changed anyways
     const auto tl = folder->targetList();
     for (ProjectTargetItem* item : tl) {
-        const auto idx = kIndexOf(dirTargets, [item](const CMakeTarget& target) { return target.name == item->text(); });
-        if (idx < 0) {
-            delete item;
-        } else {
-            auto cmakeItem = dynamic_cast<CMakeTargetItem*>(item);
-            if (cmakeItem)
-                cmakeItem->setBuiltUrl(dirTargets[idx].artifacts.value(0));
-            dirTargets.removeAt(idx);
-        }
+        delete item;
     }
 
-    for (const auto& target : qAsConst(dirTargets)) {
-        switch(target.type) {
-            case CMakeTarget::Executable:
-                new CMakeTargetItem(folder, target.name, target.artifacts.value(0));
-                break;
-            case CMakeTarget::Library:
-                new ProjectLibraryTargetItem(folder->project(), target.name, folder);
-                break;
-            case CMakeTarget::Custom:
-                new ProjectTargetItem(folder->project(), target.name, folder);
-                break;
+    QHash<QString, ProjectBaseItem*> folderItems;
+    folderItems[{}] = folder;
+    auto findOrCreateFolderItem = [&folderItems, folder](const QString& targetFolder)
+    {
+        auto& item = folderItems[targetFolder];
+        if (!item) {
+            item = new ProjectTargetItem(folder->project(), targetFolder, folder);
+            // these are "virtual" folders, they keep the original path
+            item->setPath(folder->path());
         }
-    }
+        return item;
+    };
 
-    const auto folderItems = folder->folderList();
-    for (ProjectFolderItem* children : folderItems) {
-        populateTargets(children, targets);
+    // target folder name (or empty) to list of targets
+    for (const auto &target : targets[folder->path()]) {
+        if (!isValidTarget(target)) {
+            continue;
+        }
+
+        auto* targetFolder = findOrCreateFolderItem(target.folder);
+        auto* targetItem = [&]() -> ProjectBaseItem* {
+            switch(target.type) {
+                case CMakeTarget::Executable:
+                    return new CMakeTargetItem(targetFolder, target.name, target.artifacts.value(0));
+                case CMakeTarget::Library:
+                    return new ProjectLibraryTargetItem(folder->project(), target.name, targetFolder);
+                case CMakeTarget::Custom:
+                    return new ProjectTargetItem(folder->project(), target.name, targetFolder);
+            }
+            Q_UNREACHABLE();
+        }();
+
+        for (const auto& source : target.sources) {
+            if (!isValidTargetSource(source)) {
+                continue;
+            }
+            new ProjectFileItem(folder->project(), source, targetItem);
+        }
     }
 }
 
-void CMakeManager::integrateData(const CMakeProjectData &data, KDevelop::IProject* project)
+static void cleanupTestSuites(const QVector<CTestSuite*>& testSuites, const QVector<CTestFindJob*>& testSuiteJobs)
 {
-    if (data.m_server) {
-        connect(data.m_server.data(), &CMakeServer::response, project, [this, project](const QJsonObject& response) {
-            serverResponse(project, response);
+    for (auto* testSuiteJob : testSuiteJobs) {
+        testSuiteJob->kill(KJob::Quietly);
+    }
+    for (auto* testSuite : testSuites) {
+        ICore::self()->testController()->removeTestSuite(testSuite);
+        delete testSuite;
+    }
+}
+
+void CMakeManager::integrateData(const CMakeProjectData &data, KDevelop::IProject* project, const QSharedPointer<CMakeServer>& server)
+{
+    if (server) {
+        connect(server.data(), &CMakeServer::response, project, [this, project](const QJsonObject& response) {
+            if (response[QStringLiteral("type")] == QLatin1String("signal")) {
+                if (response[QStringLiteral("name")] == QLatin1String("dirty")) {
+                    m_projects[project].server->configure({});
+                } else
+                    qCDebug(CMAKE) << "unhandled signal response..." << project << response;
+            } else if (response[QStringLiteral("type")] == QLatin1String("error")) {
+                showConfigureErrorMessage(project->name(), response[QStringLiteral("errorMessage")].toString());
+            } else if (response[QStringLiteral("type")] == QLatin1String("reply")) {
+                const auto inReplyTo = response[QStringLiteral("inReplyTo")];
+                if (inReplyTo == QLatin1String("configure")) {
+                    m_projects[project].server->compute();
+                } else if (inReplyTo == QLatin1String("compute")) {
+                    m_projects[project].server->codemodel();
+                } else if(inReplyTo == QLatin1String("codemodel")) {
+                    auto &data = m_projects[project].data;
+                    CMakeServerImportJob::processCodeModel(response, data);
+                    populateTargets(project->projectItem(), data.targets);
+                } else {
+                    qCDebug(CMAKE) << "unhandled reply response..." << project << response;
+                }
+            } else {
+                qCDebug(CMAKE) << "unhandled response..." << project << response;
+            }
         });
-    } else {
-        connect(data.watcher.data(), &QFileSystemWatcher::fileChanged, this, &CMakeManager::dirtyFile);
-        connect(data.watcher.data(), &QFileSystemWatcher::directoryChanged, this, &CMakeManager::dirtyFile);
+    } else if (!m_projects.contains(project)) {
+        auto* reloadTimer = new QTimer(project);
+        reloadTimer->setSingleShot(true);
+        reloadTimer->setInterval(1000);
+        connect(reloadTimer, &QTimer::timeout, this, [project, this]() {
+            reload(project->projectItem());
+        });
+        connect(projectWatcher(project), &KDirWatch::dirty, reloadTimer, [this, project, reloadTimer](const QString &strPath) {
+            const auto& cmakeFiles = m_projects[project].data.cmakeFiles;
+            KDevelop::Path path(strPath);
+            auto it = cmakeFiles.find(path);
+            if (it == cmakeFiles.end() || it->isGenerated || it->isExternal) {
+                return;
+            }
+            qCDebug(CMAKE) << "eventually starting reload due to change of" << strPath;
+            reloadTimer->start();
+        });
     }
-    m_projects[project] = data;
 
+    auto& projectData = m_projects[project];
+    cleanupTestSuites(projectData.testSuites, projectData.testSuiteJobs);
+
+    QVector<CTestSuite*> testSuites;
+    QVector<CTestFindJob*> testSuiteJobs;
+    for (auto& suite : CTestUtils::createTestSuites(data.testSuites, data.targets, project)) {
+        auto* testSuite = suite.release();
+        testSuites.append(testSuite);
+        auto* job = new CTestFindJob(testSuite);
+        connect(job, &KJob::result, this, [this, job, project, testSuite]() {
+            if (!job->error()) {
+                ICore::self()->testController()->addTestSuite(testSuite);
+            }
+            m_projects[project].testSuiteJobs.removeOne(job);
+        });
+        ICore::self()->runController()->registerJob(job);
+        testSuiteJobs.append(job);
+    }
+
+    projectData = { data, server, std::move(testSuites), std::move(testSuiteJobs) };
     populateTargets(project->projectItem(), data.targets);
-    CTestUtils::createTestSuites(data.m_testSuites, data.targets, project);
 }
-
-void CMakeManager::serverResponse(KDevelop::IProject* project, const QJsonObject& response)
-{
-    if (response[QStringLiteral("type")] == QLatin1String("signal")) {
-        if (response[QStringLiteral("name")] == QLatin1String("dirty")) {
-            m_projects[project].m_server->configure({});
-        } else
-            qCDebug(CMAKE) << "unhandled signal response..." << project << response;
-    } else if (response[QStringLiteral("type")] == QLatin1String("error")) {
-        showConfigureErrorMessage(response[QStringLiteral("errorMessage")].toString());
-    } else if (response[QStringLiteral("type")] == QLatin1String("reply")) {
-        const auto inReplyTo = response[QStringLiteral("inReplyTo")];
-        if (inReplyTo == QLatin1String("configure")) {
-            m_projects[project].m_server->compute();
-        } else if (inReplyTo == QLatin1String("compute")) {
-            m_projects[project].m_server->codemodel();
-        } else if(inReplyTo == QLatin1String("codemodel")) {
-            auto &data = m_projects[project];
-            CMakeServerImportJob::processCodeModel(response, data);
-            populateTargets(project->projectItem(), data.targets);
-        } else {
-            qCDebug(CMAKE) << "unhandled reply response..." << project << response;
-        }
-    } else {
-        qCDebug(CMAKE) << "unhandled response..." << project << response;
-    }
-}
-
-// void CMakeManager::deletedWatchedDirectory(IProject* p, const QUrl &dir)
-// {
-//     if(p->folder().equals(dir, QUrl::CompareWithoutTrailingSlash)) {
-//         ICore::self()->projectController()->closeProject(p);
-//     } else {
-//         if(dir.fileName()=="CMakeLists.txt") {
-//             QList<ProjectFolderItem*> folders = p->foldersForUrl(dir.upUrl());
-//             foreach(ProjectFolderItem* folder, folders)
-//                 reload(folder);
-//         } else {
-//             qDeleteAll(p->itemsForUrl(dir));
-//         }
-//     }
-// }
-
-// void CMakeManager::directoryChanged(const QString& dir)
-// {
-//     m_fileSystemChangedBuffer << dir;
-//     m_fileSystemChangeTimer->start();
-// }
-
-// void CMakeManager::filesystemBuffererTimeout()
-// {
-//     Q_FOREACH(const QString& file, m_fileSystemChangedBuffer) {
-//         realDirectoryChanged(file);
-//     }
-//     m_fileSystemChangedBuffer.clear();
-// }
-
-// void CMakeManager::realDirectoryChanged(const QString& dir)
-// {
-//     QUrl path(dir);
-//     IProject* p=ICore::self()->projectController()->findProjectForUrl(dir);
-//     if(!p || !p->isReady()) {
-//         if(p) {
-//             m_fileSystemChangedBuffer << dir;
-//             m_fileSystemChangeTimer->start();
-//         }
-//         return;
-//     }
-//
-//     if(!QFile::exists(dir)) {
-//         path.adjustPath(QUrl::AddTrailingSlash);
-//         deletedWatchedDirectory(p, path);
-//     } else
-//         dirtyFile(dir);
-// }
 
 QList< KDevelop::ProjectTargetItem * > CMakeManager::targets(KDevelop::ProjectFolderItem * folder) const
 {
@@ -492,328 +551,15 @@ KDevelop::ICodeHighlighting* CMakeManager::codeHighlighting() const
     return m_highlight;
 }
 
-// ContextMenuExtension CMakeManager::contextMenuExtension( KDevelop::Context* context )
-// {
-//     if( context->type() != KDevelop::Context::ProjectItemContext )
-//         return IPlugin::contextMenuExtension( context );
-//
-//     KDevelop::ProjectItemContext* ctx = dynamic_cast<KDevelop::ProjectItemContext*>( context );
-//     QList<KDevelop::ProjectBaseItem*> items = ctx->items();
-//
-//     if( items.isEmpty() )
-//         return IPlugin::contextMenuExtension( context );
-//
-//     m_clickedItems = items;
-//     ContextMenuExtension menuExt;
-//     if(items.count()==1 && dynamic_cast<DUChainAttatched*>(items.first()))
-//     {
-//         QAction * action = new QAction( i18n( "Jump to Target Definition" ), this );
-//         connect( action, SIGNAL(triggered()), this, SLOT(jumpToDeclaration()) );
-//         menuExt.addAction( ContextMenuExtension::ProjectGroup, action );
-//     }
-//
-//     return menuExt;
-// }
-//
-// void CMakeManager::jumpToDeclaration()
-// {
-//     DUChainAttatched* du=dynamic_cast<DUChainAttatched*>(m_clickedItems.first());
-//     if(du)
-//     {
-//         KTextEditor::Cursor c;
-//         QUrl url;
-//         {
-//             KDevelop::DUChainReadLocker lock;
-//             Declaration* decl = du->declaration().data();
-//             if(!decl)
-//                 return;
-//             c = decl->rangeInCurrentRevision().start();
-//             url = decl->url().toUrl();
-//         }
-//
-//         ICore::self()->documentController()->openDocument(url, c);
-//     }
-// }
-//
-// // TODO: Port to Path API
-// bool CMakeManager::moveFilesAndFolders(const QList< ProjectBaseItem* > &items, ProjectFolderItem* toFolder)
-// {
-//     using namespace CMakeEdit;
-//
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Move files and folders within CMakeLists as follows:"));
-//
-//     bool cmakeSuccessful = true;
-//     CMakeFolderItem *nearestCMakeFolderItem = nearestCMakeFolder(toFolder);
-//     IProject* project=toFolder->project();
-//
-//     QList<QUrl> movedUrls;
-//     QList<QUrl> oldUrls;
-//     foreach(ProjectBaseItem *movedItem, items)
-//     {
-//         QList<ProjectBaseItem*> dirtyItems = cmakeListedItemsAffectedByUrlChange(project, movedItem->url());
-//         QUrl movedItemNewUrl = toFolder->url();
-//         movedItemNewUrl.addPath(movedItem->baseName());
-//         if (movedItem->folder())
-//             movedItemNewUrl.adjustPath(QUrl::AddTrailingSlash);
-//         foreach(ProjectBaseItem* dirtyItem, dirtyItems)
-//         {
-//             QUrl dirtyItemNewUrl = afterMoveUrl(dirtyItem->url(), movedItem->url(), movedItemNewUrl);
-//             if (CMakeFolderItem* folder = dynamic_cast<CMakeFolderItem*>(dirtyItem))
-//             {
-//                 cmakeSuccessful &= changesWidgetRemoveCMakeFolder(folder, &changesWidget);
-//                 cmakeSuccessful &= changesWidgetAddFolder(dirtyItemNewUrl, nearestCMakeFolderItem, &changesWidget);
-//             }
-//             else if (dirtyItem->parent()->target())
-//             {
-//                 cmakeSuccessful &= changesWidgetMoveTargetFile(dirtyItem, dirtyItemNewUrl, &changesWidget);
-//             }
-//         }
-//
-//         oldUrls += movedItem->url();
-//         movedUrls += movedItemNewUrl;
-//     }
-//
-//     if (changesWidget.hasDocuments() && cmakeSuccessful)
-//         cmakeSuccessful &= changesWidget.exec() && changesWidget.applyAllChanges();
-//
-//     if (!cmakeSuccessful)
-//     {
-//         if (KMessageBox::questionYesNo( QApplication::activeWindow(),
-//                                         i18n("Changes to CMakeLists failed, abort move?"),
-//                                         DIALOG_CAPTION ) == KMessageBox::Yes)
-//             return false;
-//     }
-//
-//     QList<QUrl>::const_iterator it1=oldUrls.constBegin(), it1End=oldUrls.constEnd();
-//     QList<QUrl>::const_iterator it2=movedUrls.constBegin();
-//     Q_ASSERT(oldUrls.size()==movedUrls.size());
-//     for(; it1!=it1End; ++it1, ++it2)
-//     {
-//         if (!KDevelop::renameUrl(project, *it1, *it2))
-//             return false;
-//
-//         QList<ProjectBaseItem*> renamedItems = project->itemsForUrl(*it2);
-//         bool dir = QFileInfo(it2->toLocalFile()).isDir();
-//         foreach(ProjectBaseItem* item, renamedItems) {
-//             if(dir)
-//                 emit folderRenamed(Path(*it1), item->folder());
-//             else
-//                 emit fileRenamed(Path(*it1), item->file());
-//         }
-//     }
-//
-//     return true;
-// }
-//
-// bool CMakeManager::copyFilesAndFolders(const KDevelop::Path::List &items, KDevelop::ProjectFolderItem* toFolder)
-// {
-//     IProject* project = toFolder->project();
-//     foreach(const Path& path, items) {
-//         if (!KDevelop::copyUrl(project, path.toUrl(), toFolder->url()))
-//             return false;
-//     }
-//
-//     return true;
-// }
-//
-// bool CMakeManager::removeFilesAndFolders(const QList<KDevelop::ProjectBaseItem*> &items)
-// {
-//     using namespace CMakeEdit;
-//
-//     IProject* p = 0;
-//     QList<QUrl> urls;
-//     foreach(ProjectBaseItem* item, items)
-//     {
-//         Q_ASSERT(item->folder() || item->file());
-//
-//         urls += item->url();
-//         if(!p)
-//             p = item->project();
-//     }
-//
-//     //First do CMakeLists changes
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Remove files and folders from CMakeLists as follows:"));
-//
-//     bool cmakeSuccessful = changesWidgetRemoveItems(cmakeListedItemsAffectedByItemsChanged(items).toSet(), &changesWidget);
-//
-//     if (changesWidget.hasDocuments() && cmakeSuccessful)
-//         cmakeSuccessful &= changesWidget.exec() && changesWidget.applyAllChanges();
-//
-//     if (!cmakeSuccessful)
-//     {
-//         if (KMessageBox::questionYesNo( QApplication::activeWindow(),
-//                                         i18n("Changes to CMakeLists failed, abort deletion?"),
-//                                         DIALOG_CAPTION ) == KMessageBox::Yes)
-//             return false;
-//     }
-//
-//     bool ret = true;
-//     //Then delete the files/folders
-//     foreach(const QUrl& file, urls)
-//     {
-//         ret &= KDevelop::removeUrl(p, file, QDir(file.toLocalFile()).exists());
-//     }
-//
-//     return ret;
-// }
-
 bool CMakeManager::removeFilesFromTargets(const QList<ProjectFileItem*> &/*files*/)
 {
-//     using namespace CMakeEdit;
-//
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Modify project targets as follows:"));
-//
-//     if (!files.isEmpty() &&
-//         changesWidgetRemoveFilesFromTargets(files, &changesWidget) &&
-//         changesWidget.exec() &&
-//         changesWidget.applyAllChanges()) {
-//         return true;
-//     }
     return false;
 }
-
-// ProjectFolderItem* CMakeManager::addFolder(const Path& folder, ProjectFolderItem* parent)
-// {
-//     using namespace CMakeEdit;
-//
-//     CMakeFolderItem *cmakeParent = nearestCMakeFolder(parent);
-//     if(!cmakeParent)
-//         return 0;
-//
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Create folder '%1':", folder.lastPathSegment()));
-//
-//     ///FIXME: use path in changes widget
-//     changesWidgetAddFolder(folder.toUrl(), cmakeParent, &changesWidget);
-//
-//     if(changesWidget.exec() && changesWidget.applyAllChanges())
-//     {
-//         if(KDevelop::createFolder(folder.toUrl())) { //If saved we create the folder then the CMakeLists.txt file
-//             Path newCMakeLists(folder, "CMakeLists.txt");
-//             KDevelop::createFile( newCMakeLists.toUrl() );
-//         } else
-//             KMessageBox::error(0, i18n("Could not save the change."),
-//                                   DIALOG_CAPTION);
-//     }
-//
-//     return 0;
-// }
-//
-// KDevelop::ProjectFileItem* CMakeManager::addFile( const Path& file, KDevelop::ProjectFolderItem* parent)
-// {
-//     KDevelop::ProjectFileItem* created = 0;
-//     if ( KDevelop::createFile(file.toUrl()) ) {
-//         QList< ProjectFileItem* > files = parent->project()->filesForPath(IndexedString(file.pathOrUrl()));
-//         if(!files.isEmpty())
-//             created = files.first();
-//         else
-//             created = new KDevelop::ProjectFileItem( parent->project(), file, parent );
-//     }
-//     return created;
-// }
 
 bool CMakeManager::addFilesToTarget(const QList< ProjectFileItem* > &/*_files*/, ProjectTargetItem* /*target*/)
 {
     return false;
-//     using namespace CMakeEdit;
-//
-//     const QSet<QString> headerExt = QSet<QString>() << ".h" << ".hpp" << ".hxx";
-//     QList< ProjectFileItem* > files = _files;
-//     for (int i = files.count() - 1; i >= 0; --i)
-//     {
-//         QString fileName = files[i]->fileName();
-//         QString fileExt = fileName.mid(fileName.lastIndexOf('.'));
-//         QList<ProjectBaseItem*> sameUrlItems = files[i]->project()->itemsForUrl(files[i]->url());
-//         if (headerExt.contains(fileExt))
-//             files.removeAt(i);
-//         else foreach(ProjectBaseItem* item, sameUrlItems)
-//         {
-//             if (item->parent() == target)
-//             {
-//                 files.removeAt(i);
-//                 break;
-//             }
-//         }
-//     }
-//
-//     if(files.isEmpty())
-//         return true;
-//
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Modify target '%1' as follows:", target->baseName()));
-//
-//     bool success = changesWidgetAddFilesToTarget(files, target, &changesWidget) &&
-//                    changesWidget.exec() &&
-//                    changesWidget.applyAllChanges();
-//
-//     if(!success)
-//         KMessageBox::error(0, i18n("CMakeLists changes failed."), DIALOG_CAPTION);
-//
-//     return success;
 }
-
-// bool CMakeManager::renameFileOrFolder(ProjectBaseItem *item, const Path &newPath)
-// {
-//     using namespace CMakeEdit;
-//
-//     ApplyChangesWidget changesWidget;
-//     changesWidget.setCaption(DIALOG_CAPTION);
-//     changesWidget.setInformation(i18n("Rename '%1' to '%2':", item->text(),
-//                                       newPath.lastPathSegment()));
-//
-//     bool cmakeSuccessful = true, changedCMakeLists=false;
-//     IProject* project=item->project();
-//     const Path oldPath=item->path();
-//     QUrl oldUrl=oldPath.toUrl();
-//     if (item->file())
-//     {
-//         QList<ProjectBaseItem*> targetFiles = cmakeListedItemsAffectedByUrlChange(project, oldUrl);
-//         foreach(ProjectBaseItem* targetFile, targetFiles)
-//             ///FIXME: use path in changes widget
-//             cmakeSuccessful &= changesWidgetMoveTargetFile(targetFile, newPath.toUrl(), &changesWidget);
-//     }
-//     else if (CMakeFolderItem *folder = dynamic_cast<CMakeFolderItem*>(item))
-//         ///FIXME: use path in changes widget
-//         cmakeSuccessful &= changesWidgetRenameFolder(folder, newPath.toUrl(), &changesWidget);
-//
-//     item->setPath(newPath);
-//     if (changesWidget.hasDocuments() && cmakeSuccessful) {
-//         changedCMakeLists = changesWidget.exec() && changesWidget.applyAllChanges();
-//         cmakeSuccessful &= changedCMakeLists;
-//     }
-//
-//     if (!cmakeSuccessful)
-//     {
-//         if (KMessageBox::questionYesNo( QApplication::activeWindow(),
-//             i18n("Changes to CMakeLists failed, abort rename?"),
-//                                         DIALOG_CAPTION ) == KMessageBox::Yes)
-//             return false;
-//     }
-//
-//     bool ret = KDevelop::renameUrl(project, oldUrl, newPath.toUrl());
-//     if(!ret) {
-//         item->setPath(oldPath);
-//     }
-//     return ret;
-// }
-//
-// bool CMakeManager::renameFile(ProjectFileItem *item, const Path &newPath)
-// {
-//     return renameFileOrFolder(item, newPath);
-// }
-//
-// bool CMakeManager::renameFolder(ProjectFolderItem* item, const Path &newPath)
-// {
-//     return renameFileOrFolder(item, newPath);
-// }
 
 KTextEditor::Range CMakeManager::termRangeAtPosition(const KTextEditor::Document* textDocument,
                                                      const KTextEditor::Cursor& position) const
@@ -860,19 +606,22 @@ KTextEditor::Range CMakeManager::termRangeAtPosition(const KTextEditor::Document
     return KTextEditor::Range(start, end);
 }
 
-void CMakeManager::showConfigureErrorMessage(const QString& errorMessage) const
+void CMakeManager::showConfigureErrorMessage(const QString& projectName, const QString& errorMessage) const
 {
     if (!QApplication::activeWindow()) {
         // Do not show a message box if there is no active window in order not to block unit tests.
         return;
     }
-    KMessageBox::error(QApplication::activeWindow(), i18n(
-        "Failed to configure the project (error message: %1)."
+    const QString messageText = i18n(
+        "Failed to configure project '%1' (error message: %2)."
         " As a result, KDevelop's code understanding will likely be broken.\n"
         "\n"
         "To fix this issue, please ensure that the project's CMakeLists.txt files"
         " are correct, and KDevelop is configured to use the correct CMake version and settings."
-        " Then right-click the project item in the projects tool view and click 'Reload'.", errorMessage));
+        " Then right-click the project item in the projects tool view and click 'Reload'.",
+        projectName, errorMessage);
+    auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+    ICore::self()->uiController()->postMessage(message);
 }
 
 QPair<QWidget*, KTextEditor::Range> CMakeManager::specialLanguageObjectNavigationWidget(const QUrl& url, const KTextEditor::Cursor& position)
@@ -917,103 +666,24 @@ QPair<QWidget*, KTextEditor::Range> CMakeManager::specialLanguageObjectNavigatio
 
 QPair<QString, QString> CMakeManager::cacheValue(KDevelop::IProject* /*project*/, const QString& /*id*/) const
 { return QPair<QString, QString>(); }
-// {
-//     QPair<QString, QString> ret;
-//     if(project==0 && !m_projectsData.isEmpty())
-//     {
-//         project=m_projectsData.keys().first();
-//     }
-//
-// //     qCDebug(CMAKE) << "cache value " << id << project << (m_projectsData.contains(project) && m_projectsData[project].cache.contains(id));
-//     CMakeProjectData* data = m_projectsData[project];
-//     if(data && data->cache.contains(id))
-//     {
-//         const CacheEntry& e=data->cache.value(id);
-//         ret.first=e.value;
-//         ret.second=e.doc;
-//     }
-//     return ret;
-// }Add
-//
+
 void CMakeManager::projectClosing(IProject* p)
 {
-    m_projects.remove(p);
-//     delete m_projectsData.take(p);
-//     delete m_watchers.take(p);
-//
-//     m_filter->remove(p);
-//
-//     qCDebug(CMAKE) << "Project closed" << p;
-}
-//
-// QStringList CMakeManager::processGeneratorExpression(const QStringList& expr, IProject* project, ProjectTargetItem* target) const
-// {
-//     QStringList ret;
-//     const CMakeProjectData* data = m_projectsData[project];
-//     GenerationExpressionSolver exec(data->properties, data->targetAlias);
-//     if(target)
-//         exec.setTargetName(target->text());
-//
-//     exec.defineVariable("INSTALL_PREFIX", data->vm.value("CMAKE_INSTALL_PREFIX").join(QString()));
-//     for(QStringList::const_iterator it = expr.constBegin(), itEnd = expr.constEnd(); it!=itEnd; ++it) {
-//         QStringList val = exec.run(*it).split(';');
-//         ret += val;
-//     }
-//     return ret;
-// }
-/*
-void CMakeManager::addPending(const Path& path, CMakeFolderItem* folder)
-{
-    m_pending.insert(path, folder);
-}
-
-CMakeFolderItem* CMakeManager::takePending(const Path& path)
-{
-    return m_pending.take(path);
-}
-
-void CMakeManager::addWatcher(IProject* p, const QString& path)
-{
-    if (QFileSystemWatcher* watcher = m_watchers.value(p)) {
-        watcher->addPath(path);
-    } else {
-        qCWarning(CMAKE) << "Could not find a watcher for project" << p << p->name() << ", path " << path;
-        Q_ASSERT(false);
+    auto it = m_projects.find(p);
+    if (it != m_projects.end()) {
+        cleanupTestSuites(it->testSuites, it->testSuiteJobs);
+        m_projects.erase(it);
     }
-}*/
-
-// CMakeProjectData CMakeManager::projectData(IProject* project)
-// {
-//     Q_ASSERT(QThread::currentThread() == project->thread());
-//     CMakeProjectData* data = m_projectsData[project];
-//     if(!data) {
-//         data = new CMakeProjectData;
-//         m_projectsData[project] = data;
-//     }
-//     return *data;
-// }
+}
 
 ProjectFilterManager* CMakeManager::filterManager() const
 {
     return m_filter;
 }
 
-void CMakeManager::dirtyFile(const QString& path)
-{
-    qCDebug(CMAKE) << "dirty!" << path;
-
-    //we initialize again hte project that sent the signal
-    for(QHash<IProject*, CMakeProjectData>::const_iterator it = m_projects.constBegin(), itEnd = m_projects.constEnd(); it!=itEnd; ++it) {
-        if(it->watcher == sender()) {
-            reload(it.key()->projectItem());
-            break;
-        }
-    }
-}
-
 void CMakeManager::folderAdded(KDevelop::ProjectFolderItem* folder)
 {
-    populateTargets(folder, m_projects[folder->project()].targets);
+    populateTargets(folder, m_projects.value(folder->project()).data.targets);
 }
 
 ProjectFolderItem* CMakeManager::createFolderItem(IProject* project, const Path& path, ProjectBaseItem* parent)
@@ -1032,10 +702,17 @@ int CMakeManager::perProjectConfigPages() const
 
 ConfigPage* CMakeManager::perProjectConfigPage(int number, const ProjectConfigOptions& options, QWidget* parent)
 {
+#ifdef CMAKEMANAGER_NO_SETTINGS
+    Q_UNUSED(number);
+    Q_UNUSED(options);
+    Q_UNUSED(parent);
+    return nullptr;
+#else
     if (number == 0) {
         return new CMakePreferences(this, options, parent);
     }
     return nullptr;
+#endif
 }
 
 void CMakeManager::reloadProjects()
@@ -1049,7 +726,7 @@ void CMakeManager::reloadProjects()
 
 CMakeTarget CMakeManager::targetInformation(KDevelop::ProjectTargetItem* item) const
 {
-    const auto targets = m_projects[item->project()].targets[item->parent()->path()];
+    const auto targets = m_projects[item->project()].data.targets[item->parent()->path()];
     for (auto target: targets) {
         if (item->text() == target.name) {
             return target;
@@ -1066,7 +743,7 @@ KDevelop::Path CMakeManager::compiler(KDevelop::ProjectTargetItem* item) const
         return {};
     }
 
-    const auto info = m_projects[item->project()].compilationData.files[targetInfo.sources.constFirst()];
+    const auto info = m_projects[item->project()].data.compilationData.files[targetInfo.sources.constFirst()];
     const auto lang = info.language;
     if (lang.isEmpty()) {
         qCDebug(CMAKE) << "no language for" << item << item->text() << info.defines << targetInfo.sources.constFirst();

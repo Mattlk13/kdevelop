@@ -72,7 +72,7 @@ ProjectBuildSetWidget::ProjectBuildSetWidget( QWidget* parent )
     m_ui->itemView->setContextMenuPolicy( Qt::CustomContextMenu );
     connect( m_ui->itemView, &QTreeView::customContextMenuRequested,
              this, &ProjectBuildSetWidget::showContextMenu );
-    layout()->setMargin(0);
+    layout()->setContentsMargins(0, 0, 0, 0);
 }
 
 void ProjectBuildSetWidget::setProjectView( ProjectManagerView* view )
@@ -134,8 +134,8 @@ void ProjectBuildSetWidget::showContextMenu( const QPoint& p )
 
 
     QMenu m(this);
-    m.setTitle( i18n("Build Set") );
-    m.addAction( QIcon::fromTheme(QStringLiteral("list-remove")), i18n( "Remove From Build Set" ), this, SLOT(removeItems()) );
+    m.setTitle(i18nc("@title:menu", "Build Set"));
+    m.addAction(QIcon::fromTheme(QStringLiteral("list-remove")), i18nc("@action:inmenu", "Remove from Build Set"), this, SLOT(removeItems()) );
 
     if( !itemlist.isEmpty() )
     {

@@ -30,6 +30,7 @@
 
 #include "testfilepaths.h"
 #include "testprovider.h"
+#include "duchain/clanghelpers.h"
 
 //Include all used json tests, otherwise "Test not found"
 #include <tests/json/jsondeclarationtests.h>
@@ -39,10 +40,19 @@
 
 #include <QTest>
 #include <QLoggingCategory>
+#include <QProcess>
+#include <QVersionNumber>
 
 using namespace KDevelop;
 
 QTEST_MAIN(TestFiles)
+
+namespace {
+bool isCudaAvailable()
+{
+    return QProcess::execute(QStringLiteral("clang"), {QStringLiteral("-xcuda"), QStringLiteral("-fsyntax-only"), QProcess::nullDevice()}) == 0;
+}
+}
 
 void TestFiles::initTestCase()
 {
@@ -76,7 +86,11 @@ void TestFiles::testFiles_data()
 {
     QTest::addColumn<QString>("fileName");
     const QString testDirPath = TEST_FILES_DIR;
-    const QStringList files = QDir(testDirPath).entryList({"*.h", "*.cpp", "*.c", "*.cl", "*.cu"}, QDir::Files);
+    auto patterns = QStringList{"*.h", "*.cpp", "*.c", "*.cl"};
+    if (isCudaAvailable()) {
+        patterns.append("*.cu");
+    }
+    const QStringList files = QDir(testDirPath).entryList(patterns, QDir::Files);
     for (const QString& file : files) {
         QTest::newRow(file.toUtf8().constData()) << QString(testDirPath + '/' + file);
     }
@@ -109,7 +123,8 @@ void TestFiles::testFiles()
         qDebug() << problem;
     }
 
-    QEXPECT_FAIL("lambdas.cpp", "capture with identifier and initializer aren't visited apparently", Abort);
+    if (QVersionNumber::fromString(ClangHelpers::clangVersion()) < QVersionNumber(9, 0, 0))
+        QEXPECT_FAIL("lambdas.cpp", "capture with identifier and initializer aren't visited apparently", Abort);
     QVERIFY(validator.testsPassed());
 
     if (!QTest::currentDataTag() || strcmp("invalid.cpp", QTest::currentDataTag()) != 0) {

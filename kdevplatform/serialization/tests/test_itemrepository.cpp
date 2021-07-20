@@ -1,9 +1,10 @@
 #include <QObject>
 #include <QTest>
+#include <QStandardPaths>
 #include <serialization/itemrepository.h>
 #include <serialization/indexedstring.h>
-#include <stdlib.h>
-#include <time.h>
+#include <cstdlib>
+#include <ctime>
 
 using namespace KDevelop;
 
@@ -34,7 +35,7 @@ struct TestItem
     {
         return rhs->m_hash == m_hash
                && itemSize() == rhs->itemSize()
-               && memcmp(( char* )this, rhs, itemSize()) == 0;
+               && memcmp(reinterpret_cast<const char*>(this), rhs, itemSize()) == 0;
     }
 
     uint m_hash;
@@ -61,7 +62,7 @@ struct TestItemRequest
     }
 
     //Should return the size of an item created with createItem
-    size_t itemSize() const
+    uint itemSize() const
     {
         return m_item.itemSize();
     }
@@ -118,6 +119,7 @@ class TestItemRepository
 private Q_SLOTS:
     void initTestCase()
     {
+        QStandardPaths::setTestModeEnabled(true);
         ItemRepositoryRegistry::initialize(m_repositoryPath);
     }
     void cleanupTestCase()
@@ -386,7 +388,7 @@ private Q_SLOTS:
     }
 
 private:
-    QString m_repositoryPath = QDir::tempPath() + QStringLiteral("/test_itemrepository");
+    const QString m_repositoryPath = QDir::tempPath() + QStringLiteral("/test_itemrepository");
 };
 
 #include "test_itemrepository.moc"

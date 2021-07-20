@@ -302,7 +302,7 @@ struct QualifiedIdentifierItemRequest
     void createItem(ConstantQualifiedIdentifierPrivate* item) const
     {
         Q_ASSERT(shouldDoDUChainReferenceCounting(item));
-        Q_ASSERT(shouldDoDUChainReferenceCounting((( char* )item) + (itemSize() - 1)));
+        Q_ASSERT(shouldDoDUChainReferenceCounting(reinterpret_cast<char*>(item) + (itemSize() - 1)));
         new (item) ConstantQualifiedIdentifierPrivate(m_identifier);
     }
 
@@ -602,7 +602,7 @@ QString Identifier::toString(IdentifierStringFormattingOptions options) const
             templateIds.append(templateIdentifier(i).toString(options));
         }
 
-        ret += QStringLiteral("< ") + templateIds.join(QStringLiteral(", ")) + QStringLiteral(" >");
+        ret += QLatin1String("< ") + templateIds.join(QLatin1String(", ")) + QLatin1String(" >");
     }
 
     return ret;
@@ -683,7 +683,7 @@ QualifiedIdentifier::QualifiedIdentifier(const QString& id, bool isExpression)
             push(finishedId);
         }
     } else {
-        if (id.startsWith(QStringLiteral("::"))) {
+        if (id.startsWith(QLatin1String("::"))) {
             dd->m_explicitlyGlobal = true;
             dd->splitIdentifiers(id, 2);
         } else {

@@ -23,7 +23,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-#include "debug.h"
+#include "debug_workingset.h"
 #include "core.h"
 #include "documentcontroller.h"
 #include "mainwindow.h"
@@ -58,7 +58,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
     auto* layout = new QVBoxLayout(this);
     layout->setSpacing(0);
 
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     connect(mainwindow->area(),
             &Sublime::Area::viewAdded, this, &WorkingSetToolTipWidget::updateFileButtons,
@@ -77,7 +77,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
         m_setButton->hide();
 
         topLayout->addSpacing(5);
-        QLabel* icon = new QLabel;
+        auto* icon = new QLabel;
         topLayout->addWidget(icon);
         topLayout->addSpacing(5);
 
@@ -87,7 +87,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
         } else {
             label = i18n("<b>Working Set</b>");
         }
-        QLabel* name = new QLabel(label);
+        auto* name = new QLabel(label);
         name->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
         topLayout->addWidget(name);
          topLayout->addSpacing(10);
@@ -102,15 +102,15 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
 
         m_deleteButton = new QPushButton;
         m_deleteButton->setIcon(QIcon::fromTheme(QStringLiteral("edit-delete")));
-        m_deleteButton->setText(i18n("Delete"));
-        m_deleteButton->setToolTip(i18n("Remove this working set. The contained documents are not affected."));
+        m_deleteButton->setText(i18nc("@action:button", "Delete"));
+        m_deleteButton->setToolTip(i18nc("@info:tooltip", "Remove this working set. The contained documents are not affected."));
         m_deleteButton->setFlat(true);
         connect(m_deleteButton, &QPushButton::clicked, m_set, [&] { m_set->deleteSet(false); });
         connect(m_deleteButton, &QPushButton::clicked, this, &WorkingSetToolTipWidget::shouldClose);
         topLayout->addWidget(m_deleteButton);
         layout->addLayout(topLayout);
         // horizontal line
-        QFrame* line = new QFrame();
+        auto* line = new QFrame();
         line->setFrameShape(QFrame::HLine);
         line->setFrameShadow(QFrame::Raised);
         layout->addWidget(line);
@@ -119,7 +119,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
     // everything else is added to the following widget which just has a different background color
     auto* bodyLayout = new QVBoxLayout;
     {
-        QWidget* body = new QWidget();
+        auto* body = new QWidget();
         body->setLayout(bodyLayout);
         layout->addWidget(body);
         body->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
@@ -129,7 +129,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
     {
         auto* actionsLayout = new QHBoxLayout;
 
-        m_documentsLabel = new QLabel(i18n("Documents:"));
+        m_documentsLabel = new QLabel(i18nc("@label", "Documents:"));
         m_documentsLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
         actionsLayout->addWidget(m_documentsLabel);
 
@@ -137,16 +137,16 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
 
         m_mergeButton = new QPushButton;
         m_mergeButton->setIcon(QIcon::fromTheme(QStringLiteral("list-add")));
-        m_mergeButton->setText(i18n("Add All"));
-        m_mergeButton->setToolTip(i18n("Add all documents that are part of this working set to the currently active working set."));
+        m_mergeButton->setText(i18nc("@action:button", "Add All"));
+        m_mergeButton->setToolTip(i18nc("@info:tooltip", "Add all documents that are part of this working set to the currently active working set"));
         m_mergeButton->setFlat(true);
         connect(m_mergeButton, &QPushButton::clicked, m_setButton, &WorkingSetToolButton::mergeSet);
         actionsLayout->addWidget(m_mergeButton);
 
         m_subtractButton = new QPushButton;
         m_subtractButton->setIcon(QIcon::fromTheme(QStringLiteral("list-remove")));
-        m_subtractButton->setText(i18n("Remove All"));
-        m_subtractButton->setToolTip(i18n("Remove all documents that are part of this working set from the currently active working set."));
+        m_subtractButton->setText(i18nc("@action:button", "Remove All"));
+        m_subtractButton->setToolTip(i18nc("@info:tooltip", "Remove all documents that are part of this working set from the currently active working set"));
         m_subtractButton->setFlat(true);
         connect(m_subtractButton, &QPushButton::clicked, m_setButton, &WorkingSetToolButton::subtractSet);
         actionsLayout->addWidget(m_subtractButton);
@@ -156,7 +156,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
     QSet<QString> hadFiles;
 
     auto* filesLayout = new QVBoxLayout;
-    filesLayout->setMargin(0);
+    filesLayout->setContentsMargins(0, 0, 0, 0);
 
     const auto setFiles = m_set->fileList();
     for (const QString& file : setFiles) {
@@ -182,7 +182,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
         fileLabel->setToolTip(i18nc("@info:tooltip", "Click to open and activate this document."));
         fileLabel->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
         fileLayout->addWidget(fileLabel);
-        fileLayout->setMargin(0);
+        fileLayout->setContentsMargins(0, 0, 0, 0);
 
         plusButton->setMaximumHeight(fileLabel->sizeHint().height() + 4);
         plusButton->setMaximumWidth(plusButton->maximumHeight());
@@ -208,7 +208,7 @@ WorkingSetToolTipWidget::WorkingSetToolTipWidget(QWidget* parent, WorkingSet* se
     connect(set, &WorkingSet::setChangedSignificantly, this, &WorkingSetToolTipWidget::updateFileButtons);
     connect(mainwindow->area(), &Sublime::Area::changedWorkingSet, this, &WorkingSetToolTipWidget::updateFileButtons, Qt::QueuedConnection);
 
-    QMetaObject::invokeMethod(this, "updateFileButtons");
+    QMetaObject::invokeMethod(this, &WorkingSetToolTipWidget::updateFileButtons);
 }
 
 void WorkingSetToolTipWidget::nextDocument()
@@ -220,7 +220,7 @@ void WorkingSetToolTipWidget::nextDocument()
 
     if(active == -1)
     {
-        qCWarning(SHELL) << "Found no active document";
+        qCWarning(WORKINGSET) << "Found no active document";
         return;
     }
 
@@ -240,7 +240,7 @@ void WorkingSetToolTipWidget::previousDocument()
 
     if(active == -1)
     {
-        qCWarning(SHELL) << "Found no active document";
+        qCWarning(WORKINGSET) << "Found no active document";
         return;
     }
 
@@ -277,7 +277,7 @@ void WorkingSetToolTipWidget::updateFileButtons()
     if(!mainWindow->area()->workingSet().isEmpty())
     {
         currentWorkingSet = controller->workingSet(mainWindow->area()->workingSet());
-        openFiles = currentWorkingSet->fileList().toSet();
+        openFiles = currentWorkingSet->fileSet();
     }
 
     bool allOpen = true;
@@ -290,12 +290,12 @@ void WorkingSetToolTipWidget::updateFileButtons()
     for(QMap< QString, FileWidget* >::iterator it = m_fileWidgets.begin(); it != m_fileWidgets.end(); ++it) {
         if(openFiles.contains(it.key())) {
             noneOpen = false;
-            (*it)->m_button->setToolTip(i18n("Remove this file from the current working set"));
+            (*it)->m_button->setToolTip(i18nc("@info:tooltip", "Remove this file from the current working set"));
             (*it)->m_button->setIcon(QIcon::fromTheme(QStringLiteral("list-remove")));
             (*it)->show();
         }else{
             allOpen = false;
-            (*it)->m_button->setToolTip(i18n("Add this file to the current working set"));
+            (*it)->m_button->setToolTip(i18nc("@info:tooltip", "Add this file to the current working set"));
             (*it)->m_button->setIcon(QIcon::fromTheme(QStringLiteral("list-add")));
             if(currentWorkingSet == m_set)
             {
@@ -324,13 +324,13 @@ void WorkingSetToolTipWidget::updateFileButtons()
         connect(m_openButton, &QPushButton::clicked, m_setButton, &WorkingSetToolButton::closeSet);
         connect(m_openButton, &QPushButton::clicked, this, &WorkingSetToolTipWidget::shouldClose);
         m_openButton->setIcon(QIcon::fromTheme(QStringLiteral("project-development-close")));
-        m_openButton->setText(i18n("Stash"));
+        m_openButton->setText(i18nc("@action:button", "Stash"));
     }else{
         disconnect(m_openButton, &QPushButton::clicked, m_setButton, &WorkingSetToolButton::closeSet);
         connect(m_openButton, &QPushButton::clicked, m_setButton, &WorkingSetToolButton::loadSet);
         disconnect(m_openButton, &QPushButton::clicked, this, &WorkingSetToolTipWidget::shouldClose);
         m_openButton->setIcon(QIcon::fromTheme(QStringLiteral("project-open")));
-        m_openButton->setText(i18n("Load"));
+        m_openButton->setText(i18nc("@action:button", "Load"));
     }
 
     if(allHidden && tooltip)
@@ -349,7 +349,7 @@ void WorkingSetToolTipWidget::buttonClicked(bool)
 
     auto* mainWindow = qobject_cast<MainWindow*>(Core::self()->uiController()->activeMainWindow());
     Q_ASSERT(mainWindow);
-    QSet<QString> openFiles = Core::self()->workingSetControllerInternal()->workingSet(mainWindow->area()->workingSet())->fileList().toSet();
+    QSet<QString> openFiles = Core::self()->workingSetControllerInternal()->workingSet(mainWindow->area()->workingSet())->fileSet();
 
     if(!openFiles.contains(s->objectName())) {
         Core::self()->documentControllerInternal()->openDocument(QUrl::fromUserInput(s->objectName()));

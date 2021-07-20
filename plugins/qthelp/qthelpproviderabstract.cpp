@@ -40,6 +40,19 @@
 
 using namespace KDevelop;
 
+namespace {
+IDocumentation::Ptr documentationPtrFromUrl(const QUrl& url)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    const QList<QHelpLink> info {{url, url.toString()}};
+#else
+    QMap<QString, QUrl> info;
+    info.insert(url.toString(), url);
+#endif
+    return IDocumentation::Ptr(new QtHelpDocumentation(url.toString(), info));
+}
+}
+
 QtHelpProviderAbstract::QtHelpProviderAbstract(QObject *parent, const QString &collectionFileName, const QVariantList &args)
     : QObject(parent)
     , m_engine(QStandardPaths::writableLocation(QStandardPaths::DataLocation)+QLatin1Char('/')+collectionFileName)
@@ -49,6 +62,9 @@ QtHelpProviderAbstract::QtHelpProviderAbstract(QObject *parent, const QString &c
     if( !m_engine.setupData() ) {
         qCWarning(QTHELP) << "Couldn't setup QtHelp Collection file";
     }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    m_engine.setUsesFilterEngine(true);
+#endif
 }
 
 
@@ -71,7 +87,11 @@ IDocumentation::Ptr QtHelpProviderAbstract::documentationForDeclaration(Declarat
         }
 
         if (!id.isEmpty()) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+            const QList<QHelpLink> links = m_engine.documentsForIdentifier(id);
+#else
             QMap<QString, QUrl> links = m_engine.linksForIdentifier(id);
+#endif
 
             if(!links.isEmpty())
                 return IDocumentation::Ptr(new QtHelpDocumentation(id, links));
@@ -79,6 +99,14 @@ IDocumentation::Ptr QtHelpProviderAbstract::documentationForDeclaration(Declarat
     }
 
     return {};
+}
+
+KDevelop::IDocumentation::Ptr QtHelpProviderAbstract::documentation(const QUrl& url) const
+{
+    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
+    //findFile returns a valid url even if we don't have a page for that documentationForURL
+    auto data = m_engine.fileData(url);
+    return data.isEmpty() ? IDocumentation::Ptr{} : documentationPtrFromUrl(url);
 }
 
 QAbstractItemModel* QtHelpProviderAbstract::indexModel() const
@@ -91,16 +119,27 @@ IDocumentation::Ptr QtHelpProviderAbstract::documentationForIndex(const QModelIn
 {
     QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
     QString name=idx.data(Qt::DisplayRole).toString();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    return IDocumentation::Ptr(new QtHelpDocumentation(name, m_engine.documentsForKeyword(name)));
+#else
     return IDocumentation::Ptr(new QtHelpDocumentation(name, m_engine.indexModel()->linksForKeyword(name)));
+#endif
 }
 
 void QtHelpProviderAbstract::jumpedTo(const QUrl& newUrl)
 {
-    QtHelpDocumentation::s_provider = this;
-    QMap<QString, QUrl> info;
-    info.insert(newUrl.toString(), newUrl);
-    IDocumentation::Ptr doc(new QtHelpDocumentation(newUrl.toString(), info));
-    ICore::self()->documentationController()->showDocumentation(doc);
+    auto doc = documentation(newUrl);
+    IDocumentationController* controller = ICore::self()->documentationController();
+    if (!doc) {
+        doc = controller->documentation(newUrl);
+        if (!doc) {
+            // Follow the unsupported link and run the risk of displaying a blank page
+            // if this is a broken local link. If this is an external link, we can follow it
+            // and show the webpage. Our support for website navigation is pretty good.
+            doc = documentationPtrFromUrl(newUrl);
+        }
+    }
+    controller->showDocumentation(doc);
 }
 
 IDocumentation::Ptr QtHelpProviderAbstract::homePage() const

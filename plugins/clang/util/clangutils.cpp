@@ -66,12 +66,10 @@ QVector<UnsavedFile> ClangUtils::unsavedFiles()
         auto textDocument = document->textDocument();
         // TODO: Introduce a cache so we don't have to re-read all the open documents
         // which were not changed since the last run
-        if (!textDocument || !textDocument->url().isLocalFile()
-            || !DocumentFinderHelpers::mimeTypesList().contains(textDocument->mimeType()))
-        {
+        if (!textDocument || !textDocument->url().isLocalFile() || !textDocument->isModified()) {
             continue;
         }
-        if (!textDocument->isModified()) {
+        if (!DocumentFinderHelpers::mimeTypesList().contains(textDocument->mimeType())) {
             continue;
         }
         ret << UnsavedFile(textDocument->url().toLocalFile(),
@@ -144,11 +142,7 @@ CXChildVisitResult paramVisitor(CXCursor cursor, CXCursor /*parent*/, CXClientDa
     //the declaration or definition, and the default arguments don't have lexical
     //parents. So this range check is the only thing that really works.
     if ((info->fileName.isEmpty() || fileName == info->fileName) && info->range.contains(range.toRange())) {
-        const ClangTokens tokens(info->unit, range.range());
-        info->stringParts.reserve(info->stringParts.size() + tokens.size());
-        for (CXToken token : tokens) {
-            info->stringParts.append(ClangString(clang_getTokenSpelling(info->unit, token)).toString());
-        }
+        info->stringParts.append(ClangUtils::getRawContents(info->unit, range.range()));
     }
     return CXChildVisit_Continue;
 }
@@ -182,12 +176,18 @@ QVector<QString> ClangUtils::getDefaultArguments(CXCursor cursor, DefaultArgumen
         info.stringParts.clear();
         clang_visitChildren(arg, paramVisitor, &info);
 
+        const auto hasDefault = !info.stringParts.isEmpty();
+
         //Clang includes the equal sign sometimes, but not other times.
         if (!info.stringParts.isEmpty() && info.stringParts.first() == QLatin1String("=")) {
             info.stringParts.removeFirst();
         }
         //Clang seems to include the , or ) at the end of the param, so delete that
-        if (!info.stringParts.isEmpty() && (info.stringParts.last() == QLatin1String(",") || info.stringParts.last() == QLatin1String(")"))) {
+        if (!info.stringParts.isEmpty() &&
+            ((info.stringParts.last() == QLatin1String(",")) ||
+             (info.stringParts.last() == QLatin1String(")") &&
+              // assuming otherwise matching "(" & ")" tokens
+              info.stringParts.count(QStringLiteral("(")) != info.stringParts.count(QStringLiteral(")"))))) {
             info.stringParts.removeLast();
         }
 
@@ -196,6 +196,12 @@ QVector<QString> ClangUtils::getDefaultArguments(CXCursor cursor, DefaultArgumen
             arguments.replace(i, result);
         } else if (!result.isEmpty()) {
             arguments << result;
+        } else if (hasDefault) {
+            // no string obtained, probably due to a parse error...
+            // we have to include some argument, otherwise it's even more confusing to our users
+            // furthermore, we cannot even do getRawContents on the arg's cursor, as it's cursor
+            // extent stops at the first error...
+            arguments << i18n("<parse error>");
         }
     }
     return arguments;
@@ -220,7 +226,7 @@ QString ClangUtils::getScope(CXCursor cursor, CXCursor context)
         scope.prepend(ClangString(clang_getCursorDisplayName(search)).toString());
         search = clang_getCursorSemanticParent(search);
     }
-    return scope.join(QStringLiteral("::"));
+    return scope.join(QLatin1String("::"));
 }
 
 QString ClangUtils::getCursorSignature(CXCursor cursor, const QString& scope, const QVector<QString>& defaultArgs)
@@ -242,7 +248,7 @@ QString ClangUtils::getCursorSignature(CXCursor cursor, const QString& scope, co
 
     QString functionName = ClangString(clang_getCursorSpelling(cursor)).toString();
     if (functionName.contains(QLatin1Char('<'))) {
-        stream << functionName.left(functionName.indexOf(QLatin1Char('<')));
+        stream << functionName.leftRef(functionName.indexOf(QLatin1Char('<')));
     } else {
         stream << functionName;
     }
@@ -281,7 +287,7 @@ QString ClangUtils::getCursorSignature(CXCursor cursor, const QString& scope, co
         //KDevelop formats them as "t* x" and "t& x". Make that adjustment.
         const QString type = ClangString(clang_getTypeSpelling(clang_getCursorType(arg))).toString();
         if (type.endsWith(QLatin1String(" *")) || type.endsWith(QLatin1String(" &"))) {
-            stream << type.left(type.length() - 2) << type.at(type.length() - 1);
+            stream << type.leftRef(type.length() - 2) << type.at(type.length() - 1);
         } else {
             stream << type;
         }
@@ -313,6 +319,17 @@ QString ClangUtils::getCursorSignature(CXCursor cursor, const QString& scope, co
         stream << " const";
     }
 
+    switch (clang_getCursorExceptionSpecificationType(cursor)) {
+    case CXCursor_ExceptionSpecificationKind_DynamicNone:
+        stream << " throw()";
+        break;
+    case CXCursor_ExceptionSpecificationKind_BasicNoexcept:
+        stream << " noexcept";
+        break;
+    default:
+        break;
+    }
+
     return ret;
 }
 
@@ -330,38 +347,21 @@ QStringList ClangUtils::templateArgumentTypes(CXCursor cursor)
     return types;
 }
 
-QByteArray ClangUtils::getRawContents(CXTranslationUnit unit, CXSourceRange range)
+QString ClangUtils::getRawContents(CXTranslationUnit unit, CXSourceRange range)
 {
     const auto rangeStart = clang_getRangeStart(range);
     const auto rangeEnd = clang_getRangeEnd(range);
+    CXFile rangeFile;
     unsigned int start, end;
-    clang_getFileLocation(rangeStart, nullptr, nullptr, nullptr, &start);
+    clang_getFileLocation(rangeStart, &rangeFile, nullptr, nullptr, &start);
     clang_getFileLocation(rangeEnd, nullptr, nullptr, nullptr, &end);
 
-    QByteArray result;
-    const ClangTokens tokens(unit, range);
-    for (CXToken token : tokens) {
-        const auto location = ClangLocation(clang_getTokenLocation(unit, token));
-        unsigned int offset;
-        clang_getFileLocation(location, nullptr, nullptr, nullptr, &offset);
-        if (offset < start) // TODO: Sometimes hit, see bug 357585
-            return {};
-
-        const int fillCharacters = offset - start - result.size();
-        Q_ASSERT(fillCharacters >= 0);
-        if (fillCharacters < 0)
-            return {};
-
-        result.append(QByteArray(fillCharacters, ' '));
-        const auto spelling = clang_getTokenSpelling(unit, token);
-        result.append(clang_getCString(spelling));
-        clang_disposeString(spelling);
+    std::size_t fileSize;
+    const char* fileBuffer = clang_getFileContents(unit, rangeFile, &fileSize);
+    if (fileBuffer && start < fileSize && end <= fileSize && start < end) {
+        return QString::fromUtf8(fileBuffer + start, end - start);
     }
-    // Clang always appends the full range of the last token, even if this exceeds the end of the requested range.
-    // Fix this.
-    result.chop(result.size() - (end - start));
-
-    return result;
+    return QString();
 }
 
 bool ClangUtils::isExplicitlyDefaultedOrDeleted(CXCursor cursor)
@@ -370,65 +370,9 @@ bool ClangUtils::isExplicitlyDefaultedOrDeleted(CXCursor cursor)
         return true;
     }
 
-#if CINDEX_VERSION_MINOR >= 34
     if (clang_CXXMethod_isDefaulted(cursor)) {
         return true;
     }
-#else
-    auto declCursor = clang_getCanonicalCursor(cursor);
-    CXTranslationUnit tu = clang_Cursor_getTranslationUnit(declCursor);
-    ClangTokens tokens(tu, clang_getCursorExtent(declCursor));
-    bool lastTokenWasDeleteOrDefault = false;
-    for (auto it = tokens.rbegin(), end = tokens.rend(); it != end; ++it) {
-        CXToken token = *it;
-        auto kind = clang_getTokenKind(token);
-        switch (kind) {
-            case CXToken_Comment:
-                break;
-            case CXToken_Identifier:
-            case CXToken_Literal:
-                lastTokenWasDeleteOrDefault = false;
-                break;
-            case CXToken_Punctuation: {
-                ClangString spelling(clang_getTokenSpelling(tu, token));
-                const char* spellingCStr = spelling.c_str();
-                if (strcmp(spellingCStr, ")") == 0) {
-                    // a closing parent means we have reached the end of the function parameter list
-                    // therefore this function can't be explicitly deleted/defaulted
-                    return false;
-                } else if (strcmp(spellingCStr, "=") == 0) {
-                    if (lastTokenWasDeleteOrDefault) {
-                        return true;
-                    }
-#if CINDEX_VERSION_MINOR < 31
-                    // HACK: on old clang versions, we don't get the default/delete
-                    //       so there, assume the function is defaulted or deleted
-                    //       when the last token is an equal sign
-                    if (it == tokens.rbegin()) {
-                        return true;
-                    }
-#endif
-                }
-                lastTokenWasDeleteOrDefault = false;
-                break;
-            }
-            case CXToken_Keyword: {
-                ClangString spelling(clang_getTokenSpelling(tu, token));
-                const char* spellingCStr = spelling.c_str();
-                if (strcmp(spellingCStr, "default") == 0
-#if CINDEX_VERSION_MINOR < 31
-                    || strcmp(spellingCStr, "delete") == 0
-#endif
-                ) {
-                    lastTokenWasDeleteOrDefault = true;
-                } else {
-                    lastTokenWasDeleteOrDefault = false;
-                }
-                break;
-            }
-        }
-    }
-#endif
     return false;
 }
 

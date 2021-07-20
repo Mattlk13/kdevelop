@@ -37,6 +37,7 @@
 #include <sublime/holdupdates.h>
 
 #include <interfaces/itoolviewactionlistener.h>
+#include <sublime/message.h>
 #include <util/scopeddialog.h>
 
 #include "core.h"
@@ -46,6 +47,7 @@
 #include "editorconfigpage.h"
 #include "shellextension.h"
 #include "plugincontroller.h"
+#include "session.h"
 #include "mainwindow.h"
 #include "workingsetcontroller.h"
 #include "workingsets/workingset.h"
@@ -88,8 +90,7 @@ public:
         desired[QStringLiteral("org.kdevelop.SnippetView")] = Sublime::Right;
         desired[QStringLiteral("org.kdevelop.ExternalScriptView")] = Sublime::Right;
         desired[QStringLiteral("org.kdevelop.ScratchpadView")] = Sublime::Left;
-        Sublime::Area* a =
-            new Sublime::Area(m_controller, QStringLiteral("code"), i18n("Code"));
+        auto* a = new Sublime::Area(m_controller, QStringLiteral("code"), i18nc("area", "Code"));
         a->setDesiredToolViews(desired);
         a->setIconName(QStringLiteral("document-edit"));
         m_controller->addDefaultArea(a);
@@ -100,7 +101,7 @@ public:
         desired[QStringLiteral("org.kdevelop.debugger.StackView")] = Sublime::Bottom;
         desired[QStringLiteral("org.kdevelop.debugger.ConsoleView")] = Sublime::Bottom;
         desired[QStringLiteral("org.kdevelop.KonsoleView")] = Sublime::Bottom;
-        a = new Sublime::Area(m_controller, QStringLiteral("debug"), i18n("Debug"));
+        a = new Sublime::Area(m_controller, QStringLiteral("debug"), i18nc("area", "Debug"));
         a->setDesiredToolViews(desired);
         a->setIconName(QStringLiteral("debug-run"));
         m_controller->addDefaultArea(a);
@@ -109,7 +110,7 @@ public:
         desired[QStringLiteral("org.kdevelop.ProjectsView")] = Sublime::Left;
         desired[QStringLiteral("org.kdevelop.PatchReview")] = Sublime::Bottom;
 
-        a = new Sublime::Area(m_controller, QStringLiteral("review"), i18n("Review"));
+        a = new Sublime::Area(m_controller, QStringLiteral("review"), i18nc("area", "Review"));
         a->setDesiredToolViews(desired);
         a->setIconName(QStringLiteral("text-x-patch"));
         m_controller->addDefaultArea(a);
@@ -228,9 +229,6 @@ UiController::UiController(Core *core)
     if (!defaultMainWindow() || (Core::self()->setupFlags() & Core::NoUi))
         return;
 
-    connect(qApp, &QApplication::focusChanged,
-            this, [this] (QWidget* old, QWidget* now) { Q_D(UiController); d->widgetChanged(old, now); } );
-
     setupActions();
 }
 
@@ -244,6 +242,7 @@ void UiController::mainWindowAdded(Sublime::MainWindow* mainWindow)
 {
     connect(mainWindow, &MainWindow::activeToolViewChanged, this, &UiController::slotActiveToolViewChanged);
     connect(mainWindow, &MainWindow::areaChanged, this, &UiController::slotAreaChanged); // also check after area reconstruction
+    connect(mainWindow, &MainWindow::areaCleared, Core::self()->workingSetControllerInternal(), &WorkingSetController::saveArea);
 }
 
 // FIXME: currently, this always create new window. Probably,
@@ -443,8 +442,12 @@ MainWindow *UiController::defaultMainWindow()
 void UiController::initialize()
 {
     defaultMainWindow()->initialize();
-}
 
+    connect(qApp, &QApplication::focusChanged, this, [this](QWidget* old, QWidget* now) {
+        Q_D(UiController);
+        d->widgetChanged(old, now);
+    });
+}
 
 void UiController::cleanup()
 {
@@ -452,6 +455,10 @@ void UiController::cleanup()
         w->saveSettings();
     }
     saveAllAreas(KSharedConfig::openConfig());
+
+    // disconnect early to prevent UB due to accessing partially destroyed UiController
+    // in the focusChanged handler above
+    disconnect(qApp, nullptr, this, nullptr);
 }
 
 void UiController::selectNewToolViewToAdd(MainWindow *mw)
@@ -462,7 +469,7 @@ void UiController::selectNewToolViewToAdd(MainWindow *mw)
         return;
 
     ScopedDialog<QDialog> dia(mw);
-    dia->setWindowTitle(i18n("Select Tool View to Add"));
+    dia->setWindowTitle(i18nc("@title:window", "Select Tool View to Add"));
 
     auto mainLayout = new QVBoxLayout(dia);
 
@@ -473,7 +480,7 @@ void UiController::selectNewToolViewToAdd(MainWindow *mw)
     for (QHash<IToolViewFactory*, Sublime::ToolDocument*>::const_iterator it = d->factoryDocuments.constBegin();
         it != d->factoryDocuments.constEnd(); ++it)
     {
-        ViewSelectorItem *item = new ViewSelectorItem(it.value()->title(), it.key(), list);
+        auto* item = new ViewSelectorItem(it.value()->title(), it.key(), list);
         if (!item->factory->allowMultiple() && toolViewPresent(it.value(), mw->area())) {
             // Disable item if the tool view is already present.
             item->setFlags(item->flags() & ~Qt::ItemIsEnabled);
@@ -593,9 +600,15 @@ KParts::MainWindow *UiController::activeMainWindow()
 void UiController::saveArea(Sublime::Area * area, KConfigGroup & group)
 {
     area->save(group);
-    if (!area->workingSet().isEmpty()) {
-        WorkingSet* set = Core::self()->workingSetControllerInternal()->workingSet(area->workingSet());
-        set->saveFromArea(area, area->rootIndex());
+    auto workingSet = area->workingSet();
+    if (!workingSet.isEmpty()) {
+        WorkingSet* set = Core::self()->workingSetControllerInternal()->workingSet(workingSet);
+        set->saveFromArea(area);
+    }
+    for (auto w : mainWindows()) {
+        if (area == w->area()) {
+            Core::self()->activeSession()->config()->group("Working File Sets").writeEntry("Active Working Set", workingSet);
+        }
     }
 }
 
@@ -699,6 +712,7 @@ void UiController::loadAllAreas(const KSharedConfigPtr& config)
 
         // Force reload of the changes.
         showAreaInternal(mw->area(), mw);
+        mw->area()->setWorkingSet(Core::self()->activeSession()->config()->group("Working File Sets").readEntry("Active Working Set", QString()));
 
         mw->enableAreaSettingsSave();
     }
@@ -764,6 +778,17 @@ void UiController::showErrorMessage(const QString& message, int timeout)
     auto* mw = qobject_cast<KDevelop::MainWindow*>(w);
     if (!mw) return;
     QMetaObject::invokeMethod(mw, "showErrorMessage", Q_ARG(QString, message), Q_ARG(int, timeout));
+}
+
+void UiController::postMessage(Sublime::Message* message)
+{
+    // if Core has flag Core::NoUi there also is no window, so caught as well here
+    Sublime::MainWindow* window = activeSublimeWindow();
+    if (!window) {
+        delete message;
+        return;
+    }
+    QMetaObject::invokeMethod(window, "postMessage", Q_ARG(Sublime::Message*, message));
 }
 
 const QHash< IToolViewFactory*, Sublime::ToolDocument* >& UiController::factoryDocuments() const

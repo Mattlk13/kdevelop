@@ -29,6 +29,8 @@
 #include <QVector>
 #include <QUrl>
 
+#include <algorithm>
+
 namespace KDevelop {
 
 /**
@@ -79,7 +81,7 @@ public:
     /**
      * Construct an empty, invalid Path.
      */
-    Path();
+    Path() = default;
 
     /**
      * Create a Path out of a string representation of a path or URL.
@@ -112,7 +114,7 @@ public:
     explicit Path(const QUrl& url);
 
     /**
-     * Create a copy of @p base and optionally append a path segment @p subPath.
+     * Create a copy of @p base and append a path segment @p subPath.
      *
      * This implicitly shares the data of @p base and thus is very efficient
      * memory wise compared to creating two Paths from separate strings.
@@ -123,11 +125,7 @@ public:
      *
      * @sa addPath()
      */
-    Path(const Path& base, const QString& subPath = QString());
-
-    ~Path() = default;
-
-    inline Path& operator=(const Path& other) = default;
+    explicit Path(const Path& base, const QString& subPath);
 
     /**
      * Equality comparison between @p other and this Path.
@@ -136,7 +134,14 @@ public:
      */
     inline bool operator==(const Path& other) const
     {
-        return m_data == other.m_data;
+        if (other.m_data.data() == m_data.data())
+            return true; // fast path when both containers point to the same shared data
+        // The size check here is a bit faster than calling std::equal with 4 arguments.
+        if (other.m_data.size() != m_data.size())
+            return false;
+        // Optimization: compare in reverse order as often the mismatch is at the end,
+        // while the first few path segments are usually the same in different paths.
+        return std::equal(m_data.rbegin(), m_data.rend(), other.m_data.rbegin());
     }
 
     /**
@@ -150,11 +155,23 @@ public:
     }
 
     /**
+     * Compares *this with @p other and returns an integer less than, equal to,
+     * or greater than zero if *this is less than, equal to, or greater than @p other.
+     *
+     * If @p cs is Qt::CaseSensitive, the comparison is case sensitive;
+     * otherwise the comparison is case insensitive.
+    */
+    int compare(const Path& other, Qt::CaseSensitivity cs = Qt::CaseSensitive) const;
+
+    /**
      * Less-than path comparison between @p other and this Path.
      *
      * @return true if this Path is less than @p other.
      */
-    bool operator<(const Path& other) const;
+    bool operator<(const Path& other) const
+    {
+        return compare(other, Qt::CaseSensitive) < 0;
+    }
 
     /**
      * Greater-than path comparison between @p other and this Path.
@@ -173,7 +190,7 @@ public:
      */
     inline bool operator<=(const Path& other) const
     {
-        return *this < other || other == *this;
+        return !(other < *this);
     }
 
     /**
@@ -183,7 +200,7 @@ public:
      */
     inline bool operator>=(const Path& other) const
     {
-        return other < *this || other == *this;
+        return !(*this < other);
     }
 
     /**
@@ -275,9 +292,14 @@ public:
     QString remotePrefix() const;
 
     /**
-     * @return an implicitly shared copy of the internal data.
+     * @return a const reference to the internal data.
+     *
+     * @note Returning a reference to rather than a copy of QVector can substantially
+     * improve performance of a tight loop that calls this function.
+     *
+     * TODO: return std::span once we can rely on C++20.
      */
-    inline QVector<QString> segments() const
+    inline const QVector<QString>& segments() const
     {
         return m_data;
     }
@@ -332,11 +354,6 @@ public:
     bool hasParent() const;
 
     /**
-     * Clear the path, i.e. make it invalid and empty.
-     */
-    void clear();
-
-    /**
      * Change directory by relative path @p dir.
      *
      * NOTE: This is expensive.
@@ -382,6 +399,5 @@ KDEVPLATFORMUTIL_EXPORT char* toString(const KDevelop::Path& path);
 Q_DECLARE_TYPEINFO(KDevelop::Path, Q_MOVABLE_TYPE);
 Q_DECLARE_METATYPE(KDevelop::Path)
 Q_DECLARE_TYPEINFO(KDevelop::Path::List, Q_MOVABLE_TYPE);
-Q_DECLARE_METATYPE(KDevelop::Path::List)
 
 #endif // KDEVELOP_PATH_H

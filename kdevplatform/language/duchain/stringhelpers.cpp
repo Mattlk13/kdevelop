@@ -20,8 +20,6 @@
 #include "safetycounter.h"
 #include <debug.h>
 
-#include <qtcompat_p.h>
-
 #include <QString>
 #include <QStringList>
 
@@ -98,17 +96,39 @@ T formatComment_impl(const T& comment)
 
     QList<T> lines = comment.split('\n');
 
-    // remove common leading chars from the beginning of lines
+    // remove common leading & trailing chars from the lines
     for (T &l : lines) {
         // don't trigger repeated temporary allocations here
-        static const T tripleSlash("///");
-        static const T doubleSlash("//");
-        static const T doubleStar("**");
-        static const T slashDoubleStar("/**");
-        strip_impl(tripleSlash, l);
-        strip_impl(doubleSlash, l);
-        strip_impl(doubleStar, l);
-        rStrip_impl(slashDoubleStar, l);
+
+        // possible comment starts, sorted from longest to shortest
+        static const T startMatches[] = {
+            "//!<", "/*!<", "/**<", "///<",
+            "///", "//!", "/**", "/*!",
+            "//", "/*",
+            "/", "*"
+        };
+
+        // possible comment ends, sorted from longest to shortest
+        static const T endMatches[] = {
+           "**/", "*/"
+        };
+
+        l = l.trimmed();
+
+        // check for ends first, as the starting pattern "*" might interfere with the ending pattern
+        for (T const & m : endMatches) {
+            if (l.endsWith(m)) {
+                l.chop(m.length());
+                break;
+            }
+        }
+
+        for (T const & m : startMatches) {
+            if (l.startsWith(m)) {
+                l.remove(0, m.length());
+                break;
+            }
+        }
     }
 
     // TODO add method with QStringList specialisation
@@ -280,19 +300,19 @@ QString reverse(const QString& str)
 ///@todo this hackery sucks
 QString escapeForBracketMatching(QString str)
 {
-    str.replace(QStringLiteral("<<"), QStringLiteral("$&"));
-    str.replace(QStringLiteral(">>"), QStringLiteral("$$"));
-    str.replace(QStringLiteral("\\\""), QStringLiteral("$!"));
-    str.replace(QStringLiteral("->"), QStringLiteral("$?"));
+    str.replace(QLatin1String("<<"),   QLatin1String("$&"));
+    str.replace(QLatin1String(">>"),   QLatin1String("$$"));
+    str.replace(QLatin1String("\\\""), QLatin1String("$!"));
+    str.replace(QLatin1String("->"),   QLatin1String("$?"));
     return str;
 }
 
 QString escapeFromBracketMatching(QString str)
 {
-    str.replace(QStringLiteral("$&"), QStringLiteral("<<"));
-    str.replace(QStringLiteral("$$"), QStringLiteral(">>"));
-    str.replace(QStringLiteral("$!"), QStringLiteral("\\\""));
-    str.replace(QStringLiteral("$?"), QStringLiteral("->"));
+    str.replace(QLatin1String("$&"), QLatin1String("<<"));
+    str.replace(QLatin1String("$$"), QLatin1String(">>"));
+    str.replace(QLatin1String("$!"), QLatin1String("\\\""));
+    str.replace(QLatin1String("$?"), QLatin1String("->"));
     return str;
 }
 
@@ -333,23 +353,21 @@ void skipFunctionArguments(const QString& str_, QStringList& skippedArguments, i
 
 QString reduceWhiteSpace(const QString& str_)
 {
-    const QString str = str_.trimmed();
+    const QStringRef str = QStringRef(&str_).trimmed();
     QString ret;
     const int len = str.length();
     ret.reserve(len);
 
-    QChar spaceChar = QLatin1Char(' ');
-
     bool hadSpace = false;
-    for (int a = 0; a < len; ++a) {
-        if (str[a].isSpace()) {
+    for (const QChar c : str) {
+        if (c.isSpace()) {
             hadSpace = true;
         } else {
             if (hadSpace) {
                 hadSpace = false;
-                ret += spaceChar;
+                ret += QLatin1Char(' ');
             }
-            ret += str[a];
+            ret += c;
         }
     }
 
@@ -389,7 +407,7 @@ QString clearComments(const QString& str_, QChar replacement)
             pos = dest;
         } else if (withoutStrings[pos + 1] == QLatin1Char('*')) {
             //CPP style comment
-            endCommentPos = withoutStrings.indexOf(QStringLiteral("*/"), pos + 2);
+            endCommentPos = withoutStrings.indexOf(QLatin1String("*/"), pos + 2);
             if (endCommentPos != -1)
                 endCommentPos += 2;
 

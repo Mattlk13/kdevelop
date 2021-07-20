@@ -29,11 +29,22 @@
 #include <QProcess>
 #include <KLocalizedString>
 
-static const QVector<QString> args = {
-    QLatin1String("--help-command"), QLatin1String("--help-variable"), QLatin1String("--help-module"), QLatin1String("--help-property"), QLatin1String("--help-policy"), QString()
+#include <array>
+
+static const std::array<QString, 6> args = {
+    QStringLiteral("--help-command"),
+    QStringLiteral("--help-variable"),
+    QStringLiteral("--help-module"),
+    QStringLiteral("--help-property"),
+    QStringLiteral("--help-policy"),
+    QString(),
 };
-static QString modules [] = {
-    i18n("Commands"), i18n("Variables"), i18n("Modules"), i18n("Properties"), i18n("Policies")
+static const std::array<QString, 5> modules = {
+    i18nc("@item cmake", "Commands"),
+    i18nc("@item cmake", "Variables"),
+    i18nc("@item cmake", "Modules"),
+    i18nc("@item cmake", "Properties"),
+    i18nc("@item cmake", "Policies"),
 };
 
 CMakeCommandsContents::CMakeCommandsContents(QObject* parent)
@@ -66,15 +77,15 @@ void CMakeCommandsContents::processOutput(int code)
 
     QTextStream stream(process);
     QString line = stream.readLine(); //discard first line
-    QMap<QString, CMakeDocumentation::Type> newEntries;
     QVector<QString> names;
     while(stream.readLineInto(&line)) {
-        newEntries[line]=type;
         names += line;
     }
 
     beginInsertRows(index(type, 0, {}), 0, names.count()-1);
-    m_typeForName.unite(newEntries);
+    for (auto& name : qAsConst(names)) {
+        m_typeForName.insert(name, type);
+    }
     m_namesForType[type] = names;
     endInsertRows();
 }
@@ -97,12 +108,12 @@ QString CMakeCommandsContents::descriptionForIdentifier(const QString& id, CMake
     QString desc;
     if(args[t].size() != 0) {
         desc = CMake::executeProcess(CMakeBuilderSettings::self()->cmakeExecutable().toLocalFile(), { args[t], id.simplified() });
-        desc = desc.remove(QStringLiteral(":ref:"));
+        desc.remove(QLatin1String(":ref:"));
 
         const QString rst2html = QStandardPaths::findExecutable(QStringLiteral("rst2html"));
         if (rst2html.isEmpty()) {
             desc = (QLatin1String("<html><body style='background:#fff'><pre><code>") + desc.toHtmlEscaped() + QLatin1String("</code></pre>")
-                + i18n("<p>For better cmake documentation rendering, install rst2html</p>")
+                + i18n("<p>For better CMake documentation rendering, install rst2html.</p>")
                 + QLatin1String("</body></html>"));
         } else {
             QProcess p;

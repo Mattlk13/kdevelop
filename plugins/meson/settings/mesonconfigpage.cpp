@@ -42,7 +42,7 @@ MesonConfigPage::MesonConfigPage(IPlugin* plugin, IProject* project, QWidget* pa
     , m_project(project)
 {
     Q_ASSERT(project); // Catch errors early
-    MesonManager* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
+    auto* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
     Q_ASSERT(mgr); // This dialog only works with the MesonManager
 
     m_ui = new Ui::MesonConfigPage;
@@ -130,7 +130,7 @@ void MesonConfigPage::apply()
 void MesonConfigPage::defaults()
 {
     qCDebug(KDEV_Meson) << "Restoring build dir " << m_current.buildDir << " to it's default values";
-    MesonManager* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
+    auto* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
     Q_ASSERT(mgr);
 
     m_current.mesonArgs.clear();
@@ -185,7 +185,7 @@ void MesonConfigPage::checkStatus()
         }
 
         QPalette pal = m_ui->l_status->palette();
-        pal.setColor(QPalette::Foreground, scheme.foreground(role).color());
+        pal.setColor(QPalette::WindowText, scheme.foreground(role).color());
         m_ui->l_status->setPalette(pal);
         m_ui->l_status->setText(i18n("Status: %1", msg));
     };
@@ -235,7 +235,7 @@ void MesonConfigPage::checkStatus()
     }
 
     QPalette pal = m_ui->l_changed->palette();
-    pal.setColor(QPalette::Foreground, scheme.foreground(role).color());
+    pal.setColor(QPalette::WindowText, scheme.foreground(role).color());
     m_ui->l_changed->setPalette(pal);
 }
 
@@ -272,8 +272,8 @@ void MesonConfigPage::setWidgetsDisabled(bool disabled)
 void MesonConfigPage::addBuildDir()
 {
     qCDebug(KDEV_Meson) << "Adding build directory";
-    MesonManager* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
-    MesonBuilder* bld = dynamic_cast<MesonBuilder*>(mgr->builder());
+    auto* mgr = dynamic_cast<MesonManager*>(m_project->buildSystemManager());
+    auto* bld = dynamic_cast<MesonBuilder*>(mgr->builder());
     Q_ASSERT(mgr);
     Q_ASSERT(bld);
     MesonNewBuildDir newBD(m_project);
@@ -342,12 +342,12 @@ void MesonConfigPage::emitChanged()
 
 QString MesonConfigPage::name() const
 {
-    return i18n("Meson");
+    return i18nc("@title:tab", "Meson");
 }
 
 QString MesonConfigPage::fullName() const
 {
-    return i18n("Meson project configuration");
+    return i18nc("@title:tab", "Meson Project Configuration");
 }
 
 QIcon MesonConfigPage::icon() const

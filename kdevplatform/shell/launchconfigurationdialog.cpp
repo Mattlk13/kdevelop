@@ -57,9 +57,9 @@ bool launchConfigGreaterThan(KDevelop::LaunchConfigurationType* a, KDevelop::Lau
 LaunchConfigurationDialog::LaunchConfigurationDialog(QWidget* parent)
     : QDialog(parent)
 {
-    setWindowTitle( i18n( "Launch Configurations" ) );
+    setWindowTitle( i18nc("@title:window", "Launch Configurations" ) );
 
-    QWidget *mainWidget = new QWidget(this);
+    auto* mainWidget = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(mainWidget);
 
@@ -169,8 +169,8 @@ LaunchConfigurationDialog::LaunchConfigurationDialog(QWidget* parent)
     }
 
     for (LaunchConfigurationType* type : qAsConst(types)) {
-        QAction* action = new QAction(type->icon(), type->name(), m);
-        action->setProperty("configtype", qVariantFromValue<QObject*>(type));
+        auto* action = new QAction(type->icon(), type->name(), m);
+        action->setProperty("configtype", QVariant::fromValue<QObject*>(type));
         connect(action, &QAction::triggered, this, &LaunchConfigurationDialog::createEmptyLauncher);
 
         if(!m->actions().isEmpty())
@@ -206,8 +206,8 @@ void LaunchConfigurationDialog::doTreeContextMenu(const QPoint& point)
         if ( selected.parent().isValid() && ! selected.parent().parent().isValid() ) {
             // only display the menu if a launch config is clicked
             QMenu menu(tree);
-            QAction* rename = new QAction(QIcon::fromTheme(QStringLiteral("edit-rename")), i18n("Rename configuration"), &menu);
-            QAction* delete_ = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18n("Delete configuration"), &menu);
+            auto* rename = new QAction(QIcon::fromTheme(QStringLiteral("edit-rename")), i18nc("@action:inmenu", "Rename Configuration"), &menu);
+            auto* delete_ = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action:inmenu", "Delete Configuration"), &menu);
             connect(rename, &QAction::triggered, this, &LaunchConfigurationDialog::renameSelected);
             connect(delete_, &QAction::triggered, this, &LaunchConfigurationDialog::deleteConfiguration);
             menu.addAction(rename);
@@ -261,7 +261,7 @@ void LaunchConfigurationDialog::selectionChanged(const QItemSelection& selected,
             disconnect(l, &LaunchConfiguration::nameChanged, this,  &LaunchConfigurationDialog::updateNameLabel);
             if( currentPageChanged )
             {
-                if( KMessageBox::questionYesNo( this, i18n("Selected Launch Configuration has unsaved changes. Do you want to save it?"), i18n("Unsaved Changes") ) == KMessageBox::Yes )
+                if( KMessageBox::questionYesNo( this, i18n("Selected Launch Configuration has unsaved changes. Do you want to save it?"), i18nc("@title:window", "Unsaved Changes") ) == KMessageBox::Yes )
                 {
                     saveConfig( deselected.indexes().first() );
                 } else {
@@ -298,13 +298,12 @@ void LaunchConfigurationDialog::selectionChanged(const QItemSelection& selected,
                 QVariant currentLaunchMode = idx.sibling(idx.row(), 1).data(Qt::EditRole);
                 {
                     QSignalBlocker blocker(debugger);
-                    QList<ILauncher*> launchers = l->type()->launchers();
+                    const QList<ILauncher*> launchers = l->type()->launchers();
 
                     debugger->clear();
-                    for( QList<ILauncher*>::const_iterator it = launchers.constBegin(); it != launchers.constEnd(); ++it )
-                    {
-                        if( ((*it)->supportedModes().contains( lm->id() ) ) ) {
-                            debugger->addItem( (*it)->name(), (*it)->id() );
+                    for (ILauncher* launcher : launchers) {
+                        if (launcher->supportedModes().contains(lm->id())) {
+                            debugger->addItem(launcher->name(), launcher->id());
                         }
                     }
 
@@ -332,9 +331,9 @@ void LaunchConfigurationDialog::selectionChanged(const QItemSelection& selected,
                         tab->setLaunchConfiguration( l );
                         stack->setCurrentWidget( tab );
                     } else {
-                        QLabel* label = new QLabel(i18nc("%1 is a launcher name",
-                                                         "No configuration is needed for '%1'",
-                                                         launcher->name()), stack);
+                        auto* label = new QLabel(i18nc("%1 is a launcher name",
+                                                       "No configuration is needed for '%1'",
+                                                       launcher->name()), stack);
                         label->setAlignment(Qt::AlignCenter);
                         QFont font = label->font();
                         font.setItalic(true);
@@ -377,8 +376,8 @@ void LaunchConfigurationDialog::selectionChanged(const QItemSelection& selected,
             addConfig->setEnabled( addConfig->menu() && !addConfig->menu()->isEmpty() );
             deleteConfig->setEnabled( false );
             stack->setCurrentIndex( 0 );
-            QLabel* l = new QLabel(i18n("<i>Select a configuration to edit from the left,<br>"
-                                        "or click the \"Add\" button to add a new one.</i>"), stack);
+            auto* l = new QLabel(i18n("<i>Select a configuration to edit from the left,<br>"
+                                      "or click the \"Add\" button to add a new one.</i>"), stack);
             l->setAlignment(Qt::AlignCenter);
             stack->addWidget(l);
             stack->setCurrentWidget(l);
@@ -718,10 +717,10 @@ QVariant LaunchConfigurationsModel::headerData(int section, Qt::Orientation orie
     {
         if( section == 0 )
         {
-            return i18nc("Name of the Launch Configurations", "Name");
+            return i18nc("@title:column Name of the Launch Configurations", "Name");
         } else if( section == 1 )
         {
-            return i18nc("The type of the Launch Configurations (i.e. Python Application, C++ Application)", "Type");
+            return i18nc("@title:column Type of the Launch Configurations (i.e. Python Application, C++ Application)", "Type");
         }
     }
     return QVariant();
@@ -959,12 +958,10 @@ QWidget* LaunchConfigurationModelDelegate::createEditor ( QWidget* parent, const
     if( index.column() == 1 && mode && config )
     {
         auto* box = new KComboBox( parent );
-        QList<ILauncher*> launchers = config->type()->launchers();
-        for( QList<ILauncher*>::const_iterator it = launchers.constBegin(); it != launchers.constEnd(); ++it )
-        {
-            if( ((*it)->supportedModes().contains( mode->id() ) ) )
-            {
-                box->addItem( (*it)->name(), (*it)->id() );
+        const QList<ILauncher*> launchers = config->type()->launchers();
+        for (auto* launcher : launchers) {
+            if (launcher->supportedModes().contains(mode->id())) {
+                box->addItem(launcher->name(), launcher->id());
             }
         }
         return box;
@@ -972,9 +969,8 @@ QWidget* LaunchConfigurationModelDelegate::createEditor ( QWidget* parent, const
     {
         auto* box = new KComboBox( parent );
         const QList<LaunchConfigurationType*> types = Core::self()->runController()->launchConfigurationTypes();
-        for( QList<LaunchConfigurationType*>::const_iterator it = types.begin(); it != types.end(); ++it )
-        {
-            box->addItem( (*it)->name(), (*it)->id() );
+        for (auto* type : types) {
+            box->addItem(type->name(), type->id());
         }
         return box;
     }

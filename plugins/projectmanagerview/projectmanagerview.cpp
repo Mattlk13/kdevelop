@@ -68,6 +68,7 @@ ProjectManagerView *ProjectManagerViewItemContext::view() const
 
 static const char sessionConfigGroup[] = "ProjectManagerView";
 static const char splitterStateConfigKey[] = "splitterState";
+static const char syncCurrentDocumentKey[] = "syncCurrentDocument";
 static const char targetsVisibleConfigKey[] = "targetsVisible";
 static const int projectTreeViewStrechFactor = 75; // %
 static const int projectBuildSetStrechFactor = 25; // %
@@ -81,6 +82,7 @@ ProjectManagerView::ProjectManagerView( ProjectManagerViewPlugin* plugin, QWidge
     m_ui->projectTreeView->installEventFilter(this);
 
     setWindowIcon( QIcon::fromTheme( QStringLiteral("project-development"), windowIcon() ) );
+    setWindowTitle(i18nc("@title:window", "Projects"));
 
     KConfigGroup pmviewConfig(ICore::self()->activeSession()->config(), sessionConfigGroup);
     if (pmviewConfig.hasKey(splitterStateConfigKey)) {
@@ -96,16 +98,23 @@ ProjectManagerView::ProjectManagerView( ProjectManagerViewPlugin* plugin, QWidge
 
     m_syncAction = plugin->actionCollection()->action(QStringLiteral("locate_document"));
     Q_ASSERT(m_syncAction);
+    m_syncAction->setCheckable(true);
+    m_syncAction->setChecked(pmviewConfig.readEntry<bool>(syncCurrentDocumentKey, true));
     m_syncAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-    m_syncAction->setText(i18n("Locate Current Document"));
-    m_syncAction->setToolTip(i18n("Locates the current document in the project tree and selects it."));
+    m_syncAction->setText(i18nc("@action", "Locate Current Document"));
+    m_syncAction->setToolTip(i18nc("@info:tooltip", "Locates the current document in the project tree and selects it."));
     m_syncAction->setIcon(QIcon::fromTheme(QStringLiteral("dirsync")));
-    m_syncAction->setShortcut(Qt::ControlModifier + Qt::Key_Less);
-    connect(m_syncAction, &QAction::triggered, this, &ProjectManagerView::locateCurrentDocument);
+    m_syncAction->setShortcut(Qt::CTRL | Qt::Key_Less);
+    connect(m_syncAction, &QAction::triggered, this, &ProjectManagerView::toggleSyncCurrentDocument);
+    connect(ICore::self()->documentController(), &KDevelop::IDocumentController::documentActivated, this, [this]{
+        if (m_syncAction->isChecked()) {
+            locateCurrentDocument();
+        }
+    });
     addAction(m_syncAction);
     updateSyncAction();
 
-    m_toggleTargetsAction = new QAction(i18n("Show Targets"), this);
+    m_toggleTargetsAction = new QAction(i18nc("@action", "Show Build Targets"), this);
     m_toggleTargetsAction->setCheckable(true);
     m_toggleTargetsAction->setChecked(pmviewConfig.readEntry<bool>(targetsVisibleConfigKey, true));
     m_toggleTargetsAction->setIcon(QIcon::fromTheme(QStringLiteral("system-run")));
@@ -232,6 +241,15 @@ void ProjectManagerView::toggleHideTargets(bool visible)
     KConfigGroup pmviewConfig(ICore::self()->activeSession()->config(), sessionConfigGroup);
     pmviewConfig.writeEntry<bool>(targetsVisibleConfigKey, visible);
     m_modelFilter->showTargets(visible);
+}
+
+void ProjectManagerView::toggleSyncCurrentDocument(bool sync)
+{
+    KConfigGroup pmviewConfig(ICore::self()->activeSession()->config(), sessionConfigGroup);
+    pmviewConfig.writeEntry<bool>(syncCurrentDocumentKey, sync);
+    if (sync) {
+        locateCurrentDocument();
+    }
 }
 
 void ProjectManagerView::locateCurrentDocument()

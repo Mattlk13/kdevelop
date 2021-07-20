@@ -24,7 +24,10 @@
 #include <QIcon>
 #include <QMimeDatabase>
 #include <QMimeType>
+#include <QMutex>
+#include <QMutexLocker>
 
+#include <kio_version.h>
 #include <KIO/StatJob>
 #include <KLocalizedString>
 
@@ -51,10 +54,7 @@ QStringList removeProjectBasePath( const QStringList& fullpath, KDevelop::Projec
         {
             return QStringList();
         }
-        for( int i = 0; i < basePath.count(); i++ )
-        {
-            result.takeFirst();
-        }
+        return result.mid(basePath.count());
     }
     return result;
 }
@@ -143,7 +143,11 @@ public:
         Path newPath = item->path();
         newPath.setLastPathSegment(newName);
 
+#if KIO_VERSION >= QT_VERSION_CHECK(5, 69, 0)
+        auto job = KIO::statDetails(newPath.toUrl(), KIO::StatJob::SourceSide, KIO::StatNoDetails, KIO::HideProgressInfo);
+#else
         auto job = KIO::stat(newPath.toUrl(), KIO::StatJob::SourceSide, 0, KIO::HideProgressInfo);
+#endif
         if (job->exec()) {
             // file/folder exists already
             return ProjectBaseItem::ExistingItemSameName;
@@ -394,11 +398,7 @@ bool ProjectBaseItem::lessThan( const KDevelop::ProjectBaseItem* item ) const
     KDevelop::ProjectBaseItem::ProjectItemType leftType=baseType(type()), rightType=baseType(item->type());
     if(leftType==rightType)
     {
-        if(leftType==KDevelop::ProjectBaseItem::File)
-        {
-            return file()->fileName().compare(item->file()->fileName(), Qt::CaseInsensitive) < 0;
-        }
-        return this->text()<item->text();
+        return text().compare(item->text(), Qt::CaseInsensitive) < 0;
     }
     else
     {
@@ -728,13 +728,13 @@ static const int maximumCacheExtensionLength = 3;
 
 bool isNumeric(const QStringRef& str)
 {
-    int len = str.length();
-    if(len == 0)
+    if (str.isEmpty()) {
         return false;
-    for(int a = 0; a < len; ++a)
-        if(!str.at(a).isNumber())
-            return false;
-    return true;
+    }
+
+    return std::all_of(str.begin(), str.end(), [](const QChar c) {
+        return c.isNumber();
+    });
 }
 
 class IconNameCache
@@ -888,7 +888,7 @@ QModelIndex ProjectModel::pathToIndex(const QStringList& tofetch_) const
         return QModelIndex();
     QStringList tofetch(tofetch_);
     if(tofetch.last().isEmpty())
-        tofetch.takeLast();
+        tofetch.removeLast();
 
     QModelIndex current=index(0,0, QModelIndex());
 

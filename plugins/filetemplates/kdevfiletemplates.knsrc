@@ -1,5 +1,6 @@
 [KNewStuff3]
 Name=File Templates (SDK)
+Name[az]=Fayl şablonları (SDK)
 Name[ca]=Plantilles de fitxer (SDK)
 Name[ca@valencia]=Plantilles de fitxer (SDK)
 Name[cs]=Šablony souborů (SDK)
@@ -7,9 +8,12 @@ Name[de]=Dateivorlagen (SDK)
 Name[el]=Αρχεία templates (SDK)
 Name[en_GB]=File Templates (SDK)
 Name[es]=Plantillas de archivos (SDK)
+Name[et]=Failimallid (SDK)
+Name[eu]=Fitxategi txantiloiak (SDK)
 Name[fr]=Modèles de fichiers (SDK)
 Name[gl]=Modelos de ficheiros (SDK)
 Name[it]=Modelli di file (SDK)
+Name[ko]=파일 템플릿(SDK)
 Name[nl]=Bestandssjablonen (SDK)
 Name[pl]=Szablony plików (SDK)
 Name[pt]=Modelos de Ficheiros (SDK)
@@ -22,7 +26,7 @@ Name[uk]=Шаблони файлів (SDK)
 Name[x-test]=xxFile Templates (SDK)xx
 Name[zh_CN]=文件模板 (SDK)
 
-ProvidersUrl=https://download.kde.org/ocs/providers.xml
+ProvidersUrl=https://autoconfig.kde.org/ocs/providers.xml
 Categories=KDevelop File Template
 TargetDir=kdevfiletemplates/templates
 Uncompress=never

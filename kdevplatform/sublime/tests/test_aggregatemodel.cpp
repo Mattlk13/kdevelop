@@ -18,14 +18,26 @@
  ***************************************************************************/
 #include "test_aggregatemodel.h"
 
+// KDevPlatform
+#include <sublime/aggregatemodel.h>
+#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
+#include <tests/modeltest.h>
+#endif
+// Qt
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+#include <QAbstractItemModelTester>
+#endif
 #include <QTest>
 #include <QStandardItem>
 #include <QStandardItemModel>
-
-#include <sublime/aggregatemodel.h>
-#include <tests/modeltest.h>
+#include <QStandardPaths>
 
 using namespace Sublime;
+
+void TestAggregateModel::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
+}
 
 void TestAggregateModel::modelAggregationInASingleView()
 {
@@ -33,9 +45,11 @@ void TestAggregateModel::modelAggregationInASingleView()
     model->addModel(QStringLiteral("First Model"), newModel());
     model->addModel(QStringLiteral("Second Model"), newModel());
 
-    //this will assert in case of model problems and the test will fail
-    //for detailed explanation why the test failed refer to test/modeltest.cpp
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+    new QAbstractItemModelTester(model, this);
+#else
     new ModelTest(model, this);
+#endif
 }
 
 QStandardItemModel * TestAggregateModel::newModel()
@@ -52,11 +66,11 @@ QStandardItemModel * TestAggregateModel::newModel()
     auto *model = new QStandardItemModel(this);
     QStandardItem *parentItem = model->invisibleRootItem();
 
-    QStandardItem *item = new QStandardItem(QStringLiteral("cool item"));
+    auto* item = new QStandardItem(QStringLiteral("cool item"));
     parentItem->appendRow(item);
 
     for (int i = 0; i < 4; ++i) {
-        QStandardItem *item = new QStandardItem(QStringLiteral("item %0").arg(i));
+        auto* item = new QStandardItem(QStringLiteral("item %0").arg(i));
         parentItem->appendRow(item);
         parentItem = item;
     }

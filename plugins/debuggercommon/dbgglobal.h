@@ -23,9 +23,7 @@
 
 namespace KDevMI
 {
-#if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
 Q_NAMESPACE
-#endif
 
 enum DBGStateFlag
 {
@@ -50,10 +48,11 @@ enum DBGStateFlag
     /// Set when the debugger failed to start
     s_dbgFailedStart    = 1 << 13,
 };
-#if QT_VERSION >= QT_VERSION_CHECK(5,8,0)
 Q_ENUM_NS(DBGStateFlag)
-#endif
 Q_DECLARE_FLAGS(DBGStateFlags, DBGStateFlag)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 12, 0)
+Q_DECLARE_OPERATORS_FOR_FLAGS(DBGStateFlags)
+#endif
 
 enum DataType { typeUnknown, typeValue, typePointer, typeReference,
             typeStruct, typeArray, typeQString, typeWhitespace,
@@ -92,6 +91,8 @@ static const char LldbRemotePathEntry[] = "LLDB Remote Path";
 
 } // end of namespace KDevMI
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 0)
 Q_DECLARE_OPERATORS_FOR_FLAGS(KDevMI::DBGStateFlags)
+#endif
 
 #endif // _DBGGLOBAL_H_

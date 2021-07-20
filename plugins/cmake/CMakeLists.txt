@@ -25,6 +25,8 @@ set( cmakecommon_SRCS
   cmakeextraargumentshistory.cpp
   cmakebuilddirchooser.cpp
   cmakeserver.cpp
+  cmakefileapi.cpp
+  cmakeprojectdata.cpp
   ${cmake_LOG_SRCS}
 )
 set_source_files_properties(parser/cmListFileLexer.c PROPERTIES COMPILE_FLAGS "-DYY_NO_INPUT -DYY_NO_UNPUT")
@@ -41,9 +43,9 @@ set( cmakemanager_SRCS
   testing/qttestdelegate.cpp
   cmakeimportjsonjob.cpp
   cmakeserverimportjob.cpp
+  cmakefileapiimportjob.cpp
   cmakenavigationwidget.cpp
   cmakemanager.cpp
-  cmakeprojectdata.cpp
   cmakemodelitems.cpp
   duchain/cmakeparsejob.cpp
   duchain/usebuilder.cpp
@@ -83,32 +85,55 @@ endif()
 
 kconfig_add_kcfg_files( cmakecommon_SRCS cmakebuilderconfig.kcfgc )
 ki18n_wrap_ui( cmakecommon_SRCS ${cmakecommon_UI} )
-add_library( kdevcmakecommon SHARED ${cmakecommon_SRCS} )
-target_link_libraries( kdevcmakecommon
-                        KF5::TextEditor KDev::Interfaces KDev::Project KDev::Util
-                        KDev::Language
-                        )
-generate_export_header(kdevcmakecommon EXPORT_FILE_NAME cmakecommonexport.h)
+kdevelop_add_private_library(KDevCMakeCommon SOURCES ${cmakecommon_SRCS})
+target_link_libraries(KDevCMakeCommon
+    PUBLIC
+        kdevmakefileresolver
+        KDev::Interfaces
+        KDev::Project
+        KDev::Util
+        KDev::Language
+        KF5::TextEditor
+)
 
 ki18n_wrap_ui( cmakemanager_SRCS ${cmakemanager_UI} )
 add_library( kdevcmakemanagernosettings STATIC ${cmakemanager_SRCS})
-target_link_libraries( kdevcmakemanagernosettings KF5::KIOWidgets KDev::Util
-                        KDev::Interfaces kdevcmakecommon kdevmakefileresolver
-                        KDev::Project KDev::Language
-                        KDev::OutputView KF5::TextEditor Qt5::Concurrent)
+target_compile_definitions(kdevcmakemanagernosettings PRIVATE CMAKEMANAGER_NO_SETTINGS)
+target_link_libraries(kdevcmakemanagernosettings
+    KDevCMakeCommon
+    KDev::Util
+    KDev::Interfaces
+    KDev::Project
+    KDev::Language
+    KDev::Sublime
+    KDev::OutputView
+    KF5::KIOWidgets
+    KF5::TextEditor
+    Qt5::Concurrent
+)
 
-kdevplatform_add_plugin(kdevcmakemanager JSON kdevcmakemanager.json SOURCES ${cmakemanager_SRCS} ${cmakesettings_SRCS})
-target_link_libraries( kdevcmakemanager  KF5::KIOWidgets KDev::Util
-                        KDev::Interfaces kdevcmakecommon kdevmakefileresolver
-                        KDev::Project KDev::Language KDev::Shell
-                        KDev::OutputView KF5::TextEditor Qt5::Concurrent)
+kdevplatform_add_plugin(kdevcmakemanager SOURCES ${cmakemanager_SRCS} ${cmakesettings_SRCS})
+target_link_libraries(kdevcmakemanager
+    KDevCMakeCommon
+    KDev::Util
+    KDev::Interfaces
+    KDev::Project
+    KDev::Language
+    KDev::Shell
+    KDev::OutputView
+    KF5::KIOWidgets
+    KF5::TextEditor
+    Qt5::Concurrent
+)
 
-kdevplatform_add_plugin(kdevcmakedocumentation JSON kdevcmakedocumentation.json SOURCES ${cmakedoc_SRCS})
+kdevplatform_add_plugin(kdevcmakedocumentation SOURCES ${cmakedoc_SRCS})
 target_link_libraries( kdevcmakedocumentation
-                        KDev::Interfaces kdevcmakecommon
-                        KDev::Project KDev::Language
-                        KDev::Documentation
-                        KF5::ItemModels
-                        KF5::TextEditor)
-
-install(TARGETS kdevcmakecommon ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
+    KDevCMakeCommon
+    KDev::Interfaces
+    KDev::Project
+    KDev::Language
+    KDev::Documentation
+    KDev::Sublime
+    KF5::ItemModels
+    KF5::TextEditor
+)

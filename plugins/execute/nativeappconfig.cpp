@@ -94,6 +94,13 @@ void NativeAppConfigPage::loadFromConfiguration(const KConfigGroup& cfg, KDevelo
     dependencies->setDependencies(KDevelop::stringToQVariant( cfg.readEntry( ExecutePlugin::dependencyEntry, QString() ) ).toList());
 
     dependencyAction->setCurrentIndex( dependencyAction->findData( cfg.readEntry( ExecutePlugin::dependencyActionEntry, "Nothing" ) ) );
+
+    if (cfg.readEntry<bool>(ExecutePlugin::configuredByCTest, false)) {
+        killBeforeStartingAgain->setCurrentIndex(killBeforeStartingAgain->findData(NativeAppJob::startAnother));
+        killBeforeStartingAgain->setDisabled(true);
+    } else {
+        killBeforeStartingAgain->setCurrentIndex(killBeforeStartingAgain->findData(cfg.readEntry<int>(ExecutePlugin::killBeforeExecutingAgain, NativeAppJob::askIfRunning)));
+    }
 }
 
 NativeAppConfigPage::NativeAppConfigPage( QWidget* parent )
@@ -105,6 +112,10 @@ NativeAppConfigPage::NativeAppConfigPage( QWidget* parent )
     dependencyAction->setItemData(1, QStringLiteral("Build"));
     dependencyAction->setItemData(2, QStringLiteral("Install"));
     dependencyAction->setItemData(3, QStringLiteral("SudoInstall"));
+
+    killBeforeStartingAgain->addItem(i18nc("@item:inlistbox", "Ask If Running"), NativeAppJob::askIfRunning);
+    killBeforeStartingAgain->addItem(i18nc("@item:inlistbox", "Kill All Instances"), NativeAppJob::killAllInstances);
+    killBeforeStartingAgain->addItem(i18nc("@item:inlistbox", "Start Another"), NativeAppJob::startAnother);
 
     //Set workingdirectory widget to ask for directories rather than files
     workingDirectory->setMode(KFile::Directory | KFile::ExistingOnly | KFile::LocalOnly);
@@ -126,6 +137,7 @@ NativeAppConfigPage::NativeAppConfigPage( QWidget* parent )
     connect( terminal, &KComboBox::editTextChanged, this, &NativeAppConfigPage::changed );
     connect( terminal, QOverload<int>::of(&KComboBox::currentIndexChanged), this, &NativeAppConfigPage::changed );
     connect( dependencyAction, QOverload<int>::of(&KComboBox::currentIndexChanged), this, &NativeAppConfigPage::activateDeps );
+    connect( killBeforeStartingAgain, QOverload<int>::of(&KComboBox::currentIndexChanged), this, &NativeAppConfigPage::changed );
     connect( dependencies, &DependenciesWidget::changed, this, &NativeAppConfigPage::changed );
 }
 
@@ -146,13 +158,14 @@ void NativeAppConfigPage::saveToConfiguration( KConfigGroup cfg, KDevelop::IProj
     cfg.writeEntry( ExecutePlugin::useTerminalEntry, runInTerminal->isChecked() );
     cfg.writeEntry( ExecutePlugin::terminalEntry, terminal->currentText() );
     cfg.writeEntry( ExecutePlugin::dependencyActionEntry, dependencyAction->itemData( dependencyAction->currentIndex() ).toString() );
+    cfg.writeEntry( ExecutePlugin::killBeforeExecutingAgain, killBeforeStartingAgain->itemData( killBeforeStartingAgain->currentIndex() ).toInt() );
     QVariantList deps = dependencies->dependencies();
     cfg.writeEntry( ExecutePlugin::dependencyEntry, KDevelop::qvariantToString( QVariant( deps ) ) );
 }
 
 QString NativeAppConfigPage::title() const
 {
-    return i18n("Configure Native Application");
+    return i18nc("@title:tab", "Configure Native Application");
 }
 
 QList< KDevelop::LaunchConfigurationPageFactory* > NativeAppLauncher::configPages() const
@@ -196,7 +209,13 @@ KJob* NativeAppLauncher::start(const QString& launchMode, KDevelop::ILaunchConfi
         {
             l << depjob;
         }
-        l << new NativeAppJob( KDevelop::ICore::self()->runController(), cfg );
+        auto nativeAppJob = new NativeAppJob( KDevelop::ICore::self()->runController(), cfg );
+        QObject::connect(nativeAppJob, &NativeAppJob::killBeforeExecutingAgainChanged, KDevelop::ICore::self()->runController(), [cfg] (int newValue) {
+            auto cfgGroup = cfg->config();
+            cfgGroup.writeEntry(ExecutePlugin::killBeforeExecutingAgain, newValue);
+        });
+        l << nativeAppJob;
+
         return new KDevelop::ExecuteCompositeJob( KDevelop::ICore::self()->runController(), l );
 
     }
@@ -240,9 +259,14 @@ QList<KDevelop::LaunchConfigurationPageFactory*> NativeAppConfigType::configPage
     return factoryList;
 }
 
+QString NativeAppConfigType::sharedId()
+{
+    return QStringLiteral("Native Application");
+}
+
 QString NativeAppConfigType::id() const
 {
-    return ExecutePlugin::_nativeAppConfigTypeId;
+    return sharedId();
 }
 
 QIcon NativeAppConfigType::icon() const
@@ -275,7 +299,6 @@ void NativeAppConfigType::configureLaunchFromItem ( KConfigGroup cfg, KDevelop::
 void NativeAppConfigType::configureLaunchFromCmdLineArguments ( KConfigGroup cfg, const QStringList& args ) const
 {
     cfg.writeEntry( ExecutePlugin::isExecutableEntry, true );
-    Q_ASSERT(QFile::exists(args.first()));
 //  TODO: we probably want to flexibilize, but at least we won't be accepting wrong values anymore
     cfg.writeEntry( ExecutePlugin::executableEntry, QUrl::fromLocalFile(args.first()) );
     QStringList a(args);
@@ -308,7 +331,7 @@ bool menuLess(QMenu* a, QMenu* b)
 
 QMenu* NativeAppConfigType::launcherSuggestions()
 {
-    QMenu* ret = new QMenu(i18n("Project Executables"));
+    auto* ret = new QMenu(i18nc("@title:menu", "Project Executables"));
 
     KDevelop::ProjectModel* model = KDevelop::ICore::self()->projectController()->projectModel();
     const QList<KDevelop::IProject*> projects = KDevelop::ICore::self()->projectController()->projects();
@@ -347,7 +370,7 @@ QMenu* NativeAppConfigType::launcherSuggestions()
                     }
                     QStringList path = model->pathFromIndex(folder->index());
                     path.removeFirst();
-                    QMenu* submenu = new QMenu(path.join(QLatin1Char('/')), projectMenu);
+                    auto* submenu = new QMenu(path.join(QLatin1Char('/')), projectMenu);
                     std::sort(actions.begin(), actions.end(), actionLess);
                     submenu->addActions(actions);
                     submenus += submenu;

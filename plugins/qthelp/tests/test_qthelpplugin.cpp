@@ -23,6 +23,9 @@
 #include "../qthelp_config_shared.h"
 
 #include <QTest>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+#include <QHelpLink>
+#endif
 
 #include <interfaces/idocumentation.h>
 #include <language/duchain/duchainlock.h>
@@ -60,6 +63,7 @@ void TestQtHelpPlugin::init()
     // write default config and read it
     qtHelpWriteConfig(QStringList(), QStringList(), QStringList(), QStringList(), QString(), true);
     m_plugin->readConfig();
+    QTRY_VERIFY(m_plugin->isQtHelpQtDocLoaded());
 }
 
 void TestQtHelpPlugin::cleanup()
@@ -192,7 +196,12 @@ void TestQtHelpPlugin::testDeclarationLookup_Class()
 
     auto provider = dynamic_cast<QtHelpProviderAbstract*>(m_plugin->providers().at(0));
     QVERIFY(provider);
-    if (!provider->isValid() || provider->engine()->linksForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+    if (!provider->isValid() ||
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        provider->engine()->documentsForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+#else
+        provider->engine()->linksForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+#endif
         QSKIP("Qt help not available", SkipSingle);
     }
 
@@ -219,7 +228,12 @@ void TestQtHelpPlugin::testDeclarationLookup_Method()
 
     auto provider = dynamic_cast<QtHelpProviderAbstract*>(m_plugin->providers().at(0));
     QVERIFY(provider);
-    if (!provider->isValid() || provider->engine()->linksForIdentifier(QStringLiteral("QString::fromLatin1")).isEmpty()) {
+    if (!provider->isValid() ||
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        provider->engine()->documentsForIdentifier(QStringLiteral("QString::fromLatin1")).isEmpty()) {
+#else
+        provider->engine()->linksForIdentifier(QStringLiteral("QString::fromLatin1")).isEmpty()) {
+#endif
         QSKIP("Qt help not available", SkipSingle);
     }
 
@@ -244,7 +258,12 @@ void TestQtHelpPlugin::testDeclarationLookup_OperatorFunction()
 
     auto provider = dynamic_cast<QtHelpProviderAbstract*>(m_plugin->providers().at(0));
     QVERIFY(provider);
-    if (!provider->isValid() || provider->engine()->linksForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+    if (!provider->isValid() ||
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+        provider->engine()->documentsForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+#else
+        provider->engine()->linksForIdentifier(QStringLiteral("QObject")).isEmpty()) {
+#endif
         QSKIP("Qt help not available", SkipSingle);
     }
 

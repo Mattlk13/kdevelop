@@ -24,8 +24,6 @@
 
 #include "path.h"
 #include "debug.h"
-// KF
-#include <kio_version.h>
 // Qt
 #include <QtConcurrentRun>
 #include <QDir>
@@ -45,8 +43,24 @@ bool isChildItem(ProjectBaseItem* parent, ProjectBaseItem* child)
 }
 }
 
+class SemaReleaser
+{
+public:
+    SemaReleaser(QSemaphore* sem)
+        : m_sem(sem)
+    {}
+
+    ~SemaReleaser()
+    {
+        m_sem->release();
+    }
+
+private:
+    QSemaphore* m_sem;
+};
+
 FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
-    : KIO::Job(), m_item(item), m_aborted(false)
+    : KIO::Job(), m_item(item), m_aborted(false), m_listing(1)
 {
     qRegisterMetaType<KIO::UDSEntryList>("KIO::UDSEntryList");
     qRegisterMetaType<KIO::Job*>();
@@ -66,9 +80,10 @@ FileManagerListJob::FileManagerListJob(ProjectFolderItem* item)
 
 FileManagerListJob::~FileManagerListJob()
 {
-    // lock and abort to ensure our background list job is stopped
-    std::lock_guard<std::recursive_mutex> lock(m_listing);
+    // abort and lock to ensure our background list job is stopped
     m_aborted = true;
+    m_listing.acquire();
+    Q_ASSERT(m_listing.available() == 0);
 }
 
 void FileManagerListJob::addSubDir( ProjectFolderItem* item )
@@ -111,9 +126,9 @@ void FileManagerListJob::startNextJob()
     if (m_item->path().isLocalFile()) {
         // optimized version for local projects using QDir directly
         // start locking to ensure we don't get destroyed while waiting for the list to finish
-        m_listing.lock();
+        m_listing.acquire();
         QtConcurrent::run([this] (const Path& path) {
-            std::lock_guard<std::recursive_mutex> lock(m_listing, std::adopt_lock);
+            SemaReleaser lock(&m_listing);
             if (m_aborted) {
                 return;
             }
@@ -125,24 +140,12 @@ void FileManagerListJob::startNextJob()
             KIO::UDSEntryList results;
             std::transform(entries.begin(), entries.end(), std::back_inserter(results), [] (const QFileInfo& info) -> KIO::UDSEntry {
                 KIO::UDSEntry entry;
-#if KIO_VERSION < QT_VERSION_CHECK(5,48,0)
-                entry.insert(KIO::UDSEntry::UDS_NAME, info.fileName());
-#else
                 entry.fastInsert(KIO::UDSEntry::UDS_NAME, info.fileName());
-#endif
                 if (info.isDir()) {
-#if KIO_VERSION < QT_VERSION_CHECK(5,48,0)
-                    entry.insert(KIO::UDSEntry::UDS_FILE_TYPE, QT_STAT_DIR);
-#else
                     entry.fastInsert(KIO::UDSEntry::UDS_FILE_TYPE, QT_STAT_DIR);
-#endif
                 }
                 if (info.isSymLink()) {
-#if KIO_VERSION < QT_VERSION_CHECK(5,48,0)
-                    entry.insert(KIO::UDSEntry::UDS_LINK_DEST, info.symLinkTarget());
-#else
                     entry.fastInsert(KIO::UDSEntry::UDS_LINK_DEST, info.symLinkTarget());
-#endif
                 }
                 return entry;
             });

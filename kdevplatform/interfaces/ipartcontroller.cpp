@@ -23,6 +23,7 @@
 #include <KParts/ReadOnlyPart>
 #include <KService>
 
+#include <array>
 
 namespace KDevelop {
 
@@ -44,12 +45,9 @@ KPluginFactory* IPartController::findPartFactory ( const QString& mimetype, cons
         // if there is a preferred plugin we'll take it
         if ( !preferredName.isEmpty() )
         {
-            KService::List::ConstIterator it;
-            for ( it = offers.constBegin(); it != offers.constEnd(); ++it )
-            {
-                if ( ( *it ) ->desktopEntryName() == preferredName )
-                {
-                    ptr = ( *it );
+            for (auto& offer : offers) {
+                if (offer->desktopEntryName() == preferredName) {
+                    ptr = offer;
                     break;
                 }
             }
@@ -69,17 +67,15 @@ KPluginFactory* IPartController::findPartFactory ( const QString& mimetype, cons
 
 KParts::Part* IPartController::createPart ( const QString& mimetype, const QString& prefName )
 {
-    const uint length = 1;
-    static const char* const services[length] =
-    {
+    static const std::array<QString, 1> services = {
         // Disable read/write parts until we can support them
-        /*"KParts/ReadWritePart",*/ "KParts/ReadOnlyPart"
+        /*"KParts/ReadWritePart",*/
+        QStringLiteral("KParts/ReadOnlyPart")
     };
 
     KParts::Part* part = nullptr;
-    for ( uint i = 0; i < length; ++i )
-    {
-        KPluginFactory* editorFactory = findPartFactory( mimetype, QString::fromLatin1(services[ i ]), prefName );
+    for (auto& service : services) {
+        KPluginFactory* editorFactory = findPartFactory(mimetype, service, prefName);
         if ( editorFactory )
         {
             part = editorFactory->create<KParts::ReadOnlyPart>( nullptr, this );

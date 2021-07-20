@@ -58,31 +58,33 @@ QtHelpQtDoc::QtHelpQtDoc(QObject *parent, const QVariantList &args)
     registerDocumentations();
 }
 
+QtHelpQtDoc::~QtHelpQtDoc() = default;
+
 void QtHelpQtDoc::registerDocumentations()
 {
+    Q_ASSERT(!m_isInitialized);
     const QString qmake = qmakeCandidate();
     if (!qmake.isEmpty()) {
-        auto *p = new QProcess;
+        auto* p = new QProcess(this);
         p->setProcessChannelMode(QProcess::MergedChannels);
         p->setProgram(qmake);
         p->setArguments({QLatin1String("-query"), QLatin1String("QT_INSTALL_DOCS")});
+        connect(p, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this, p](int code) {
+            if (code == QProcess::NormalExit) {
+                m_path = QDir::fromNativeSeparators(QString::fromLatin1(p->readAllStandardOutput().trimmed()));
+                qCDebug(QTHELP) << "Detected doc path:" << m_path;
+            } else {
+                qCCritical(QTHELP) << "qmake query returned error:" << QString::fromLatin1(p->readAllStandardError());
+                qCDebug(QTHELP) << "last standard output was:" << QString::fromLatin1(p->readAllStandardOutput());
+            }
+
+            p->deleteLater();
+            m_isInitialized = true;
+        });
         p->start();
-        connect(p, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &QtHelpQtDoc::lookupDone);
-    }
-}
-
-void QtHelpQtDoc::lookupDone(int code)
-{
-    auto *p = qobject_cast<QProcess*>(sender());
-    if(code == QProcess::NormalExit) {
-        m_path = QDir::fromNativeSeparators(QString::fromLatin1(p->readAllStandardOutput().trimmed()));
-        qCDebug(QTHELP) << "Detected doc path:" << m_path;
     } else {
-        qCCritical(QTHELP) << "qmake query returned error:" << QString::fromLatin1(p->readAllStandardError());
-        qCDebug(QTHELP) << "last standard output was:" << QString::fromLatin1(p->readAllStandardOutput());
+        m_isInitialized = true;
     }
-
-    sender()->deleteLater();
 }
 
 void QtHelpQtDoc::loadDocumentation()

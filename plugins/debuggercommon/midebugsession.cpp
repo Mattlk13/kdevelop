@@ -30,6 +30,7 @@
 
 #include "debuglog.h"
 #include "midebugger.h"
+#include "midebuggerplugin.h"
 #include "mivariable.h"
 #include "mi/mi.h"
 #include "mi/micommand.h"
@@ -42,11 +43,12 @@
 #include <interfaces/idocument.h>
 #include <interfaces/idocumentcontroller.h>
 #include <interfaces/ilaunchconfiguration.h>
+#include <interfaces/iuicontroller.h>
+#include <sublime/message.h>
 #include <util/processlinemaker.h>
 
 #include <KConfigGroup>
 #include <KLocalizedString>
-#include <KMessageBox>
 #include <KSharedConfig>
 #include <KShell>
 
@@ -61,10 +63,14 @@ using namespace KDevelop;
 using namespace KDevMI;
 using namespace KDevMI::MI;
 
+namespace {
+constexpr DBGStateFlags notStartedDebuggerFlags{s_dbgNotStarted | s_appNotStarted};
+}
+
 MIDebugSession::MIDebugSession(MIDebuggerPlugin *plugin)
     : m_procLineMaker(new ProcessLineMaker(this))
     , m_commandQueue(new CommandQueue)
-    , m_debuggerState(s_dbgNotStarted | s_appNotStarted)
+    , m_debuggerState{notStartedDebuggerFlags}
     , m_tty(nullptr)
     , m_plugin(plugin)
 {
@@ -121,9 +127,8 @@ MIVariable* MIDebugSession::findVariableByVarobjName(const QString &varobjName) 
 
 void MIDebugSession::markAllVariableDead()
 {
-    for (auto i = m_allVariables.begin(), e = m_allVariables.end(); i != e; ++i)
-    {
-        i.value()->markAsDead();
+    for (auto* variable : qAsConst(m_allVariables)) {
+        variable->markAsDead();
     }
     m_allVariables.clear();
 }
@@ -151,7 +156,11 @@ bool MIDebugSession::startDebugger(ILaunchConfiguration *cfg)
     // output signals
     connect(m_debugger, &MIDebugger::applicationOutput,
             this, [this](const QString &output) {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+                auto lines = output.split(QRegularExpression(QStringLiteral("[\r\n]")), Qt::SkipEmptyParts);
+#else
                 auto lines = output.split(QRegularExpression(QStringLiteral("[\r\n]")), QString::SkipEmptyParts);
+#endif
                 for (auto &line : lines) {
                     int p = line.length();
                     while (p >= 1 && (line[p-1] == QLatin1Char('\r') || line[p-1] == QLatin1Char('\n'))) {
@@ -250,7 +259,8 @@ bool MIDebugSession::startDebugging(ILaunchConfiguration* cfg, IExecutePlugin* i
     QString tty(m_tty->getSlave());
 #ifndef Q_OS_WIN
     if (tty.isEmpty()) {
-        KMessageBox::information(qApp->activeWindow(), m_tty->lastError(), i18n("warning"));
+        auto* message = new Sublime::Message(m_tty->lastError(), Sublime::Message::Information);
+        ICore::self()->uiController()->postMessage(message);
 
         m_tty.reset(nullptr);
         return false;
@@ -323,11 +333,11 @@ bool MIDebugSession::attachToProcess(int pid)
 void MIDebugSession::handleTargetAttach(const MI::ResultRecord& r)
 {
     if (r.reason == QLatin1String("error")) {
-        KMessageBox::error(
-            qApp->activeWindow(),
+        const QString messageText =
             i18n("<b>Could not attach debugger:</b><br />")+
-            r[QStringLiteral("msg")].literal(),
-            i18n("Startup error"));
+                 r[QStringLiteral("msg")].literal();
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+        ICore::self()->uiController()->postMessage(message);
         stopDebugger();
     }
 }
@@ -378,66 +388,22 @@ DBGStateFlags MIDebugSession::debuggerState() const
 void MIDebugSession::setDebuggerStateOn(DBGStateFlags stateOn)
 {
     DBGStateFlags oldState = m_debuggerState;
-
-    debuggerStateChange(m_debuggerState, m_debuggerState | stateOn);
     m_debuggerState |= stateOn;
-
     handleDebuggerStateChange(oldState, m_debuggerState);
 }
 
 void MIDebugSession::setDebuggerStateOff(DBGStateFlags stateOff)
 {
     DBGStateFlags oldState = m_debuggerState;
-
-    debuggerStateChange(m_debuggerState, m_debuggerState & ~stateOff);
     m_debuggerState &= ~stateOff;
-
     handleDebuggerStateChange(oldState, m_debuggerState);
 }
 
 void MIDebugSession::setDebuggerState(DBGStateFlags newState)
 {
     DBGStateFlags oldState = m_debuggerState;
-
-    debuggerStateChange(m_debuggerState, newState);
     m_debuggerState = newState;
-
     handleDebuggerStateChange(oldState, m_debuggerState);
-}
-
-void MIDebugSession::debuggerStateChange(DBGStateFlags oldState, DBGStateFlags newState)
-{
-    int delta = oldState ^ newState;
-    if (delta)
-    {
-        QString out;
-#define STATE_CHECK(name) \
-    do { \
-        if (delta & name) { \
-            out += ((newState & name) ? QLatin1String(" +") : QLatin1String(" -")) \
-                   + QLatin1String(#name); \
-            delta &= ~name; \
-        } \
-    } while (0)
-        STATE_CHECK(s_dbgNotStarted);
-        STATE_CHECK(s_appNotStarted);
-        STATE_CHECK(s_programExited);
-        STATE_CHECK(s_attached);
-        STATE_CHECK(s_core);
-        STATE_CHECK(s_shuttingDown);
-        STATE_CHECK(s_dbgBusy);
-        STATE_CHECK(s_appRunning);
-        STATE_CHECK(s_dbgNotListening);
-        STATE_CHECK(s_automaticContinue);
-#undef STATE_CHECK
-
-        for (unsigned int i = 0; delta != 0 && i < 32; ++i) {
-            if (delta & (1 << i))  {
-                delta &= ~(1 << i);
-                out += (((1 << i) & newState) ? QLatin1String(" +") : QLatin1String(" -")) + QString::number(i);
-            }
-        }
-    }
 }
 
 void MIDebugSession::handleDebuggerStateChange(DBGStateFlags oldState, DBGStateFlags newState)
@@ -522,8 +488,14 @@ void MIDebugSession::restartDebugger()
 void MIDebugSession::stopDebugger()
 {
     if (debuggerStateIsOn(s_dbgNotStarted)) {
-        // we are force to stop even before debugger started, just reset
         qCDebug(DEBUGGERCOMMON) << "Stopping debugger when it's not started";
+        if (debuggerState() != notStartedDebuggerFlags) {
+            setDebuggerState(notStartedDebuggerFlags);
+        }
+        // Transition into EndedState to let DebugController destroy this session.
+        if (state() != EndedState) {
+            setSessionState(EndedState);
+        }
         return;
     }
 
@@ -558,13 +530,27 @@ void MIDebugSession::stopDebugger()
     QTimer::singleShot(5000, this, [this]() {
         if (!debuggerStateIsOn(s_programExited) && debuggerStateIsOn(s_shuttingDown)) {
             qCDebug(DEBUGGERCOMMON) << "debugger not shutdown - killing";
-            m_debugger->kill();
-            setDebuggerState(s_dbgNotStarted | s_appNotStarted);
-            raiseEvent(debugger_exited);
+            killDebuggerImpl();
         }
     });
 
     emit reset();
+}
+
+void MIDebugSession::killDebuggerNow()
+{
+    if (!debuggerStateIsOn(s_dbgNotStarted)) {
+        qCDebug(DEBUGGERCOMMON) << "killing debugger now";
+        killDebuggerImpl();
+    }
+}
+
+void MIDebugSession::killDebuggerImpl()
+{
+    Q_ASSERT(m_debugger);
+    m_debugger->kill();
+    setDebuggerState(notStartedDebuggerFlags);
+    raiseEvent(debugger_exited);
 }
 
 void MIDebugSession::interruptDebugger()
@@ -765,11 +751,11 @@ void MIDebugSession::addCommand(MI::CommandType type, const QString& arguments,
 void MIDebugSession::queueCmd(MICommand *cmd)
 {
     if (debuggerStateIsOn(s_dbgNotStarted)) {
-        KMessageBox::information(
-            qApp->activeWindow(),
+        const QString messageText =
             i18n("<b>Gdb command sent when debugger is not running</b><br>"
-                 "The command was:<br> %1", cmd->initialString()),
-            i18n("Internal error"));
+                 "The command was:<br> %1", cmd->initialString());
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Information);
+        ICore::self()->uiController()->postMessage(message);
         return;
     }
 
@@ -882,9 +868,9 @@ void MIDebugSession::executeCmd()
     }
 
     if (bad_command) {
-        KMessageBox::information(qApp->activeWindow(),
-                                 i18n("<b>Invalid debugger command</b><br>%1", message),
-                                 i18n("Invalid debugger command"));
+        const QString messageText = i18n("<b>Invalid debugger command</b><br>%1", message);
+        auto* message = new Sublime::Message(messageText, Sublime::Message::Information);
+        ICore::self()->uiController()->postMessage(message);
         executeCmd();
         return;
     }
@@ -1209,8 +1195,8 @@ void MIDebugSession::explainDebuggerStatus()
         information += extra;
     }
 
-    KMessageBox::information(qApp->activeWindow(), information,
-                             i18n("Debugger status"));
+    auto* message = new Sublime::Message(information, Sublime::Message::Information);
+    ICore::self()->uiController()->postMessage(message);
 }
 
 // There is no app anymore. This can be caused by program exiting
@@ -1274,12 +1260,12 @@ void MIDebugSession::defaultErrorHandler(const MI::ResultRecord& result)
         return;
     }
 
-    KMessageBox::information(
-        qApp->activeWindow(),
+    const QString messageText =
         i18n("<b>Debugger error</b>"
              "<p>Debugger reported the following error:"
-             "<p><tt>%1", result[QStringLiteral("msg")].literal()),
-        i18n("Debugger error"));
+             "<p><tt>%1", result[QStringLiteral("msg")].literal());
+    auto* message = new Sublime::Message(messageText, Sublime::Message::Error);
+    ICore::self()->uiController()->postMessage(message);
 
     // Error most likely means that some change made in GUI
     // was not communicated to the gdb, so GUI is now not

@@ -22,13 +22,10 @@
 #include "cmakeprojectdata.h"
 
 #include <QFileInfo>
-#include <QDir>
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QRegularExpression>
 
-#include <KShell>
-#include <KLocalizedString>
 #include <KConfigGroup>
 
 #include <project/projectmodel.h>
@@ -41,6 +38,7 @@
 
 #include "icmakedocumentation.h"
 #include "cmakebuilddirchooser.h"
+#include "cmakeconfiggroupkeys.h"
 #include "settings/cmakecachemodel.h"
 #include "debug.h"
 #include "cmakebuilderconfig.h"
@@ -48,53 +46,6 @@
 #include "parser/cmakelistsparser.h"
 
 using namespace KDevelop;
-
-namespace Config
-{
-namespace Old
-{
-static const QString currentBuildDirKey = QStringLiteral("CurrentBuildDir");
-static const QString oldcmakeExecutableKey = QStringLiteral("CMake Binary"); // Todo: Remove at some point
-static const QString currentBuildTypeKey = QStringLiteral("CurrentBuildType");
-static const QString currentInstallDirKey = QStringLiteral("CurrentInstallDir");
-static const QString currentEnvironmentKey = QStringLiteral("CurrentEnvironment");
-static const QString currentExtraArgumentsKey = QStringLiteral("Extra Arguments");
-static const QString currentCMakeExecutableKey = QStringLiteral("Current CMake Binary");
-static const QString projectRootRelativeKey = QStringLiteral("ProjectRootRelative");
-static const QString projectBuildDirs = QStringLiteral("BuildDirs");
-}
-
-static const QString buildDirIndexKey_ = QStringLiteral("Current Build Directory Index");
-static const QString buildDirOverrideIndexKey = QStringLiteral("Temporary Build Directory Index");
-static const QString buildDirCountKey = QStringLiteral("Build Directory Count");
-
-//the used builddir will change for every runtime
-static QString buildDirIndexKey() {
-    const QString currentRuntime = ICore::self()->runtimeController()->currentRuntime()->name();
-    return buildDirIndexKey_ + QLatin1Char('-') + currentRuntime;
-}
-
-namespace Specific
-{
-static const QString buildDirPathKey = QStringLiteral("Build Directory Path");
-// TODO: migrate to more generic & consistent key term "CMake Executable"
-// Support the old "CMake Binary" key too for backwards compatibility during
-// a reasonable transition period. Both keys are saved at least until 5.2.0
-// is released. Import support for the old key will need to remain for a
-// considerably longer period, ideally.
-static const QString cmakeBinaryKey = QStringLiteral("CMake Binary");
-static const QString cmakeExecutableKey = QStringLiteral("CMake Executable");
-static const QString cmakeBuildTypeKey = QStringLiteral("Build Type");
-static const QString cmakeInstallDirKey = QStringLiteral("Install Directory");
-static const QString cmakeEnvironmentKey = QStringLiteral("Environment Profile");
-static const QString cmakeArgumentsKey = QStringLiteral("Extra Arguments");
-static const QString buildDirRuntime = QStringLiteral("Runtime");
-}
-
-static const QString groupNameBuildDir = QStringLiteral("CMake Build Directory %1");
-static const QString groupName = QStringLiteral("CMake");
-
-} // namespace Config
 
 namespace
 {
@@ -109,25 +60,24 @@ KConfigGroup baseGroup( KDevelop::IProject* project )
 
 KConfigGroup buildDirGroup( KDevelop::IProject* project, int buildDirIndex )
 {
-    return baseGroup(project).group( Config::groupNameBuildDir.arg(buildDirIndex) );
+    return baseGroup(project).group(Config::groupNameBuildDir(buildDirIndex));
 }
 
 bool buildDirGroupExists( KDevelop::IProject* project, int buildDirIndex )
 {
-    return baseGroup(project).hasGroup( Config::groupNameBuildDir.arg(buildDirIndex) );
+    return baseGroup(project).hasGroup(Config::groupNameBuildDir(buildDirIndex));
 }
 
-QString readBuildDirParameter( KDevelop::IProject* project, const QString& key, const QString& aDefault, int buildDirectory )
+QString readBuildDirParameter(KDevelop::IProject* project, const char* key, const QString& aDefault, int buildDirectory)
 {
     const int buildDirIndex = buildDirectory<0 ? CMake::currentBuildDirIndex(project) : buildDirectory;
-    if (buildDirIndex >= 0)
-        return buildDirGroup( project, buildDirIndex ).readEntry( key, aDefault );
-
+    if (buildDirIndex >= 0) // NOTE: we return trimmed since we may have written bogus trailing newlines in the past...
+        return buildDirGroup( project, buildDirIndex ).readEntry( key, aDefault ).trimmed();
     else
         return aDefault;
 }
 
-void writeBuildDirParameter( KDevelop::IProject* project, const QString& key, const QString& value )
+void writeBuildDirParameter(KDevelop::IProject* project, const char* key, const QString& value)
 {
     int buildDirIndex = CMake::currentBuildDirIndex(project);
     if (buildDirIndex >= 0)
@@ -142,10 +92,10 @@ void writeBuildDirParameter( KDevelop::IProject* project, const QString& key, co
     }
 }
 
-void writeProjectBaseParameter( KDevelop::IProject* project, const QString& key, const QString& value )
+template <typename Key>
+void writeProjectBaseParameter(KDevelop::IProject* project, const Key& key, const QString& value)
 {
-    KConfigGroup baseGrp = baseGroup(project);
-    baseGrp.writeEntry( key, value );
+    baseGroup(project).writeEntry(key, value);
 }
 
 void setBuildDirRuntime( KDevelop::IProject* project, const QString& name)
@@ -228,7 +178,7 @@ bool checkForNeedingConfigure( KDevelop::IProject* project )
         };
 
         if (!currentRuntime->buildPath().isEmpty()) {
-            const Path newBuilddir(currentRuntime->buildPath(), QStringLiteral("build-") + currentRuntimeName + project->name());
+            const Path newBuilddir(currentRuntime->buildPath(), QLatin1String("build-") + currentRuntimeName + project->name());
             const Path installPath(QString::fromUtf8(currentRuntime->getenv("KDEV_DEFAULT_INSTALL_PREFIX")));
 
             addBuildDir(newBuilddir, installPath, {}, QStringLiteral("Debug"), {});
@@ -347,6 +297,29 @@ QString findExecutable()
     return cmake;
 }
 
+QString cmakeExecutableVersion(const QString& cmakeExecutable)
+{
+    QProcess p;
+    p.setProcessChannelMode(QProcess::ForwardedErrorChannel);
+    p.start(cmakeExecutable, {QStringLiteral("--version")});
+    if (!p.waitForFinished()) {
+        qCWarning(CMAKE) << "failed to read cmake version for executable" << cmakeExecutable << p.errorString();
+        return {};
+    }
+
+    static const QRegularExpression pattern(QStringLiteral("cmake version (\\d\\.\\d+(?:\\.\\d+)?).*"));
+    const auto output = QString::fromLocal8Bit(p.readAll());
+    const auto match = pattern.match(output);
+    if (!match.hasMatch()) {
+        qCWarning(CMAKE) << "failed to read cmake version for executable" << cmakeExecutable << output;
+        return {};
+    }
+
+    const auto version = match.captured(1);
+    qCDebug(CMAKE) << "cmake version for executable" << cmakeExecutable << version;
+    return version;
+}
+
 KDevelop::Path currentCMakeExecutable(KDevelop::IProject* project, int builddir)
 {
     auto defaultCMakeExecutable = CMakeBuilderSettings::self()->cmakeExecutable().toLocalFile();
@@ -437,7 +410,7 @@ int currentBuildDirIndex( KDevelop::IProject* project )
     else if (baseGrp.hasKey(Config::buildDirIndexKey()))
         return baseGrp.readEntry<int>( Config::buildDirIndexKey(), -1 );
     else
-        return baseGrp.readEntry<int>( Config::buildDirIndexKey_, -1 ); // backwards compatibility
+        return baseGrp.readEntry<int>(Config::globalBuildDirIndexKey(), -1); // backwards compatibility
 }
 
 void setCurrentBuildDirIndex( KDevelop::IProject* project, int buildDirIndex )
@@ -534,16 +507,21 @@ void updateConfig( KDevelop::IProject* project, int buildDirIndex)
     const KDevelop::Path builddir(buildDirGrp.readEntry( Config::Specific::buildDirPathKey, QString() ));
     const KDevelop::Path cacheFilePath( builddir, QStringLiteral("CMakeCache.txt"));
 
-    const QMap<QString, QString> keys = {
+    const QMap<QString, const char*> keys = {
         { QStringLiteral("CMAKE_COMMAND"), Config::Specific::cmakeExecutableKey },
         { QStringLiteral("CMAKE_INSTALL_PREFIX"), Config::Specific::cmakeInstallDirKey },
         { QStringLiteral("CMAKE_BUILD_TYPE"), Config::Specific::cmakeBuildTypeKey }
     };
 
-    const QHash<QString, QString> cacheValues = readCacheValues(cacheFilePath, keys.keys().toSet());
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const QSet<QString> variables(keys.keyBegin(), keys.keyEnd());
+#else
+    const QSet<QString> variables = keys.keys().toSet();
+#endif
+    const QHash<QString, QString> cacheValues = readCacheValues(cacheFilePath, variables);
     for(auto it = cacheValues.constBegin(), itEnd = cacheValues.constEnd(); it!=itEnd; ++it) {
-        const QString key = keys.value(it.key());
-        Q_ASSERT(!key.isEmpty());
+        const char* const key = keys.value(it.key());
+        Q_ASSERT(key);
 
         // Use cache only when the config value is not set. Without this check we will always
         // overwrite values provided by the user in config dialog.
@@ -552,58 +530,6 @@ void updateConfig( KDevelop::IProject* project, int buildDirIndex)
             buildDirGrp.writeEntry( key, it.value() );
         }
     }
-}
-
-void attemptMigrate( KDevelop::IProject* project )
-{
-    if ( !baseGroup(project).hasKey( Config::Old::projectBuildDirs ) )
-    {
-        qCDebug(CMAKE) << "CMake settings migration: already done, exiting";
-        return;
-    }
-
-    KConfigGroup baseGrp = baseGroup(project);
-
-    KDevelop::Path buildDir( baseGrp.readEntry( Config::Old::currentBuildDirKey, QString() ) );
-    int buildDirIndex = -1;
-    const QStringList existingBuildDirs = baseGrp.readEntry( Config::Old::projectBuildDirs, QStringList() );
-    {
-        // also, find current build directory in this list (we need an index, not path)
-        QString currentBuildDirCanonicalPath = QDir( buildDir.toLocalFile() ).canonicalPath();
-
-        for( int i = 0; i < existingBuildDirs.count(); ++i )
-        {
-            const QString& nextBuildDir = existingBuildDirs.at(i);
-            if( QDir(nextBuildDir).canonicalPath() == currentBuildDirCanonicalPath )
-            {
-                buildDirIndex = i;
-            }
-        }
-    }
-    int buildDirsCount = existingBuildDirs.count();
-
-    qCDebug(CMAKE) << "CMake settings migration: existing build directories" << existingBuildDirs;
-    qCDebug(CMAKE) << "CMake settings migration: build directory count" << buildDirsCount;
-    qCDebug(CMAKE) << "CMake settings migration: current build directory" << buildDir << "(index" << buildDirIndex << ")";
-
-    baseGrp.writeEntry( Config::buildDirCountKey, buildDirsCount );
-    baseGrp.writeEntry( Config::buildDirIndexKey(), buildDirIndex );
-
-    for (int i = 0; i < buildDirsCount; ++i)
-    {
-        qCDebug(CMAKE) << "CMake settings migration: writing group" << i << ": path" << existingBuildDirs.at(i);
-
-        KConfigGroup buildDirGrp = buildDirGroup( project, i );
-        buildDirGrp.writeEntry( Config::Specific::buildDirPathKey, existingBuildDirs.at(i) );
-    }
-
-    baseGrp.deleteEntry( Config::Old::currentBuildDirKey );
-    baseGrp.deleteEntry( Config::Old::currentCMakeExecutableKey );
-    baseGrp.deleteEntry( Config::Old::currentBuildTypeKey );
-    baseGrp.deleteEntry( Config::Old::currentInstallDirKey );
-    baseGrp.deleteEntry( Config::Old::currentEnvironmentKey );
-    baseGrp.deleteEntry( Config::Old::currentExtraArgumentsKey );
-    baseGrp.deleteEntry( Config::Old::projectBuildDirs );
 }
 
 void setOverrideBuildDirIndex( KDevelop::IProject* project, int overrideBuildDirIndex )
@@ -691,16 +617,16 @@ QString defaultGenerator()
     return defGen;
 }
 
-QVector<Test> importTestSuites(const Path &buildDir, const QString &cmakeTestFileName)
+QVector<CMakeTest> importTestSuites(const Path &buildDir, const QString &cmakeTestFileName)
 {
     const auto cmakeTestFile = Path(buildDir, cmakeTestFileName).toLocalFile()  ;
     const auto contents = CMakeListsParser::readCMakeFile(cmakeTestFile);
     
-    QVector<Test> tests;
+    QVector<CMakeTest> tests;
     for (const auto& entry: contents) {
         if (entry.name == QLatin1String("add_test")) {
             auto args = entry.arguments;
-            Test test;
+            CMakeTest test;
             test.name = args.takeFirst().value;
             test.executable = args.takeFirst().value;
             test.arguments = kTransform<QStringList>(args, [](const CMakeFunctionArgument& arg) { return arg.value; });
@@ -726,7 +652,7 @@ QVector<Test> importTestSuites(const Path &buildDir, const QString &cmakeTestFil
                                  << entry.arguments.at(1).value << "...), but expected PROPERTIES as second argument";
                 continue;
             }
-            Test &test = tests.last();
+            CMakeTest &test = tests.last();
             for (int i = 2; i < entry.arguments.count(); i += 2)
                 test.properties[entry.arguments[i].value] = entry.arguments[i + 1].value;
         }
@@ -735,7 +661,7 @@ QVector<Test> importTestSuites(const Path &buildDir, const QString &cmakeTestFil
     return tests;
 }
 
-QVector<Test> importTestSuites(const Path &buildDir) {
+QVector<CMakeTest> importTestSuites(const Path &buildDir) {
     return importTestSuites(buildDir, QStringLiteral("CTestTestfile.cmake"));
 }
 

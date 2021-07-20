@@ -312,8 +312,9 @@ void CodeHighlightingInstance::highlightDUChain(DUContext* context, QHash<Declar
     }
 
     if (context->type() == DUContext::Other || context->type() == DUContext::Function) {
-        m_functionColorsForDeclarations[IndexedDUContext(context)] = colorsForDeclarations;
-        m_functionDeclarationsForColors[IndexedDUContext(context)] = declarationsForColors;
+        const auto indexed = IndexedDUContext(context);
+        m_functionColorsForDeclarations[indexed] = colorsForDeclarations;
+        m_functionDeclarationsForColors[indexed] = declarationsForColors;
     }
 
     const QVector<DUContext*> children = context->childContexts();
@@ -507,7 +508,7 @@ void CodeHighlighting::clearHighlightingForDocument(const IndexedString& documen
     DocumentChangeTracker* tracker = ICore::self()->languageController()->backgroundParser()->trackerForUrl(document);
     auto highlightingIt = m_highlights.find(tracker);
     if (highlightingIt != m_highlights.end()) {
-        disconnect(tracker, &DocumentChangeTracker::destroyed, this, &CodeHighlighting::trackerDestroyed);
+        disconnect(tracker, &DocumentChangeTracker::destroyed, this, nullptr);
         auto& highlighting = *highlightingIt;
         qDeleteAll(highlighting->m_highlightedRanges);
         delete highlighting;
@@ -552,7 +553,15 @@ void CodeHighlighting::applyHighlighting(void* _highlighting)
                 this, SLOT(aboutToInvalidateMovingInterfaceContent(KTextEditor::Document*)));
         connect(tracker->document(), SIGNAL(aboutToRemoveText(KTextEditor::Range)),
                 this, SLOT(aboutToRemoveText(KTextEditor::Range)));
-        connect(tracker, &DocumentChangeTracker::destroyed, this, &CodeHighlighting::trackerDestroyed);
+        connect(tracker, &DocumentChangeTracker::destroyed, this, [this, tracker]() {
+            // Called when a document is destroyed
+            VERIFY_FOREGROUND_LOCKED
+            QMutexLocker lock(&m_dataMutex);
+            Q_ASSERT(m_highlights.contains(tracker));
+            delete m_highlights[tracker]; // No need to care about the individual ranges, as the document is being
+                                          // destroyed
+            m_highlights.remove(tracker);
+        });
         m_highlights.insert(tracker, highlighting);
     }
 
@@ -601,17 +610,6 @@ void CodeHighlighting::applyHighlighting(void* _highlighting)
 
     for (; movingIt != oldHighlightedRanges.end(); ++movingIt)
         delete *movingIt; // Delete unmatched moving ranges behind
-}
-
-void CodeHighlighting::trackerDestroyed(QObject* object)
-{
-    // Called when a document is destroyed
-    VERIFY_FOREGROUND_LOCKED
-    QMutexLocker lock(&m_dataMutex);
-    auto* tracker = static_cast<DocumentChangeTracker*>(object);
-    Q_ASSERT(m_highlights.contains(tracker));
-    delete m_highlights[tracker]; // No need to care about the individual ranges, as the document is being destroyed
-    m_highlights.remove(tracker);
 }
 
 void CodeHighlighting::aboutToInvalidateMovingInterfaceContent(Document* doc)

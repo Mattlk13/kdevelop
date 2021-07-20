@@ -57,17 +57,17 @@ IProject* MesonTest::project() const
 
 KJob* MesonTest::job(ITestSuite::TestJobVerbosity verbosity)
 {
-    OutputJob::OutputJobVerbosity convVerbosity;
-    switch (verbosity) {
-    case KDevelop::ITestSuite::Verbose:
-        convVerbosity = OutputJob::Verbose;
-        break;
-    case KDevelop::ITestSuite::Silent:
-        convVerbosity = OutputJob::Silent;
-        break;
-    }
+    auto convVerbosity = [verbosity]() {
+        switch (verbosity) {
+        case KDevelop::ITestSuite::Verbose:
+            return OutputJob::Verbose;
+        case KDevelop::ITestSuite::Silent:
+            return OutputJob::Silent;
+        }
+        Q_UNREACHABLE();
+    }();
 
-    OutputExecuteJob* job = new OutputExecuteJob(m_project, convVerbosity);
+    auto* job = new OutputExecuteJob(m_project, convVerbosity);
     *job << m_command;
     if (!m_workDir.isEmpty()) {
         job->setWorkingDirectory(m_workDir.toUrl());

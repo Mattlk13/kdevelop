@@ -50,7 +50,7 @@ public:
         return QStringLiteral("org.kdevelop.TemplateFilePreview");
     }
 
-    Qt::DockWidgetArea defaultPosition() override
+    Qt::DockWidgetArea defaultPosition() const override
     {
         return Qt::RightDockWidgetArea;
     }
@@ -61,20 +61,19 @@ private:
 
 FileTemplatesPlugin::FileTemplatesPlugin(QObject* parent, const QVariantList& args)
     : IPlugin(QStringLiteral("kdevfiletemplates"), parent)
-    , m_model(nullptr)
 {
     Q_UNUSED(args);
 
     setXMLFile(QStringLiteral("kdevfiletemplates.rc"));
     QAction* action = actionCollection()->addAction(QStringLiteral("new_from_template"));
-    action->setText(i18n("New From Template..."));
+    action->setText(i18nc("@action", "New from Template..."));
     action->setIcon( QIcon::fromTheme( QStringLiteral("code-class") ) );
-    action->setWhatsThis( i18n( "Allows you to create new source code files, such as classes or unit tests, using templates." ) );
-    action->setStatusTip( i18n( "Create new files from a template" ) );
+    action->setWhatsThis(i18nc("@info:whatsthis", "Allows you to create new source code files, such as classes or unit tests, using templates." ) );
+    action->setToolTip( i18nc("@info:tooltip",  "Create new files from a template" ) );
     connect (action, &QAction::triggered, this, &FileTemplatesPlugin::createFromTemplate);
 
     m_toolView = new TemplatePreviewFactory(this);
-    core()->uiController()->addToolView(i18n("Template Preview"), m_toolView);
+    core()->uiController()->addToolView(i18nc("@title:window", "Template Preview"), m_toolView);
 }
 
 FileTemplatesPlugin::~FileTemplatesPlugin()
@@ -113,7 +112,7 @@ ContextMenuExtension FileTemplatesPlugin::contextMenuExtension(Context* context,
         }
         if (url.isValid())
         {
-            QAction* action = new QAction(i18n("Create From Template..."), parent);
+            auto* action = new QAction(i18nc("@action:inmenu", "Create from Template..."), parent);
             action->setIcon(QIcon::fromTheme(QStringLiteral("code-class")));
             action->setData(url);
             connect(action, &QAction::triggered, this, &FileTemplatesPlugin::createFromTemplate);
@@ -133,7 +132,7 @@ ContextMenuExtension FileTemplatesPlugin::contextMenuExtension(Context* context,
 
     if (fileUrl.isValid() && determineTemplateType(fileUrl) != NoTemplate)
     {
-        QAction* action = new QAction(i18n("Show Template Preview"), parent);
+        auto* action = new QAction(i18nc("@action:inmenu", "Show Template Preview"), parent);
         action->setIcon(QIcon::fromTheme(QStringLiteral("document-preview")));
         action->setData(fileUrl);
         connect(action, &QAction::triggered, this, &FileTemplatesPlugin::previewTemplate);
@@ -153,10 +152,11 @@ QIcon FileTemplatesPlugin::icon() const
     return QIcon::fromTheme(QStringLiteral("code-class"));
 }
 
-QAbstractItemModel* FileTemplatesPlugin::templatesModel()
+QAbstractItemModel* FileTemplatesPlugin::templatesModel() const
 {
     if(!m_model) {
-        m_model = new TemplatesModel(QStringLiteral("kdevfiletemplates"), this);
+        auto* self = const_cast<FileTemplatesPlugin*>(this);
+        m_model = new TemplatesModel(QStringLiteral("kdevfiletemplates"), self);
     }
     return m_model;
 }
@@ -264,7 +264,7 @@ FileTemplatesPlugin::TemplateType FileTemplatesPlugin::determineTemplateType(con
                 return ProjectTemplate;
             }
 
-            KConfig* config = new KConfig(dir.absoluteFilePath(entry), KConfig::SimpleConfig);
+            auto* config = new KConfig(dir.absoluteFilePath(entry), KConfig::SimpleConfig);
             KConfigGroup group = config->group("General");
 
             qCDebug(PLUGIN_FILETEMPLATES) << "General group keys:" << group.keyList();
@@ -305,7 +305,7 @@ void FileTemplatesPlugin::previewTemplate()
     {
         return;
     }
-    auto* preview = qobject_cast<TemplatePreviewToolView*>(core()->uiController()->findToolView(i18n("Template Preview"), m_toolView));
+    auto* preview = qobject_cast<TemplatePreviewToolView*>(core()->uiController()->findToolView(i18nc("@title:window", "Template Preview"), m_toolView));
     if (!preview)
     {
         return;

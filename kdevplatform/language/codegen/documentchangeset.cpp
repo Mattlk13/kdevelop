@@ -220,7 +220,13 @@ DocumentChangeSet::ChangeResult DocumentChangeSet::applyAllChanges()
     }
 
     QList<QUrl> allFiles;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+    const auto changedFiles =
+        QSet<KDevelop::IndexedString>(d->documentsRename.keyBegin(), d->documentsRename.keyEnd()) +
+        QSet<KDevelop::IndexedString>(d->changes.keyBegin(), d->changes.keyEnd());
+#else
     const auto changedFiles = d->documentsRename.keys().toSet() + d->changes.keys().toSet();
+#endif
     allFiles.reserve(changedFiles.size());
     for (const IndexedString& file : changedFiles) {
         allFiles << file.toUrl();
@@ -254,10 +260,8 @@ DocumentChangeSet::ChangeResult DocumentChangeSet::applyAllChanges()
                         // remove old entry
                         d->changes.erase(iter);
                         // adapt to new url
-                        ChangesList::iterator itChange = value.begin();
-                        ChangesList::iterator itEnd = value.end();
-                        for (; itChange != itEnd; ++itChange) {
-                            (*itChange)->m_document = idxNewDoc;
+                        for (auto& change : value) {
+                            change->m_document = idxNewDoc;
                         }
 
                         d->changes[idxNewDoc] = value;
@@ -392,17 +396,16 @@ DocumentChangeSet::ChangeResult DocumentChangeSetPrivate::generateNewText(const 
                                                                           const CodeRepresentation* repr,
                                                                           QString& output)
 {
-    ISourceFormatter* formatter = nullptr;
-    if (ICore::self()) {
-        formatter = ICore::self()->sourceFormatterController()->formatterForUrl(file.toUrl());
-    }
-
     //Create the actual new modified file
     QStringList textLines = repr->text().split(QLatin1Char('\n'));
 
     QUrl url = file.toUrl();
 
     QMimeType mime = QMimeDatabase().mimeTypeForUrl(url);
+
+    auto core = ICore::self();
+    ISourceFormatter* formatter = core ? core->sourceFormatterController()->formatterForUrl(file.toUrl(), mime) : nullptr;
+
     QVector<int> removedLines;
 
     for (int pos = sortedChanges.size() - 1; pos >= 0; --pos) {
@@ -425,16 +428,16 @@ DocumentChangeSet::ChangeResult DocumentChangeSetPrivate::generateNewText(const 
 
                 if (formatPolicy == DocumentChangeSet::AutoFormatChangesKeepIndentation) {
                     // Reproduce the previous indentation
-                    QStringList oldLines = oldNewText.split(QLatin1Char('\n'));
+                    const QStringList oldLines = oldNewText.split(QLatin1Char('\n'));
                     QStringList newLines = change.m_newText.split(QLatin1Char('\n'));
 
                     if (oldLines.size() == newLines.size()) {
                         for (int line = 0; line < newLines.size(); ++line) {
                             // Keep the previous indentation
                             QString oldIndentation;
-                            for (int a = 0; a < oldLines[line].size(); ++a) {
-                                if (oldLines[line][a].isSpace()) {
-                                    oldIndentation.append(oldLines[line][a]);
+                            for (const QChar a : oldLines[line]) {
+                                if (a.isSpace()) {
+                                    oldIndentation.append(a);
                                 } else {
                                     break;
                                 }

@@ -18,6 +18,8 @@ Boston, MA 02110-1301, USA.
 */
 
 #include "environmentprofilelist.h"
+#include "kdevstringhandler.h"
+#include "debug.h"
 
 #include <QMap>
 #include <QStringList>
@@ -25,7 +27,6 @@ Boston, MA 02110-1301, USA.
 
 #include <KConfigGroup>
 
-#include <QRegularExpression>
 #include <QProcessEnvironment>
 
 namespace KDevelop {
@@ -223,21 +224,86 @@ QStringList EnvironmentProfileList::createEnvironment(const QString& profileName
     return env;
 }
 
+static QString expandVariable(const QString &key, const QString &value,
+                              QMap<QString, QString> &output,
+                              const QMap<QString, QString> &input,
+                              const QProcessEnvironment &environment)
+{
+    if (value.isEmpty())
+        return QString();
+
+    auto it = output.constFind(key);
+    if (it != output.constEnd()) {
+        // nothing to do, value was expanded already
+        return *it;
+    }
+
+    // not yet expanded, do that now
+
+    auto variableValue = [&](const QString &variable) {
+        if (environment.contains(variable)) {
+            return environment.value(variable);
+        } else if (variable == key) {
+            qCWarning(UTIL) << "recursive variable expansion" << variable;
+            return QString();
+        } else if (input.contains(variable)) {
+            return expandVariable(variable, input.value(variable), output, input, environment);
+        } else {
+            qCWarning(UTIL) << "Couldn't find replacement for" << variable;
+            return QString();
+        }
+    };
+
+    constexpr ushort escapeChar{'\\'};
+    constexpr ushort variableStartChar{'$'};
+    const auto isSpecialSymbol = [=](QChar c) {
+        return c.unicode() == escapeChar || c.unicode() == variableStartChar;
+    };
+
+    auto& expanded = output[key];
+    expanded.reserve(value.size());
+    const int lastIndex = value.size() - 1;
+    int i = 0;
+    // Never treat value.back() as a special symbol (nothing to escape or start).
+    while (i < lastIndex) {
+        const auto currentChar = value[i];
+        switch (currentChar.unicode()) {
+        case escapeChar: {
+            const auto nextChar = value[i+1];
+            if (!isSpecialSymbol(nextChar)) {
+                expanded += currentChar; // Nothing to escape => keep the escapeChar.
+            }
+            expanded += nextChar;
+            i += 2;
+            break;
+        }
+        case variableStartChar: {
+            ++i;
+            const auto match = matchPossiblyBracedAsciiVariable(value.midRef(i));
+            if (match.length == 0) {
+                expanded += currentChar; // Not a variable name start.
+            } else {
+                expanded += variableValue(match.name);
+                i += match.length;
+            }
+            break;
+        }
+        default:
+            expanded += currentChar;
+            ++i;
+        }
+    }
+    if (i == lastIndex) {
+        expanded += value[i];
+    }
+    return expanded;
+}
+
 void KDevelop::expandVariables(QMap<QString, QString>& variables, const QProcessEnvironment& environment)
 {
-    QRegularExpression rVar(QStringLiteral("(?<!\\\\)(\\$\\w+)"));
-    QRegularExpression rNotVar(QStringLiteral("\\\\\\$"));
-    for (auto it = variables.begin(); it != variables.end(); ++it) {
-        QRegularExpressionMatch m;
-        while ((m = rVar.match(it.value())).hasMatch()) {
-            if (environment.contains(m.captured(1).midRef(1).toString())) {
-                it.value().replace(m.capturedStart(0), m.capturedLength(0),
-                                   environment.value(m.captured(0).midRef(1).toString()));
-            } else {
-                //TODO: an warning
-                it.value().remove(m.capturedStart(0), m.capturedLength(0));
-            }
-        }
-        it.value().replace(rNotVar, QStringLiteral("$"));
+    QMap<QString, QString> expanded;
+    for (auto it = variables.cbegin(), end = variables.cend(); it != end; ++it) {
+        expandVariable(it.key(), it.value(), expanded, variables, environment);
     }
+    variables = expanded;
 }

@@ -27,10 +27,16 @@
 #include <KIO/Global>
 
 #include <QTest>
+#include <QStandardPaths>
+
+#include <type_traits>
 
 QTEST_MAIN(TestPath)
 
 using namespace KDevelop;
+
+static_assert(std::is_nothrow_move_assignable<Path>(), "Why would a move assignment operator throw?");
+static_assert(std::is_nothrow_move_constructible<Path>(), "Why would a move constructor throw?");
 
 static const int FILES_PER_FOLDER = 10;
 static const int FOLDERS_PER_FOLDER = 5;
@@ -103,6 +109,11 @@ void runBenchmark()
         const T base = stringToUrl<T>("/tmp/foo/bar");
         generateData(base, 0);
     }
+}
+
+void TestPath::initTestCase()
+{
+    QStandardPaths::setTestModeEnabled(true);
 }
 
 void TestPath::bench_qurl()
@@ -302,7 +313,7 @@ void TestPath::testPath()
     QVERIFY(c.isDirectParentOf(a));
 #endif
 
-    optUrl.clear();
+    optUrl = Path{};
     url.clear();
     QCOMPARE(optUrl.toUrl(), url);
 }
@@ -355,19 +366,26 @@ void TestPath::testPathInvalid_data()
     QTest::newRow("remote-nopath") << "http://www.test.com";
 }
 
-void TestPath::testPathOperators()
+void TestPath::testPathComparison()
 {
     QFETCH(Path, left);
     QFETCH(Path, right);
+    QFETCH(int, leftCompareRight);
+    QFETCH(int, leftCompareRightCi);
 
-    QFETCH(bool, equal);
-    QFETCH(bool, less);
-    bool greater = !equal && !less;
+    const bool equal = leftCompareRight == 0;
+    const bool less = leftCompareRight < 0;
+    const bool greater = leftCompareRight > 0;
 
     QVERIFY(left == left);
     QVERIFY(right == right);
     QCOMPARE(left == right, equal);
     QCOMPARE(right == left, equal);
+
+    QVERIFY(!(left != left));
+    QVERIFY(!(right != right));
+    QCOMPARE(left != right, !equal);
+    QCOMPARE(right != left, !equal);
 
     QCOMPARE(left < right, less);
     QCOMPARE(left <= right, less || equal);
@@ -378,14 +396,29 @@ void TestPath::testPathOperators()
     QCOMPARE(right <= left, greater || equal);
     QCOMPARE(right > left, less);
     QCOMPARE(right >= left, less || equal);
+
+    QCOMPARE(left.compare(left), 0);
+    QCOMPARE(right.compare(right), 0);
+    QCOMPARE(left.compare(right) < 0, leftCompareRight < 0);
+    QCOMPARE(right.compare(left) < 0, leftCompareRight > 0);
+
+    QCOMPARE(left.compare(left, Qt::CaseSensitive), 0);
+    QCOMPARE(right.compare(right, Qt::CaseSensitive), 0);
+    QCOMPARE(left.compare(right, Qt::CaseSensitive) < 0, leftCompareRight < 0);
+    QCOMPARE(right.compare(left, Qt::CaseSensitive) < 0, leftCompareRight > 0);
+
+    QCOMPARE(left.compare(left, Qt::CaseInsensitive), 0);
+    QCOMPARE(right.compare(right, Qt::CaseInsensitive), 0);
+    QCOMPARE(left.compare(right, Qt::CaseInsensitive) < 0, leftCompareRightCi < 0);
+    QCOMPARE(right.compare(left, Qt::CaseInsensitive) < 0, leftCompareRightCi > 0);
 }
 
-void TestPath::testPathOperators_data()
+void TestPath::testPathComparison_data()
 {
     QTest::addColumn<Path>("left");
     QTest::addColumn<Path>("right");
-    QTest::addColumn<bool>("equal");
-    QTest::addColumn<bool>("less");
+    QTest::addColumn<int>("leftCompareRight");
+    QTest::addColumn<int>("leftCompareRightCi");
 
     Path a(QStringLiteral("/tmp/a"));
     Path b(QStringLiteral("/tmp/b"));
@@ -395,12 +428,29 @@ void TestPath::testPathOperators_data()
     Path f(QStringLiteral("/tmp/"));
     Path invalid;
 
-    QTest::newRow("a-b") << a << b << false << true;
-    QTest::newRow("a-copy") << a << Path(a) << true << false;
-    QTest::newRow("c-a") << c << a << false << false;
-    QTest::newRow("c-invalid") << c << invalid << false << false;
-    QTest::newRow("c-d") << c << d << false << false;
-    QTest::newRow("e-f") << e << f << true << false;
+    QTest::newRow("a-b") << a << b << -1 << -1;
+    QTest::newRow("a-copy") << a << Path(a) << 0 << 0;
+    QTest::newRow("c-a") << c << a << 1 << 1;
+    QTest::newRow("c-invalid") << c << invalid << 1 << 1;
+    QTest::newRow("c-d") << c << d << 1 << 1;
+    QTest::newRow("e-f") << e << f << 0 << 0;
+
+    Path A(QStringLiteral("/tmp/A"));
+    Path B(QStringLiteral("/tmp/B"));
+    Path C(QStringLiteral("/tmp/aC"));
+    Path D(QStringLiteral("/D"));
+    Path E(QStringLiteral("/TMP"));
+    Path F(QStringLiteral("/TmP/F"));
+
+    QTest::newRow("a-A") << a << A << 1 << 0;
+    QTest::newRow("a-B") << a << B << 1 << -1;
+    QTest::newRow("A-b") << A << b << -1 << -1;
+    QTest::newRow("A-C") << A << C << -1 << -1;
+    QTest::newRow("c-C") << c << C << 1 << 0;
+    QTest::newRow("d-D") << d << D << 1 << 0;
+    QTest::newRow("F-A") << F << A << -1 << 1;
+    QTest::newRow("f-E") << f << E << 1 << 0;
+    QTest::newRow("E-F") << E << F << -1 << -1;
 }
 
 void TestPath::testPathAddData()
@@ -433,6 +483,12 @@ void TestPath::testPathAddData()
         }
 
         baseUrl = baseUrl.adjusted(QUrl::NormalizePathSegments);
+        if (baseUrl.path().contains(QLatin1String("//"))) {
+            // odd, this should have been normalized, no?
+            auto path = baseUrl.path();
+            path.replace(QLatin1String("//"), QLatin1String("/"));
+            baseUrl.setPath(path);
+        }
         // QUrl::StripTrailingSlash converts file:/// to file: which is not what we want
         if (baseUrl.path() != QLatin1String("/")) {
             baseUrl = baseUrl.adjusted(QUrl::StripTrailingSlash);
@@ -465,7 +521,7 @@ void TestPath::testPathAddData_data()
                               << QStringLiteral("../foo/./bar")
                               << QStringLiteral("../../../../../../../invalid");
     for (const QString& path : paths) {
-        QTest::newRow(qstrdup(path.toUtf8().constData())) << path;
+        QTest::addRow("%s", qPrintable(path)) << path;
     }
 }
 
@@ -557,28 +613,39 @@ void TestPath::testPathCd_data()
         QStringLiteral("http://foo.com/"), QStringLiteral("http://foo.com/foo"), QStringLiteral(
             "http://foo.com/foo/bar/asdf")
     };
-    for (const QString& base : bases) {
-        QTest::newRow(qstrdup(qPrintable(base + "-"))) << base << "";
-        QTest::newRow(qstrdup(qPrintable(base + "-.."))) << base << "..";
-        QTest::newRow(qstrdup(qPrintable(base + "-../"))) << base << "../";
-        QTest::newRow(qstrdup(qPrintable(base + "v../foo"))) << base << "../foo";
-        QTest::newRow(qstrdup(qPrintable(base + "-."))) << base << ".";
-        QTest::newRow(qstrdup(qPrintable(base + "-./"))) << base << "./";
-        QTest::newRow(qstrdup(qPrintable(base + "-./foo"))) << base << "./foo";
-        QTest::newRow(qstrdup(qPrintable(base + "-./foo/bar"))) << base << "./foo/bar";
-        QTest::newRow(qstrdup(qPrintable(base + "-foo/.."))) << base << "foo/..";
-        QTest::newRow(qstrdup(qPrintable(base + "-foo/"))) << base << "foo/";
-        QTest::newRow(qstrdup(qPrintable(base + "-foo/../bar"))) << base << "foo/../bar";
-#ifdef Q_OS_WIN
-        if (!base.startsWith("C:/")) {
-            // only add next rows for remote URLs on Windows
-#endif
-        QTest::newRow(qstrdup(qPrintable(base + "-/foo"))) << base << "/foo";
-        QTest::newRow(qstrdup(qPrintable(base + "-/foo/../bar"))) << base << "/foo/../bar";
-#ifdef Q_OS_WIN
-    }
 
+    const QVector<QString> suffixes {
+        QString(),
+        QStringLiteral(".."),
+        QStringLiteral("../"),
+        QStringLiteral("../foo"),
+        QStringLiteral("."),
+        QStringLiteral("./"),
+        QStringLiteral("./foo"),
+        QStringLiteral("./foo/bar"),
+        QStringLiteral("./foo/.."),
+        QStringLiteral("./foo/"),
+        QStringLiteral("./foo/../bar"),
+    };
+
+    const QVector<QString> extraSuffixes {
+        QStringLiteral("/foo"),
+        QStringLiteral("/foo/../bar"),
+    };
+
+    for (const QString& base : bases) {
+        for (const auto& suffix : suffixes) {
+            QTest::addRow("%s-%s", qPrintable(base), qPrintable(suffix)) << base << suffix;
+        }
+#ifdef Q_OS_WIN
+        // only add next rows for remote URLs on Windows
+        if (base.startsWith("C:/")) {
+            continue;
+        }
 #endif
+        for (const auto& suffix : extraSuffixes) {
+            QTest::addRow("%s-%s", qPrintable(base), qPrintable(suffix)) << base << suffix;
+        }
     }
 }
 

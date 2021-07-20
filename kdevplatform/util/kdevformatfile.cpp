@@ -17,18 +17,20 @@
 */
 
 #include "kdevformatfile.h"
+#include "wildcardhelpers.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QProcess>
 
+#include <utility>
+
 namespace KDevelop {
 
-static const QString formatFileName = QStringLiteral("format_sources");
-
 KDevFormatFile::KDevFormatFile(const QString& origFilePath, const QString& tempFilePath)
-    : m_origFilePath(origFilePath)
+    : formatFileName{QStringLiteral("format_sources")}
+    , m_origFilePath(origFilePath)
     , m_tempFilePath(tempFilePath)
 {
 }
@@ -37,7 +39,7 @@ bool KDevFormatFile::find()
 {
     QDir srcDir(QFileInfo(m_origFilePath).canonicalPath());
 
-    while (!srcDir.isRoot()) {
+    do {
         if (srcDir.exists(formatFileName)) {
             QDir::setCurrent(srcDir.canonicalPath());
 
@@ -46,16 +48,14 @@ bool KDevFormatFile::find()
                       << "\"\n";
             return true;
         }
-
-        srcDir.cdUp();
-    }
+    } while (!srcDir.isRoot() && srcDir.cdUp());
 
     return false;
 }
 
 bool KDevFormatFile::read()
 {
-    static const QChar delimiter = QLatin1Char(':');
+    constexpr QChar delimiter = QLatin1Char(':');
 
     QFile formatFile(formatFileName);
     if (!formatFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -64,34 +64,32 @@ bool KDevFormatFile::read()
     }
 
     int lineNumber = 0;
-    QString line;
-    QStringList wildcards;
-    QString command;
-
     while (!formatFile.atEnd()) {
         ++lineNumber;
 
-        line =  QString::fromUtf8(formatFile.readLine().trimmed());
+        QString line = QString::fromUtf8(formatFile.readLine().trimmed());
         if (line.isEmpty() || line.startsWith(QLatin1Char('#')))
             continue;
 
         if (line.indexOf(delimiter) < 0) {
             // We found the simple syntax without wildcards, and only with the command
-
-            wildcards.clear();
-            m_formatLines.append({wildcards, line});
+            m_formatLines.append({QStringList{}, std::move(line)});
         } else {
             // We found the correct syntax with "wildcards : command"
 
-            wildcards = line.section(delimiter, 0, 0).split(QLatin1Char(' '), QString::SkipEmptyParts);
-            command = line.section(delimiter, 1).trimmed();
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+            QStringList wildcards = line.section(delimiter, 0, 0).split(QLatin1Char(' '), Qt::SkipEmptyParts);
+#else
+            QStringList wildcards = line.section(delimiter, 0, 0).split(QLatin1Char(' '), QString::SkipEmptyParts);
+#endif
+            QString command = line.section(delimiter, 1).trimmed();
 
             if (wildcards.isEmpty()) {
                 qStdOut() << formatFileName << ":" << lineNumber
                           << ": error: empty wildcard, skip the line\n";
                 continue;
             }
-            m_formatLines.append({wildcards, command});
+            m_formatLines.append({std::move(wildcards), std::move(command)});
         }
     }
 
@@ -111,8 +109,10 @@ bool KDevFormatFile::apply()
             return executeCommand(formatLine.command);
         }
 
+        const QChar dirSeparator = QDir::separator();
         for (const QString& wildcard : formatLine.wildcards) {
-            if (QDir::match(QDir::current().canonicalPath() + QDir::separator() + wildcard.trimmed(), m_origFilePath)) {
+            const QString pattern = QDir::current().canonicalPath() + dirSeparator + wildcard.trimmed();
+            if (WildcardHelpers::matchSinglePattern(pattern, m_origFilePath)) {
                 qStdOut() << "matched \"" << m_origFilePath << "\" with wildcard \"" << wildcard << '\"';
                 return executeCommand(formatLine.command);
             }
@@ -125,25 +125,35 @@ bool KDevFormatFile::apply()
 
 bool KDevFormatFile::executeCommand(QString command)
 {
+    if (command.isEmpty()) {
+        qStdOut() << ", empty command => nothing to do\n";
+        return true;
+    }
     qStdOut() << ", using command \"" << command << "\"\n";
 
-    command.replace(QStringLiteral("$ORIGFILE"), m_origFilePath);
-    command.replace(QStringLiteral("$TMPFILE"), m_tempFilePath);
+    command.replace(QLatin1String("$ORIGFILE"), m_origFilePath);
+    command.replace(QLatin1String("$TMPFILE"), m_tempFilePath);
 
 #ifdef Q_OS_WIN
-    int execResult = QProcess::execute(QStringLiteral("cmd"), {QStringLiteral("/c"), command});
+    const QString interpreter = QStringLiteral("cmd");
+    const QStringList arguments{QStringLiteral("/c"), command};
 #else
-    int execResult = QProcess::execute(QStringLiteral("sh"), {QStringLiteral("-c"), command});
+    const QString interpreter = QStringLiteral("sh");
+    const QStringList arguments{QStringLiteral("-c"), command};
 #endif
+    const int execResult = QProcess::execute(interpreter, arguments);
 
-    if (execResult == -2) {
-        qStdOut() << "command \"" << command << "\" failed to start\n";
-        return false;
-    }
-
-    if (execResult == -1) {
-        qStdOut() << "command \"" << command << "\" crashed\n";
-        return false;
+    if (execResult != 0) {
+        const QString interpreterDescription = QLatin1String("interpreter ") + interpreter;
+        if (execResult == -2) {
+            qStdOut() << "error: " << interpreterDescription << " failed to start\n";
+            return false;
+        }
+        if (execResult == -1) {
+            qStdOut() << "error: " << interpreterDescription << " crashed\n";
+            return false;
+        }
+        qStdOut() << "warning: " << interpreterDescription << " exited with code " << execResult << '\n';
     }
 
     return true;

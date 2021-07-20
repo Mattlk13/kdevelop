@@ -24,6 +24,9 @@
 #include <QProcess>
 #include <QTemporaryDir>
 #include <QDebug>
+#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
+#include <QRandomGenerator>
+#endif
 
 #include <tests/autotestshell.h>
 #include <tests/testcore.h>
@@ -40,8 +43,6 @@
 #include <KIO/Global>
 
 QTEST_MAIN(TestProjectLoad)
-
-Q_DECLARE_METATYPE(KDevelop::IProject*)
 
 using namespace KDevelop;
 
@@ -99,10 +100,16 @@ bool createFile(const QString& path)
         return false;
     }
 
-    f.write(QByteArray::number(qrand()));
-    f.write(QByteArray::number(qrand()));
-    f.write(QByteArray::number(qrand()));
-    f.write(QByteArray::number(qrand()));
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+    auto* randomGenerator = QRandomGenerator::global();
+#endif
+    for (int i = 0; i < 4; ++i) {
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+        f.write(QByteArray::number(randomGenerator->generate()));
+#else
+        f.write(QByteArray::number(qrand()));
+#endif
+    }
 
     if (!f.flush()) {
         qWarning() << f.errorString() << path;
@@ -116,8 +123,13 @@ bool createFile(const QString& path)
 bool writeRandomStructure(QString path, int files)
 {
     QDir p(path);
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 10, 0))
+    const QString name = QString::number(QRandomGenerator::global()->generate());
+    if (QRandomGenerator::global()->bounded(5) < 1) {
+#else
     QString name = QString::number(qrand());
     if (qrand() < RAND_MAX / 5) {
+#endif
         if (!p.mkdir(name)) {
             return false;
         }

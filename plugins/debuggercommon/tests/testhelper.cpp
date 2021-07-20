@@ -1,5 +1,6 @@
 /*
  * Common helpers for MI debugger unit tests
+ * Copyright 2009 Niko Sams <niko.sams@gmail.com>
  * Copyright 2016  Aetf <aetf@unlimitedcodeworks.xyz>
  *
  * This program is free software; you can redistribute it and/or
@@ -25,12 +26,19 @@
 #include "debuggers-tests-config.h"
 #include "midebugsession.h"
 
-#include <QApplication>
+#include <execute/iexecuteplugin.h>
+#include <util/environmentprofilelist.h>
+
+#include <QAbstractItemModel>
 #include <QDebug>
-#include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QModelIndex>
 #include <QRegularExpression>
+#include <QSignalSpy>
+#include <QStringList>
 #include <QTest>
+#include <QVariant>
 
 namespace KDevMI {
 
@@ -107,7 +115,7 @@ bool waitForState(MIDebugSession *session, KDevelop::IDebugSession::DebuggerStat
                   const char *file, int line, bool waitForIdle)
 {
     QPointer<MIDebugSession> s(session); //session can get deleted in DebugController
-    QTime stopWatch;
+    QElapsedTimer stopWatch;
     stopWatch.start();
 
     // legacy behavior for tests that implicitly may require waiting for idle,
@@ -169,6 +177,62 @@ bool TestWaiter::waitUnless(bool ok)
     }
 
     return true;
+}
+
+TestLaunchConfiguration::TestLaunchConfiguration(const QUrl& executable, const QUrl& workingDirectory)
+{
+    qDebug() << "FIND" << executable;
+    c = KSharedConfig::openConfig();
+    static constexpr const char* groupName = "launch";
+    c->deleteGroup(groupName);
+    cfg = c->group(groupName);
+    cfg.writeEntry(IExecutePlugin::isExecutableEntry, true);
+    cfg.writeEntry(IExecutePlugin::executableEntry, executable);
+    cfg.writeEntry(IExecutePlugin::workingDirEntry, workingDirectory);
+}
+
+namespace {
+class WritableEnvironmentProfileList : public KDevelop::EnvironmentProfileList
+{
+public:
+    explicit WritableEnvironmentProfileList(KConfig* config) : EnvironmentProfileList(config) {}
+
+    using EnvironmentProfileList::variables;
+    using EnvironmentProfileList::saveSettings;
+    using EnvironmentProfileList::removeProfile;
+};
+} // end of namespace
+
+void testEnvironmentSet(MIDebugSession* session, const QString& profileName,
+                        IExecutePlugin* executePlugin)
+{
+    TestLaunchConfiguration cfg(QStringLiteral("debuggee_debugeeechoenv"));
+
+    cfg.config().writeEntry(IExecutePlugin::environmentProfileEntry, profileName);
+
+    WritableEnvironmentProfileList envProfiles(cfg.rootConfig());
+    envProfiles.removeProfile(profileName);
+    auto& envs = envProfiles.variables(profileName);
+    envs[QStringLiteral("VariableA")] = QStringLiteral("-A' \" complex --value");
+    envs[QStringLiteral("VariableB")] = QStringLiteral("-B' \" complex --value");
+    envProfiles.saveSettings(cfg.rootConfig());
+
+    QSignalSpy outputSpy(session, &MIDebugSession::inferiorStdoutLines);
+
+    QVERIFY(session->startDebugging(&cfg, executePlugin));
+    WAIT_FOR_STATE(session, KDevelop::IDebugSession::EndedState);
+
+    QVERIFY(outputSpy.count() > 0);
+
+    QStringList outputLines;
+    while (outputSpy.count() > 0) {
+        const QList<QVariant> arguments = outputSpy.takeFirst();
+        for (const auto& item : arguments) {
+            outputLines.append(item.toStringList());
+        }
+    }
+    QCOMPARE(outputLines, QStringList() << "-A' \" complex --value"
+                                        << "-B' \" complex --value");
 }
 
 } // end of namespace KDevMI

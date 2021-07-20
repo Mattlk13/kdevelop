@@ -117,7 +117,7 @@ public:
      * Returns the view that was last stored through setActiveView(view), or zero
      * if the view was deleted or it was never set.
      */
-    View* activeView();
+    View* activeView() const;
     
     /**
      * Allows marking a view as active that can later be retrieved through activeView()
@@ -173,14 +173,17 @@ public:
     /**@return the controller for this area.*/
     Controller *controller() const;
 
-    ///Returns the currently set working-set for this area. The working-set is persistent
+    ///Returns the currently set working-set for this area.
     QString workingSet() const;
+    ///Returns if the currently set working-set is persistent.
+    ///@note This is just a hint and not synchronized with the actual working set.
+    bool workingSetPersistent() const;
     ///Sets the working-set for this area. The working-set is just a marker, and does nothing
     ///within Area.
     ///The actual view management has to be implemented in the entity that knows more
     ///about possible views, documents, etc. (kdevplatform/shell)
     ///@warning (KDevelop): Before calling this, make sure that all views are saved! (see IDocumentController::saveAllDocumentsForWindow)
-    void setWorkingSet(const QString& name);
+    void setWorkingSet(const QString &name, bool persistent = true, Area *oldArea = nullptr);
     
     /**Walker mode to determine the behavior of area walkers.*/
     enum WalkerMode {
@@ -260,9 +263,9 @@ Q_SIGNALS:
     /**Emitted when a tool view is moved to a different position.*/
     void toolViewMoved(Sublime::View*, Sublime::Position);
     /**Emitted before the working-set is changed.*/
-    void changingWorkingSet(Sublime::Area* area, const QString& from, const QString& to);
+    void changingWorkingSet(Sublime::Area* area, Sublime::Area* oldArea, const QString& from, const QString& to);
     /**Emitted after the working-set was changed.*/
-    void changedWorkingSet(Sublime::Area* area, const QString& from, const QString& to);
+    void changedWorkingSet(Sublime::Area* area, Sublime::Area* oldArea, const QString& from, const QString& to);
     /** notifies the working set that it should clear */
     void clearWorkingSet(Sublime::Area* area);
 

@@ -39,13 +39,20 @@ public:
 private:
     void invalidateCache();
 
+    template <typename T>
+    struct Cached {
+        T data;
+        bool wasCached = false;
+    };
     struct DefinesIncludes {
-        KDevelop::Defines definedMacros;
-        KDevelop::Path::List includePaths;
+        Cached<KDevelop::Defines> definedMacros;
+        Cached<KDevelop::Path::List> includePaths;
     };
 
     /// List of defines/includes per arguments
-    mutable QHash<QString, DefinesIncludes> m_definesIncludes;
+    mutable QHash<Utils::LanguageType, QHash<QString, DefinesIncludes>> m_definesIncludes;
+    mutable QHash<QStringList, Cached<KDevelop::Defines>> m_defines;
+    mutable QHash<QStringList, Cached<KDevelop::Path::List>> m_includes;
 };
 
 #endif // GCCLIKECOMPILER_H
