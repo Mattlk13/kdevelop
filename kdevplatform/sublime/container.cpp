@@ -437,13 +437,13 @@ Container::~Container() = default;
 
 bool Container::configTabBarVisible()
 {
-    KConfigGroup group = KSharedConfig::openConfig()->group("UiSettings");
+    KConfigGroup group = KSharedConfig::openConfig()->group(QStringLiteral("UiSettings"));
     return group.readEntry("TabBarVisibility", 1);
 }
 
 bool Container::configCloseButtonsOnTabs()
 {
-    KConfigGroup group = KSharedConfig::openConfig()->group("UiSettings");
+    KConfigGroup group = KSharedConfig::openConfig()->group(QStringLiteral("UiSettings"));
     return group.readEntry("CloseButtonsOnTabs", 1);
 }
 
@@ -568,6 +568,7 @@ void Container::documentTitleChanged(Sublime::Document* doc)
                 d->fileNameCorner->setText( doc->title(Document::Extended) );
                 // TODO KF6: remove this as soon as it is included upstream and we reqire
                 // that version
+                // NOTE: this has languished and is still not upstream as of 6.3.0
                 // see https://phabricator.kde.org/D7010
                 d->fileNameCorner->updateGeometry();
             }

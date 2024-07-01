@@ -7,13 +7,13 @@
 #ifndef KDEVPLATFORM_IQUICKOPEN_H
 #define KDEVPLATFORM_IQUICKOPEN_H
 
-#include <QSet>
-
-#include <QLineEdit>
-
 #include <language/languageexport.h>
 
-class QStringList;
+#include <QObject>
+#include <QSet>
+#include <QStringList>
+
+class QLineEdit;
 
 namespace KDevelop {
 class QuickOpenDataProviderBase;

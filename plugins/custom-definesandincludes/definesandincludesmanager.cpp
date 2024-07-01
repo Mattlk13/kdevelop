@@ -99,7 +99,6 @@ K_PLUGIN_FACTORY_WITH_JSON(DefinesAndIncludesManagerFactory, "kdevdefinesandincl
 DefinesAndIncludesManager::DefinesAndIncludesManager( QObject* parent, const QVariantList& )
     : IPlugin(QStringLiteral("kdevdefinesandincludesmanager"), parent )
     , m_settings(SettingsManager::globalInstance())
-    , m_noProjectIPM(new NoProjectIncludePathsManager())
 {
     registerProvider(m_settings->provider());
 #ifdef Q_OS_OSX
@@ -140,7 +139,7 @@ Defines DefinesAndIncludesManager::defines( ProjectBaseItem* item, Type type  ) 
         merge(&defines, findConfigForItem(m_settings->readPaths(cfg), item).defines);
     }
 
-    merge(&defines, m_noProjectIPM->includesAndDefines(item->path().path()).second);
+    merge(&defines, NoProjectIncludePathsManager::defines(item->path().path()));
 
     return defines;
 }
@@ -184,7 +183,7 @@ Path::List DefinesAndIncludesManager::includes( ProjectBaseItem* item, Type type
         includes += newItems;
     }
 
-    includes += m_noProjectIPM->includesAndDefines(item->path().path()).first;
+    includes += NoProjectIncludePathsManager::includes(item->path().path());
 
     return includes;
 }
@@ -242,9 +241,7 @@ Defines DefinesAndIncludesManager::defines(const QString& path, Type type) const
     if ( type & CompilerSpecific ) {
         merge(&ret, m_settings->provider()->defines(path));
     }
-    if ( type & ProjectSpecific ) {
-        merge(&ret, m_noProjectIPM->includesAndDefines(path).second);
-    }
+    merge(&ret, NoProjectIncludePathsManager::defines(path));
     return ret;
 }
 
@@ -254,9 +251,7 @@ Path::List DefinesAndIncludesManager::includes(const QString& path, Type type) c
     if ( type & CompilerSpecific ) {
         ret += m_settings->provider()->includes(path);
     }
-    if ( type & ProjectSpecific ) {
-        ret += m_noProjectIPM->includesAndDefines(path).first;
-    }
+    ret += NoProjectIncludePathsManager::includes(path);
     return ret;
 }
 
@@ -270,7 +265,7 @@ void DefinesAndIncludesManager::openConfigurationDialog(const QString& pathToFil
     if (auto project = KDevelop::ICore::self()->projectController()->findProjectForUrl(QUrl::fromLocalFile(pathToFile))) {
         KDevelop::ICore::self()->projectController()->configureProject(project);
     } else {
-        m_noProjectIPM->openConfigurationDialog(pathToFile);
+        NoProjectIncludePathsManager::openConfigurationDialog(pathToFile);
     }
 }
 
@@ -307,7 +302,13 @@ Defines DefinesAndIncludesManager::definesInBackground(const QString& path) cons
         }
     }
 
-    merge(&defines, m_noProjectIPM->includesAndDefines(path).second);
+    // The return value of definesInBackground() complements and overrides that of defines().
+    // If there are zero background defines, return an empty container to signify no overriding.
+    // If there are some background defines, override them with user-set defines from
+    // NoProjectIncludePathsManager, because they must take precedence in case of conflict.
+    if (!defines.empty()) {
+        merge(&defines, NoProjectIncludePathsManager::defines(path));
+    }
 
     return defines;
 }

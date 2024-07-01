@@ -24,6 +24,66 @@ using namespace KDevMI;
 using namespace KDevMI::MI;
 using namespace KDevelop;
 
+namespace {
+
+class ActualBreakpointLocation
+{
+public:
+    explicit ActualBreakpointLocation(const MI::Value& miBreakpoint)
+        : m_miBreakpoint(miBreakpoint)
+    {
+        static const auto lineField = QStringLiteral("line");
+
+        // GDB/MI sends the "original-location" field but not the "fullname" and "line" fields
+        // for a pending breakpoint. lldb-mi, in contrast, sends all 3 of these fields for a
+        // pending breakpoint. These pending lldb-mi "fullname" and "line" values are invalid:
+        // "??/??" and "0" respectively.
+        //
+        // Treat the invalid "line" field value of 0 in the same way as missing "line" field
+        // to consistently keep the original location of a pending breakpoint intact with both
+        // GDB/MI and lldb-mi (instead of overwriting the location with lldb-mi's unsupported
+        // relative-path URL, which triggers an assertion failure, and line=-1). Treating
+        // the "line" value of 0 as missing is safe, because GDB considers all breakpoints
+        // at line=0 pending while LLDB refuses to create a breakpoint at line=0 outright,
+        // and therefore neither MI ever sends 0 as a valid "line" field value.
+
+        if (miBreakpoint.hasField(lineField) && miBreakpoint.hasField(fullNameField())) {
+            // a MI line is one-based and Breakpoint::line() is zero-based
+            m_line = miBreakpoint[lineField].toInt() - 1;
+        }
+    }
+
+    /// @return whether actual breakpoint location is available and valid
+    explicit operator bool() const
+    {
+        return m_line != -1;
+    }
+
+    /// zero-based
+    int line() const
+    {
+        Q_ASSERT(*this);
+        return m_line;
+    }
+
+    QString filePath() const
+    {
+        Q_ASSERT(*this);
+        return Utils::unquoteExpression(m_miBreakpoint[fullNameField()].literal());
+    }
+
+private:
+    static QString fullNameField()
+    {
+        return QStringLiteral("fullname");
+    }
+
+    const MI::Value& m_miBreakpoint;
+    int m_line = -1;
+};
+
+} // unnamed namespace
+
 struct MIBreakpointController::Handler : public MICommandHandler
 {
     Handler(MIBreakpointController* controller, const BreakpointDataPtr& b,
@@ -46,7 +106,8 @@ struct MIBreakpointController::Handler : public MICommandHandler
             int row = controller->breakpointRow(breakpoint);
             if (row >= 0) {
                 controller->updateErrorText(row, r[QStringLiteral("msg")].literal());
-                qCWarning(DEBUGGERCOMMON) << r[QStringLiteral("msg")].literal();
+                qCWarning(DEBUGGERCOMMON).nospace() << "debugger reports an error for breakpoint #" << row << ": "
+                                                    << r[QStringLiteral("msg")].literal();
             }
         } else {
             if (breakpoint->errors & columns) {
@@ -233,10 +294,15 @@ void MIBreakpointController::breakpointModelChanged(int row, BreakpointModel::Co
     if (m_ignoreChanges > 0)
         return;
 
+    // we are not interested in changes to other columns
+    columns &= BreakpointModel::EnableColumnFlag | BreakpointModel::LocationColumnFlag
+        | BreakpointModel::ConditionColumnFlag | BreakpointModel::IgnoreHitsColumnFlag;
+    if (!columns) {
+        return; // nothing of interest changed
+    }
+
     BreakpointDataPtr breakpoint = m_breakpoints.at(row);
-    breakpoint->dirty |= columns &
-        (BreakpointModel::EnableColumnFlag | BreakpointModel::LocationColumnFlag |
-         BreakpointModel::ConditionColumnFlag | BreakpointModel::IgnoreHitsColumnFlag);
+    breakpoint->dirty |= columns;
 
     if (breakpoint->sent != 0) {
         // Throttle the amount of commands we send to GDB; the response handler of currently
@@ -524,14 +590,10 @@ void MIBreakpointController::createFromDebugger(const Value& miBkpt)
         if (gdbKind == Breakpoint::CodeBreakpoint) {
             bool sameLocation = false;
 
-            if (miBkpt.hasField(QStringLiteral("fullname")) && miBkpt.hasField(QStringLiteral("line"))) {
-                const QString location = Utils::unquoteExpression(miBkpt[QStringLiteral("fullname")].literal());
-                const int line = miBkpt[QStringLiteral("line")].toInt() - 1;
-                if (location == modelBreakpoint->url().url(QUrl::PreferLocalFile | QUrl::StripTrailingSlash) &&
-                    line == modelBreakpoint->line())
-                {
-                    sameLocation = true;
-                }
+            if (const auto actualLocation = ActualBreakpointLocation{miBkpt}) {
+                sameLocation = actualLocation.line() == modelBreakpoint->line()
+                    && actualLocation.filePath()
+                        == modelBreakpoint->url().url(QUrl::PreferLocalFile | QUrl::StripTrailingSlash);
             }
 
             if (!sameLocation && miBkpt.hasField(QStringLiteral("original-location"))) {
@@ -649,19 +711,11 @@ void MIBreakpointController::updateFromDebugger(int row, const Value& miBkpt, Br
     // address, source file and line). The breakpoint model currently does not map well to this
     // (though it arguably should), and does not support multi-location breakpoints at all.
     // We try to do the best we can until the breakpoint model gets cleaned up.
-    if (miBkpt.hasField(QStringLiteral("fullname")) && miBkpt.hasField(QStringLiteral("line"))) {
-        modelBreakpoint->setLocation(
-            QUrl::fromLocalFile(Utils::unquoteExpression(miBkpt[QStringLiteral("fullname")].literal())),
-            miBkpt[QStringLiteral("line")].toInt() - 1);
+    if (const auto actualLocation = ActualBreakpointLocation{miBkpt}) {
+        modelBreakpoint->setLocation(QUrl::fromLocalFile(actualLocation.filePath()), actualLocation.line());
     } else if (miBkpt.hasField(QStringLiteral("original-location"))) {
-        QRegExp rx(QStringLiteral("^(.+):(\\d+)$"));
         QString location = miBkpt[QStringLiteral("original-location")].literal();
-        if (rx.indexIn(location) != -1) {
-            modelBreakpoint->setLocation(QUrl::fromLocalFile(Utils::unquoteExpression(rx.cap(1))),
-                                         rx.cap(2).toInt()-1);
-        } else {
-            modelBreakpoint->setData(Breakpoint::LocationColumn, Utils::unquoteExpression(location));
-        }
+        modelBreakpoint->setData(Breakpoint::LocationColumn, Utils::unquoteExpression(location));
     } else if (miBkpt.hasField(QStringLiteral("what"))) {
         modelBreakpoint->setExpression(miBkpt[QStringLiteral("what")].literal());
     } else {
@@ -696,10 +750,8 @@ void MIBreakpointController::updateFromDebugger(int row, const Value& miBkpt, Br
         breakpoint->dirty &= ~BreakpointModel::IgnoreHitsColumnFlag;
     }
 
-    breakpoint->pending = false;
-    if (miBkpt.hasField(QStringLiteral("addr")) && miBkpt[QStringLiteral("addr")].literal() == QLatin1String("<PENDING>")) {
-        breakpoint->pending = true;
-    }
+    static const auto addressField = QStringLiteral("addr");
+    breakpoint->pending = miBkpt.hasField(addressField) && miBkpt[addressField].literal() == pendingBreakpointAddress();
 
     int hitCount = 0;
     if (miBkpt.hasField(QStringLiteral("times"))) {

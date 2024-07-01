@@ -171,32 +171,33 @@ QString LldbCommand::cmdToSend()
             }
             int p = command_.length() - 1;
             bool quoted = false;
-            if (command_[p] == QLatin1Char('"')) {
+            if (command_.at(p) == QLatin1Char('"')) {
                 quoted = true; // should always be the case
             }
             --p;
             for (; p >= 0; --p) {
                 // find next '"' or ' '
                 if (quoted) {
-                    if (command_[p] == QLatin1Char('"') && (p == 0 || command_[p-1] != QLatin1Char('\\')))
+                    if (command_.at(p) == QLatin1Char('"') && (p == 0 || command_.at(p - 1) != QLatin1Char('\\')))
                         break;
                 } else {
-                    if (command_[p] == QLatin1Char(' '))
+                    if (command_.at(p) == QLatin1Char(' '))
                         break;
                 }
             }
             if (p < 0) p = 0; // this means the command is malformated, we proceed anyway.
 
             // move other switches like '-d' '-c' into miCommand part
-            overrideCmd = miCommand() + QLatin1Char(' ') + command_.leftRef(p);
-            command_ = QLatin1String("-f ") + command_.midRef(p, command_.length());
+            const QStringView commandView = command_;
+            overrideCmd = miCommand() + QLatin1Char(' ') + commandView.left(p);
+            command_ = QLatin1String("-f ") + commandView.mid(p);
             break;
         }
         case BreakWatch:
             if (command_.startsWith(QLatin1String("-r "))) {
-                command_ = QLatin1String("-w read ") + command_.midRef(3);
+                command_ = QLatin1String("-w read ") + QStringView{command_}.mid(3);
             } else if (command_.startsWith(QLatin1String("-a "))) {
-                command_ = QLatin1String("-w read_write ") + command_.midRef(3);
+                command_ = QLatin1String("-w read_write ") + QStringView{command_}.mid(3);
             }
             break;
         case StackListArguments:

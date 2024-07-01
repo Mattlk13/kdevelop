@@ -52,7 +52,7 @@ void CheckGroup::addCheck(const QString& checkName)
 
     // 2. check if existing subgroup for prefix, if so add to that
     // include separator into subgroup name
-    const QStringRef subGroupName = checkName.leftRef(nextSplitOffset + 1); 
+    const auto subGroupName = QStringView{checkName}.left(nextSplitOffset + 1);
     for (auto* subGroup : qAsConst(m_subGroups)) {
         if (subGroup->prefix() == subGroupName) {
             subGroup->addCheck(checkName);
@@ -62,7 +62,7 @@ void CheckGroup::addCheck(const QString& checkName)
 
     // 3. check if existing check with same prefix, if so create subgroup for them
     for (int i = 0; i < m_checks.size(); ++i) {
-        const auto& listedCheckName = m_checks[i];
+        const auto& listedCheckName = m_checks.at(i);
         if (listedCheckName.startsWith(subGroupName)) {
             auto* newSubGroup = new CheckGroup(subGroupName.toString(), this);
             newSubGroup->addCheck(listedCheckName);
@@ -91,14 +91,14 @@ void CheckGroup::setEnabledChecks(const QStringList& rules)
             matchStartPos = 1;
             enabledState = Disabled;
         }
-        applyEnabledRule(rule.midRef(matchStartPos), enabledState);
+        applyEnabledRule(QStringView{rule}.mid(matchStartPos), enabledState);
     }
 
     m_enabledChecksCountDirty = true;
     setEnabledChecksCountDirtyInSubGroups();
 }
 
-void CheckGroup::applyEnabledRule(const QStringRef& rule, EnabledState enabledState)
+void CheckGroup::applyEnabledRule(QStringView rule, EnabledState enabledState)
 {
     // this group?
     if (rule == wildCardText()) {
@@ -114,7 +114,7 @@ void CheckGroup::applyEnabledRule(const QStringRef& rule, EnabledState enabledSt
     }
 
     for (int i = 0; i < m_checks.size(); ++i) {
-        if (m_checks[i] == rule) {
+        if (m_checks.at(i) == rule) {
             m_checksEnabledStates[i] = enabledState;
             return;
         }

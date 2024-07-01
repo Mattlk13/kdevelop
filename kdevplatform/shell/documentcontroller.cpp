@@ -113,7 +113,7 @@ public:
         if ( controller->activeDocument() ) {
             dir = controller->activeDocument()->url().adjusted(QUrl::RemoveFilename);
         } else  {
-            const auto cfg = KSharedConfig::openConfig()->group("Open File");
+            const auto cfg = KSharedConfig::openConfig()->group(QStringLiteral("Open File"));
             dir = cfg.readEntry( "Last Open File Directory", Core::self()->projectController()->projectsBaseDirectory() );
         }
 
@@ -227,7 +227,7 @@ public:
                 return nullptr;
         }
 
-        KSharedConfig::openConfig()->group("Open File").writeEntry( "Last Open File Directory", url.adjusted(QUrl::RemoveFilename) );
+        KSharedConfig::openConfig()->group(QStringLiteral("Open File")).writeEntry("Last Open File Directory", url.adjusted(QUrl::RemoveFilename));
 
         // clean it and resolve possible symlink
         url = url.adjusted( QUrl::NormalizePathSegments );
@@ -585,7 +585,7 @@ void DocumentController::cleanup()
     d->shuttingDown = true;
 
     if (d->fileOpenRecent)
-        d->fileOpenRecent->saveEntries( KConfigGroup(KSharedConfig::openConfig(), "Recent Files" ) );
+        d->fileOpenRecent->saveEntries(KConfigGroup(KSharedConfig::openConfig(), QStringLiteral("Recent Files")));
 
     // Close all documents without checking if they should be saved.
     // This is because the user gets a chance to save them during MainWindow::queryClose.
@@ -617,7 +617,7 @@ void DocumentController::setupActions()
     d->fileOpenRecent = KStandardAction::openRecent(this,
                     SLOT(slotOpenDocument(QUrl)), ac);
     d->fileOpenRecent->setWhatsThis(i18nc("@info:whatsthis", "This lists files which you have opened recently, and allows you to easily open them again."));
-    d->fileOpenRecent->loadEntries( KConfigGroup(KSharedConfig::openConfig(), "Recent Files" ) );
+    d->fileOpenRecent->loadEntries(KConfigGroup(KSharedConfig::openConfig(), QStringLiteral("Recent Files")));
 
     action = d->saveAll = ac->addAction( QStringLiteral("file_save_all") );
     action->setIcon(QIcon::fromTheme(QStringLiteral("document-save")));
@@ -785,6 +785,11 @@ void DocumentController::notifyDocumentClosed(Sublime::Document* doc_)
     }
 
     emit documentClosed(doc);
+}
+
+bool DocumentController::isUntitledDocumentUrl(const QUrl& url) const
+{
+    return isEmptyDocumentUrl(url);
 }
 
 IDocument * DocumentController::documentForUrl( const QUrl & dirtyUrl ) const
@@ -1084,7 +1089,7 @@ QUrl DocumentController::nextEmptyDocumentUrl()
         if (DocumentController::isEmptyDocumentUrl(doc->url())) {
             const auto match = pattern.match(doc->url().toDisplayString(QUrl::PreferLocalFile));
             if (match.hasMatch()) {
-                const int num = match.capturedRef(1).toInt();
+                const auto num = match.capturedView(1).toInt();
                 nextEmptyDocNumber = qMax(nextEmptyDocNumber, num + 1);
             } else {
                 nextEmptyDocNumber = qMax(nextEmptyDocNumber, 1);

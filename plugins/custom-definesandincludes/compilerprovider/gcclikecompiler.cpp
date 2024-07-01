@@ -204,8 +204,8 @@ Path::List GccLikeCompiler::includes(Utils::LanguageType type, const QString& ar
     Status mode = Initial;
 
     const auto output = QString::fromLocal8Bit( proc.readAllStandardOutput() );
-    const auto lines = output.splitRef(QLatin1Char('\n'));
-    for (const auto& line : lines) {
+    const auto lines = QStringView{output}.split(QLatin1Char('\n'));
+    for (const auto line : lines) {
         switch ( mode ) {
             case Initial:
                 if ( line.indexOf( QLatin1String("#include \"...\"") ) != -1 ) {

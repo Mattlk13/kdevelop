@@ -7,10 +7,6 @@ set_package_properties(ClangTidy PROPERTIES
     TYPE RUNTIME
 )
 
-include_directories(
-    ${Boost_INCLUDE_DIRS}
-)
-
 declare_qt_logging_category(kdevclangtidy_LOG_SRCS
     TYPE PLUGIN
     IDENTIFIER KDEV_CLANGTIDY
@@ -41,9 +37,7 @@ set(kdevclangtidy_PART_SRCS
     config/customchecksetconfigproxywidget.cpp
 
     parsers/clangtidyparser.cpp
-# disable for now:
-# CentOS used for appimage does not have string_ref.hpp (Boost >= 1.53) as used by current code
-#     parsers/replacementparser.cpp
+    parsers/replacementparser.cpp
 )
 
 ki18n_wrap_ui(kdevclangtidy_PART_SRCS

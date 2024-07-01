@@ -180,7 +180,19 @@ QString buildCppCheckInformationLine()
     include directories and add all of them as include directories for Cppcheck. To see what files Cppcheck cannot find use --check-config.");
 }
 
-
+QString buildTscErrorLine(TestPathType pathType = UnixFilePathNoSpaces)
+{
+    QString outputline;
+    outputline.append(projectPath(pathType));
+    outputline.append("(43,9): error TS2304: Cannot find name 'testDevice'.");
+    return outputline;
 }
+
+QString buildGtestErrorLine(TestPathType pathType)
+{
+    return projectPath(pathType) + QLatin1String("test_foo_impl.cpp:311: Failure");
+}
+
+} // end namespace
 
 #endif

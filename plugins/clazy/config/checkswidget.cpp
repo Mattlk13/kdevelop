@@ -107,13 +107,14 @@ void ChecksWidget::setChecks(const QString& checks)
         setState(m_ui->checksTree->topLevelItem(i), Qt::Unchecked);
     }
 
-    const auto checksList = checks.splitRef(QLatin1Char(','), Qt::SkipEmptyParts);
-    for (auto& rawCheckName : checksList) {
-        QString checkName = rawCheckName.trimmed().toString();
-        if (checkName == QLatin1String("manual")) {
+    const auto checksList = QStringView{checks}.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    for (auto rawCheckName : checksList) {
+        rawCheckName = rawCheckName.trimmed();
+        if (rawCheckName == QLatin1String("manual")) {
             continue;
         }
 
+        auto checkName = rawCheckName.toString();
         auto state = Qt::Checked;
         if (checkName.startsWith(QLatin1String("no-"))) {
             checkName.remove(0, 3);

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: https://bugs.kde.org\n"
-"POT-Creation-Date: 2024-06-05 02:05+0000\n"
+"POT-Creation-Date: 2024-07-01 01:44+0000\n"
 "PO-Revision-Date: 2024-04-17 07:00+0200\n"
 "Last-Translator: Matjaž Jeran <matjaz.jeran@amis.net>\n"
 "Language-Team: Slovenian <lugos-slo@lugos.si>\n"
@@ -30,31 +30,31 @@ msgctxt "EMAIL OF TRANSLATORS"
 msgid "Your emails"
 msgstr "jlp@holodeck1.com,andrejm@ubuntu.si"
 
-#: debugger/breakpoint/breakpoint.cpp:164
+#: debugger/breakpoint/breakpoint.cpp:195
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Error"
 msgstr "Napaka"
 
-#: debugger/breakpoint/breakpoint.cpp:170
+#: debugger/breakpoint/breakpoint.cpp:201
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Dirty"
 msgstr "Umazano"
 
-#: debugger/breakpoint/breakpoint.cpp:172
+#: debugger/breakpoint/breakpoint.cpp:203
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Pending"
 msgstr "Na čakanju"
 
-#: debugger/breakpoint/breakpoint.cpp:174
+#: debugger/breakpoint/breakpoint.cpp:205
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Clean"
 msgstr "Čisto"
 
-#: debugger/breakpoint/breakpoint.cpp:207
+#: debugger/breakpoint/breakpoint.cpp:238
 #, kde-format
 msgctxt "location (address)"
 msgid "%1 (%2)"
@@ -593,7 +593,7 @@ msgctxt "@title:menu"
 msgid "Analyze Current Project With"
 msgstr "Analiziraj trenutni projekt z"
 
-#: interfaces/isourceformatter.cpp:216
+#: interfaces/isourceformatter.cpp:221
 #, kde-format
 msgid ""
 "The executable %1 cannot be found. Please make sure it is installed and can "
@@ -627,12 +627,12 @@ msgstr "Preimenuj"
 msgid "Rename file from \"%1\" to \"%2\"."
 msgstr "Preimenuj datoteko iz \"%1\" v \"%2\"."
 
-#: language/backgroundparser/backgroundparser.cpp:309
+#: language/backgroundparser/backgroundparser.cpp:308
 #, kde-format
 msgid "Parsing: %1"
 msgstr "Razčlenjevanje: %1"
 
-#: language/backgroundparser/backgroundparser.cpp:615
+#: language/backgroundparser/backgroundparser.cpp:614
 #: shell/settings/bgpreferences.cpp:68
 #, kde-format
 msgid "Background Parser"
@@ -1466,102 +1466,102 @@ msgstr "izpiši ustvarjen pretok žetonov"
 msgid "code to parse"
 msgstr "koda za razčleniti"
 
-#: outputview/outputexecutejob.cpp:194
+#: outputview/outputexecutejob.cpp:196
 #, kde-format
 msgid "No build directory specified for a builder job."
 msgstr "Za posel izgradnje ni bilo podane mape za izgradnjo."
 
-#: outputview/outputexecutejob.cpp:196
+#: outputview/outputexecutejob.cpp:198
 #, kde-format
 msgid "No working directory specified for a process."
 msgstr "Za opravilo ni bilo podane delovne mape."
 
-#: outputview/outputexecutejob.cpp:208
+#: outputview/outputexecutejob.cpp:210
 #, kde-format
 msgid "Invalid build directory '%1'"
 msgstr "Neveljavna mapa za izgradnjo '%1'"
 
-#: outputview/outputexecutejob.cpp:210
+#: outputview/outputexecutejob.cpp:212
 #, kde-format
 msgid "Invalid working directory '%1'"
 msgstr "Neveljavna delovna mapa '%1'"
 
-#: outputview/outputexecutejob.cpp:217
+#: outputview/outputexecutejob.cpp:219
 #, kde-format
 msgid "Build directory '%1' is not a local path"
 msgstr "Mapa za izgradnjo '%1' ni krajevna pot"
 
-#: outputview/outputexecutejob.cpp:219
+#: outputview/outputexecutejob.cpp:221
 #, kde-format
 msgid "Working directory '%1' is not a local path"
 msgstr "Delovna mapa '%1' ni krajevna pot"
 
-#: outputview/outputexecutejob.cpp:238
+#: outputview/outputexecutejob.cpp:240
 #, kde-format
 msgid "Build directory '%1' does not exist or is not a directory"
 msgstr "Mapa za izgradnjo '%1' ne obstaja ali pa ni mapa"
 
-#: outputview/outputexecutejob.cpp:240
+#: outputview/outputexecutejob.cpp:242
 #, kde-format
 msgid "Working directory '%1' does not exist or is not a directory"
 msgstr "Delovna mapa '%1' ne obstaja ali pa ni mapa"
 
-#: outputview/outputexecutejob.cpp:301
+#: outputview/outputexecutejob.cpp:303
 #, kde-format
 msgid "Failed to specify program to start: %1"
 msgstr "Ni bilo mogoče podati programa za zagon: %1"
 
-#: outputview/outputexecutejob.cpp:302
+#: outputview/outputexecutejob.cpp:304
 #, kde-format
 msgid "*** %1 ***"
 msgstr "*** %1 ***"
 
-#: outputview/outputexecutejob.cpp:328
+#: outputview/outputexecutejob.cpp:330
 #, kde-format
 msgid "*** Killed process ***"
 msgstr "*** Opravilo uničeno ***"
 
-#: outputview/outputexecutejob.cpp:332
+#: outputview/outputexecutejob.cpp:334
 #, kde-format
 msgid "*** Warning: could not kill the process ***"
 msgstr "*** Opozorilo: ni bilo mogoče uničiti opravila ***"
 
-#: outputview/outputexecutejob.cpp:354
+#: outputview/outputexecutejob.cpp:356
 #, kde-format
 msgid "%1 has failed to start"
 msgstr "Zagon %1 ni uspel"
 
-#: outputview/outputexecutejob.cpp:358
+#: outputview/outputexecutejob.cpp:360
 #, kde-format
 msgid "%1 has crashed"
 msgstr "%1  se je sesul"
 
-#: outputview/outputexecutejob.cpp:362
+#: outputview/outputexecutejob.cpp:364
 #, kde-format
 msgid "Read error"
 msgstr "Napaka branja"
 
-#: outputview/outputexecutejob.cpp:366
+#: outputview/outputexecutejob.cpp:368
 #, kde-format
 msgid "Write error"
 msgstr "Napaka pisanja"
 
-#: outputview/outputexecutejob.cpp:370
+#: outputview/outputexecutejob.cpp:372
 #, kde-format
 msgid "Waiting for the process has timed out"
 msgstr "Čakanje na časovni pretek opravila"
 
-#: outputview/outputexecutejob.cpp:374
+#: outputview/outputexecutejob.cpp:376
 #, kde-format
 msgid "Exit code %1"
 msgstr "Izhodna koda %1"
 
-#: outputview/outputexecutejob.cpp:387
+#: outputview/outputexecutejob.cpp:389
 #, kde-format
 msgid "*** Failure: %1 ***"
 msgstr "*** Neuspeh: %1 ***"
 
-#: outputview/outputexecutejob.cpp:405
+#: outputview/outputexecutejob.cpp:407
 #, kde-format
 msgid "*** Finished ***"
 msgstr "*** Zaključeno ***"
@@ -2380,7 +2380,7 @@ msgctxt "@action"
 msgid "Annotate"
 msgstr "Zabeleži"
 
-#: shell/documentcontroller.cpp:1297
+#: shell/documentcontroller.cpp:1302
 #, kde-format
 msgid ""
 "Could not annotate the document because it is not part of a version-"
@@ -3029,29 +3029,29 @@ msgstr ""
 "Nastavitev projekta, določenih za razvijalca, ni bilo mogoče shraniti.\n"
 "Pozor: vaše spremembe nastavitev projekta bodo izgubljene."
 
-#: shell/projectcontroller.cpp:161
+#: shell/projectcontroller.cpp:158
 #, kde-format
 msgctxt "@title:window"
 msgid "Configure Project %1"
 msgstr "Nastavi projekt %1"
 
-#: shell/projectcontroller.cpp:304
+#: shell/projectcontroller.cpp:301
 #, kde-format
 msgid "Invalid Location: %1"
 msgstr "Neveljavno mesto: %1"
 
-#: shell/projectcontroller.cpp:314
+#: shell/projectcontroller.cpp:311
 #, kde-format
 msgid "Already opening %1, not opening again"
 msgstr "Projekt %1 se že odpira in ne bo odprt še enkrat"
 
-#: shell/projectcontroller.cpp:471
+#: shell/projectcontroller.cpp:468
 #, kde-format
 msgctxt "@action:button"
 msgid "Override"
 msgstr "Prepiši"
 
-#: shell/projectcontroller.cpp:472
+#: shell/projectcontroller.cpp:469
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
@@ -3059,26 +3059,26 @@ msgid ""
 msgstr ""
 "Nadaljuj z odpiranjem projekta in uporabi le ponudene nastavitve projekta"
 
-#: shell/projectcontroller.cpp:473
+#: shell/projectcontroller.cpp:470
 #, kde-format
 msgctxt "@action:button"
 msgid "Open Existing File"
 msgstr "Odpri obstoječo datoteko"
 
-#: shell/projectcontroller.cpp:474
+#: shell/projectcontroller.cpp:471
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Continue to open the project but use the existing project configuration"
 msgstr ""
 "Nadaljuj z odpiranjem projekta in uporabi obstoječe nastavitve projekta"
 
-#: shell/projectcontroller.cpp:476
+#: shell/projectcontroller.cpp:473
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Cancel and do not open the project"
 msgstr "Prekliči in ne odpri projekta"
 
-#: shell/projectcontroller.cpp:479
+#: shell/projectcontroller.cpp:476
 #, kde-format
 msgid ""
 "There already exists a project configuration file at %1.\n"
@@ -3087,41 +3087,41 @@ msgstr ""
 "Nastavitvena datoteka projekta že obstaja v %1.\n"
 "Ali jo želite prepisati ali odpreti obstoječo datoteko?"
 
-#: shell/projectcontroller.cpp:482
+#: shell/projectcontroller.cpp:479
 #, kde-format
 msgctxt "@title:window"
 msgid "Override Existing Project Configuration"
 msgstr "Prepiši obstoječo nastavitev projekta"
 
-#: shell/projectcontroller.cpp:500
+#: shell/projectcontroller.cpp:497
 #, kde-format
 msgid "Unable to create configuration file %1"
 msgstr "Ni bilo mogoče ustvariti nastavitvene datoteke %1"
 
-#: shell/projectcontroller.cpp:514
+#: shell/projectcontroller.cpp:511
 #, kde-format
 msgid "Reopen the current project?"
 msgstr "Ali znova odprem trenutni projekt?"
 
-#: shell/projectcontroller.cpp:515
+#: shell/projectcontroller.cpp:512
 #, kde-format
 msgctxt "@action:button"
 msgid "Reopen"
 msgstr "Ponovno odpri"
 
-#: shell/projectcontroller.cpp:556
+#: shell/projectcontroller.cpp:553
 #, kde-format
 msgctxt "@action"
 msgid "Open / Import Project..."
 msgstr "Odpri / uvozi projekt ..."
 
-#: shell/projectcontroller.cpp:557
+#: shell/projectcontroller.cpp:554
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Open or import project"
 msgstr "Odpre ali uvozi projekt"
 
-#: shell/projectcontroller.cpp:558
+#: shell/projectcontroller.cpp:555
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -3136,19 +3136,19 @@ msgstr ""
 "obstoječe mape za odprtje v KDevelop. Če odprta obstoječa mapa še ne vsebuje "
 "projektne datoteke KDevelop, bo ustvarjena."
 
-#: shell/projectcontroller.cpp:569
+#: shell/projectcontroller.cpp:566
 #, kde-format
 msgctxt "@action"
 msgid "Fetch Project..."
 msgstr "Pridobi projekt ..."
 
-#: shell/projectcontroller.cpp:571
+#: shell/projectcontroller.cpp:568
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Fetch project"
 msgstr "Pridobi projekt"
 
-#: shell/projectcontroller.cpp:572
+#: shell/projectcontroller.cpp:569
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -3156,71 +3156,71 @@ msgid ""
 msgstr ""
 "Uporabnika vodi skozi pridobivanje projekta in ga potem uvozi v KDevelop."
 
-#: shell/projectcontroller.cpp:587
+#: shell/projectcontroller.cpp:584
 #, kde-format
 msgctxt "@action"
 msgid "Close Project(s)"
 msgstr "Zapri projekt(e)"
 
-#: shell/projectcontroller.cpp:589
+#: shell/projectcontroller.cpp:586
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Closes all currently selected projects"
 msgstr "Zapre vse trenutno izbrane projekte"
 
-#: shell/projectcontroller.cpp:595
+#: shell/projectcontroller.cpp:592
 #, kde-format
 msgctxt "@action"
 msgid "Open Configuration..."
 msgstr "Odpri nastavitev..."
 
-#: shell/projectcontroller.cpp:601
+#: shell/projectcontroller.cpp:598
 #, kde-format
 msgctxt "@action"
 msgid "Commit Current Project..."
 msgstr "Uveljavi trenutni projekt..."
 
-#: shell/projectcontroller.cpp:602
+#: shell/projectcontroller.cpp:599
 #, kde-format
 msgctxt "@action"
 msgid "Commit..."
 msgstr "Uveljavi..."
 
-#: shell/projectcontroller.cpp:613
+#: shell/projectcontroller.cpp:610
 #, kde-format
 msgctxt "@action"
 msgid "Open Recent Project"
 msgstr "Odpri nedavni projekt"
 
-#: shell/projectcontroller.cpp:614
+#: shell/projectcontroller.cpp:611
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid "Opens recently opened project."
 msgstr "Odpre nedavni projekt."
 
-#: shell/projectcontroller.cpp:619
+#: shell/projectcontroller.cpp:616
 #, kde-format
 msgctxt "@action"
 msgid "Open Project for Current File"
 msgstr "Odpri projekt za trenutno datoteko"
 
-#: shell/projectcontroller.cpp:770
+#: shell/projectcontroller.cpp:767
 #, kde-format
 msgid "Project already open: %1"
 msgstr "Projekt je že odprt: %1"
 
-#: shell/projectcontroller.cpp:774
+#: shell/projectcontroller.cpp:771
 #, kde-format
 msgid "No active document"
 msgstr "Ni dejavnega dokumenta"
 
-#: shell/projectcontroller.cpp:855
+#: shell/projectcontroller.cpp:852
 #, kde-format
 msgctxt "@title:window"
 msgid "Project Already Open"
 msgstr "Projekt je že odprt"
 
-#: shell/projectcontroller.cpp:858
+#: shell/projectcontroller.cpp:855
 #, kde-format
 msgid ""
 "The project you're trying to open is already open in at least one other "
@@ -3229,24 +3229,24 @@ msgstr ""
 "Projekt, ki ga želite odpreti, je že odprt v vsaj eni izmed drugih sej.."
 "<br>Kaj želite storiti?"
 
-#: shell/projectcontroller.cpp:862
+#: shell/projectcontroller.cpp:859
 #, kde-format
 msgctxt "@option:radio"
 msgid "Add project to current session"
 msgstr "Dodaj projekt k trenutni seji"
 
-#: shell/projectcontroller.cpp:866
+#: shell/projectcontroller.cpp:863
 #, kde-format
 msgctxt "@option:radio"
 msgid "Open session %1"
 msgstr "Odpri sejo %1"
 
-#: shell/projectcontroller.cpp:927
+#: shell/projectcontroller.cpp:924
 #, kde-format
 msgid "No enabled plugin supports this repository URL: %1"
 msgstr "Nobeden izmed omogočenih vstavkov ne podpira URL-ja tega skladišča: %1"
 
-#: shell/projectcontroller.cpp:1231
+#: shell/projectcontroller.cpp:1228
 #, kde-format
 msgctxt "@action"
 msgid "Reparse the Entire Project"
@@ -3746,7 +3746,7 @@ msgstr "Filter:"
 msgid "Create New Session"
 msgstr "Ustvari novo sejo"
 
-#: shell/sessionlock.cpp:154
+#: shell/sessionlock.cpp:159
 #, kde-format
 msgctxt "@info:shell"
 msgid ""
@@ -3756,13 +3756,13 @@ msgstr ""
 "Zaznan je bil zagnan primerek %1 (PID: %2), zato je slednji postal viden, "
 "novi pa ni bil zagnan"
 
-#: shell/sessionlock.cpp:159
+#: shell/sessionlock.cpp:164
 #, kde-format
 msgctxt "@info:shell"
 msgid "Running %1 instance (PID: %2) is apparently hung"
 msgstr "Zagnan primerek %1 (PID: %2) je očitno obvisel"
 
-#: shell/sessionlock.cpp:165
+#: shell/sessionlock.cpp:170
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3771,7 +3771,7 @@ msgid ""
 msgstr ""
 "Podan program se ne odzval na klic DBUS, lahko da se je sesul ali pa obvisel."
 
-#: shell/sessionlock.cpp:170
+#: shell/sessionlock.cpp:175
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3780,14 +3780,14 @@ msgstr ""
 "Ni bilo mogoče zakleniti seje <em>%1</em>, saj je že zaklenjena s strani %2 "
 "na %3 (PID %4)."
 
-#: shell/sessionlock.cpp:174
+#: shell/sessionlock.cpp:179
 #, kde-format
 msgctxt "@info"
 msgid "Failed to lock the session <em>%1</em> (lock-file unavailable)."
 msgstr ""
 "Ni bilo mogoče zakleniti seje <em>%1</em> (zaklepna datoteka ni na voljo)"
 
-#: shell/sessionlock.cpp:178
+#: shell/sessionlock.cpp:183
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3797,25 +3797,25 @@ msgstr ""
 "<p>Zaprite primerek programa, ki vam povzroča težave, ali pa izberite novo "
 "sejo za zagon.</p>"
 
-#: shell/sessionlock.cpp:184
+#: shell/sessionlock.cpp:189
 #, kde-format
 msgctxt "@action:button"
 msgid "Retry Startup"
 msgstr "Poskusi ponovni zagon"
 
-#: shell/sessionlock.cpp:187
+#: shell/sessionlock.cpp:192
 #, kde-format
 msgctxt "@action:button"
 msgid "Choose Another Session"
 msgstr "Izberite drugo sejo"
 
-#: shell/sessionlock.cpp:191
+#: shell/sessionlock.cpp:196
 #, kde-format
 msgctxt "@title:window"
 msgid "Failed to Lock Session %1"
 msgstr "Ni bilo mogoče zakleniti seje %1"
 
-#: shell/sessionlock.cpp:197
+#: shell/sessionlock.cpp:202
 #, kde-format
 msgctxt "@info"
 msgid "The session %1 is already active in another running instance."
@@ -4916,13 +4916,13 @@ msgid "Formatting functionality using the configured source formatter(s)."
 msgstr ""
 "Oblikuj funkcionalnost z uporabo nastavljenih oblikovalnikov izvorne kode."
 
-#: shell/sourceformattercontroller.cpp:610
+#: shell/sourceformattercontroller.cpp:609
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using <i>%1</i> (<b>%2</b>)"
 msgstr "Ponovno oblikuj izbiro ali datoteko z uporabo <i>%1</i> (<b>%2</b>)"
 
-#: shell/sourceformattercontroller.cpp:613
+#: shell/sourceformattercontroller.cpp:612
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4932,13 +4932,13 @@ msgstr ""
 "Ponovno oblikuj izbrano besedilo ali celotno datoteko, če ni ničesar "
 "izbranega, z uporabo orodja <i>%1</i> na način <b>%2</b>."
 
-#: shell/sourceformattercontroller.cpp:615
+#: shell/sourceformattercontroller.cpp:614
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat current line using <i>%1</i> (<b>%2</b>)"
 msgstr "Ponovno oblikuj trenutno vrstico z uporabo <i>%1</i> (<b>%2</b>)"
 
-#: shell/sourceformattercontroller.cpp:618
+#: shell/sourceformattercontroller.cpp:617
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4948,7 +4948,7 @@ msgstr ""
 "Ponovno oblikuj vrstico pod kazalko z uporabo orodja <i>%1</i> na način <b>"
 "%2</b>."
 
-#: shell/sourceformattercontroller.cpp:622
+#: shell/sourceformattercontroller.cpp:621
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using the configured source formatter"
@@ -4956,7 +4956,7 @@ msgstr ""
 "Ponovno oblikuj izbiro ali datoteko z uporabo nastavljenega oblikovalnika "
 "izvorne kode"
 
-#: shell/sourceformattercontroller.cpp:624
+#: shell/sourceformattercontroller.cpp:623
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4966,7 +4966,7 @@ msgstr ""
 "Ponovno oblikuj izbiro ali celotno datoteko, če ni ničesar izbranega, z "
 "uporabo nastavljenega oblikovalnika izvorne kode."
 
-#: shell/sourceformattercontroller.cpp:626
+#: shell/sourceformattercontroller.cpp:625
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat current line using the configured source formatter"
@@ -4974,7 +4974,7 @@ msgstr ""
 "Preoblikuj trenutno vrstico z uporabo nastavljenega oblikovalnika izvorne "
 "kode"
 
-#: shell/sourceformattercontroller.cpp:628
+#: shell/sourceformattercontroller.cpp:627
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4984,18 +4984,18 @@ msgstr ""
 "Preoblikovanje vrstice pod kazalko z uporabo nastavljenega oblikovalnika "
 "izvorne kode."
 
-#: shell/sourceformattercontroller.cpp:865
+#: shell/sourceformattercontroller.cpp:864
 #, kde-format
 msgctxt "@title:window"
 msgid "Reformat Files?"
 msgstr "Naj preoblikujem datoteke?"
 
-#: shell/sourceformattercontroller.cpp:866
+#: shell/sourceformattercontroller.cpp:865
 #, kde-format
 msgid "Reformat all files in the selected folder?"
 msgstr "Preoblikujem vse datoteke v izbrani mapi?"
 
-#: shell/sourceformattercontroller.cpp:870
+#: shell/sourceformattercontroller.cpp:869
 #, kde-format
 msgctxt "@action:button"
 msgid "Reformat"
@@ -5277,25 +5277,25 @@ msgctxt "@info"
 msgid "(Press Ctrl+Tab to switch)"
 msgstr "(Pritisnite Ctrl+Tab za preklop)"
 
-#: sublime/container.cpp:797
+#: sublime/container.cpp:798
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Copy Filename"
 msgstr "Kopiraj ime datoteke"
 
-#: sublime/container.cpp:800
+#: sublime/container.cpp:801
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close"
 msgstr "Zapri"
 
-#: sublime/container.cpp:802
+#: sublime/container.cpp:803
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close All Other"
 msgstr "Zapri vse druge"
 
-#: sublime/container.cpp:804
+#: sublime/container.cpp:805
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close All"

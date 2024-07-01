@@ -28,10 +28,10 @@
 using namespace KDevelop;
 
 namespace {
-IDocumentation::Ptr documentationPtrFromUrl(const QUrl& url)
+IDocumentation::Ptr documentationPtrFromUrl(QtHelpProviderAbstract* provider, const QUrl& url)
 {
     const QList<QHelpLink> info{{url, url.toString()}};
-    return IDocumentation::Ptr(new QtHelpDocumentation(url.toString(), info));
+    return IDocumentation::Ptr(new QtHelpDocumentation(provider, url.toString(), info));
 }
 }
 
@@ -43,9 +43,31 @@ QtHelpProviderAbstract::QtHelpProviderAbstract(QObject* parent, const QString& c
     , m_nam(new HelpNetworkAccessManager(&m_engine, this))
 {
     Q_UNUSED(args);
+
+    connect(&m_engine, &QHelpEngine::warning, this, [collectionFileName](const QString& msg) {
+        qCWarning(QTHELP) << "engine warning for" << collectionFileName << msg;
+    });
+
+    // we assume that the setup finished synchronously, otherwise our code does not work correctly
+    // the below will catch situations when Qt would change its behavior
+    bool setupFinished = false;
+    auto startedConnection = connect(&m_engine, &QHelpEngine::setupStarted, this, [collectionFileName]() {
+        qCDebug(QTHELP) << "setup started" << collectionFileName;
+    });
+    auto finishedConnection =
+        connect(&m_engine, &QHelpEngine::setupFinished, this, [&setupFinished, collectionFileName]() {
+            qCDebug(QTHELP) << "setup finished" << collectionFileName;
+            setupFinished = true;
+        });
+
     if( !m_engine.setupData() ) {
         qCWarning(QTHELP) << "Couldn't setup QtHelp Collection file";
     }
+
+    Q_ASSERT(setupFinished);
+    disconnect(startedConnection);
+    disconnect(finishedConnection);
+
     m_engine.setUsesFilterEngine(true);
 }
 
@@ -56,7 +78,6 @@ QtHelpProviderAbstract::~QtHelpProviderAbstract()
 
 IDocumentation::Ptr QtHelpProviderAbstract::documentationForDeclaration(Declaration* dec) const
 {
-    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
     if (dec) {
         static const IndexedString qmlJs("QML/JS");
         QString id;
@@ -71,7 +92,8 @@ IDocumentation::Ptr QtHelpProviderAbstract::documentationForDeclaration(Declarat
         if (!id.isEmpty()) {
             const QList<QHelpLink> links = m_engine.documentsForIdentifier(id);
             if(!links.isEmpty())
-                return IDocumentation::Ptr(new QtHelpDocumentation(id, links));
+                return IDocumentation::Ptr(
+                    new QtHelpDocumentation(const_cast<QtHelpProviderAbstract*>(this), id, links));
         }
     }
 
@@ -80,23 +102,22 @@ IDocumentation::Ptr QtHelpProviderAbstract::documentationForDeclaration(Declarat
 
 KDevelop::IDocumentation::Ptr QtHelpProviderAbstract::documentation(const QUrl& url) const
 {
-    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
     //findFile returns a valid url even if we don't have a page for that documentationForURL
     auto data = m_engine.fileData(url);
-    return data.isEmpty() ? IDocumentation::Ptr{} : documentationPtrFromUrl(url);
+    return data.isEmpty() ? IDocumentation::Ptr{}
+                          : documentationPtrFromUrl(const_cast<QtHelpProviderAbstract*>(this), url);
 }
 
 QAbstractItemModel* QtHelpProviderAbstract::indexModel() const
 {
-    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
     return m_engine.indexModel();
 }
 
 IDocumentation::Ptr QtHelpProviderAbstract::documentationForIndex(const QModelIndex& idx) const
 {
-    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
     QString name = idx.data(Qt::DisplayRole).toString();
-    return IDocumentation::Ptr(new QtHelpDocumentation(name, m_engine.documentsForKeyword(name)));
+    return IDocumentation::Ptr(
+        new QtHelpDocumentation(const_cast<QtHelpProviderAbstract*>(this), name, m_engine.documentsForKeyword(name)));
 }
 
 void QtHelpProviderAbstract::jumpedTo(const QUrl& newUrl)
@@ -109,7 +130,7 @@ void QtHelpProviderAbstract::jumpedTo(const QUrl& newUrl)
             // Follow the unsupported link and run the risk of displaying a blank page
             // if this is a broken local link. If this is an external link, we can follow it
             // and show the webpage. Our support for website navigation is pretty good.
-            doc = documentationPtrFromUrl(newUrl);
+            doc = documentationPtrFromUrl(this, newUrl);
         }
     }
     controller->showDocumentation(doc);
@@ -117,8 +138,7 @@ void QtHelpProviderAbstract::jumpedTo(const QUrl& newUrl)
 
 IDocumentation::Ptr QtHelpProviderAbstract::homePage() const
 {
-    QtHelpDocumentation::s_provider = const_cast<QtHelpProviderAbstract*>(this);
-    return IDocumentation::Ptr(new HomeDocumentation);
+    return IDocumentation::Ptr(new HomeDocumentation(const_cast<QtHelpProviderAbstract*>(this)));
 }
 
 bool QtHelpProviderAbstract::isValid() const

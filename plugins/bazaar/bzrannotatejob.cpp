@@ -12,10 +12,11 @@
 #include <QDateTime>
 #include <QDir>
 
+#include <interfaces/iplugin.h>
+#include <util/stringviewhelpers.h>
 #include <vcs/dvcs/dvcsjob.h>
 #include <vcs/vcsannotation.h>
 #include <vcs/vcsrevision.h>
-#include <interfaces/iplugin.h>
 
 using namespace KDevelop;
 
@@ -66,13 +67,13 @@ void BzrAnnotateJob::parseNextLine()
             emit resultsReady(this);
             break;
         }
-        QString currentLine = m_outputLines[m_currentLine];
+        const QStringView currentLine = m_outputLines.at(m_currentLine);
         if (currentLine.isEmpty()) {
             ++m_currentLine;
             continue;
         }
         bool revOk;
-        auto revision = currentLine.leftRef(currentLine.indexOf(QLatin1Char(' '))).toULong(&revOk);
+        const auto revision = leftOfNeedleOrEntireView(currentLine, QLatin1Char{' '}).toULong(&revOk);
         if (!revOk) {
             // Future compatibility - not a revision yet
             ++m_currentLine;

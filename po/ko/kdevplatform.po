@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kdevelop\n"
 "Report-Msgid-Bugs-To: https://bugs.kde.org\n"
-"POT-Creation-Date: 2024-06-05 02:05+0000\n"
+"POT-Creation-Date: 2024-07-01 01:44+0000\n"
 "PO-Revision-Date: 2024-02-20 23:51+0100\n"
 "Last-Translator: Shinjo Park <kde@peremen.name>\n"
 "Language-Team: Korean <kde-kr@kde.org>\n"
@@ -24,32 +24,32 @@ msgctxt "EMAIL OF TRANSLATORS"
 msgid "Your emails"
 msgstr "kde@peremen.name"
 
-#: debugger/breakpoint/breakpoint.cpp:164
+#: debugger/breakpoint/breakpoint.cpp:195
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Error"
 msgstr "오류"
 
 # 디버거에 전달되지 않은 중단점
-#: debugger/breakpoint/breakpoint.cpp:170
+#: debugger/breakpoint/breakpoint.cpp:201
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Dirty"
 msgstr "전달되지 않음"
 
-#: debugger/breakpoint/breakpoint.cpp:172
+#: debugger/breakpoint/breakpoint.cpp:203
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Pending"
 msgstr "대기 중"
 
-#: debugger/breakpoint/breakpoint.cpp:174
+#: debugger/breakpoint/breakpoint.cpp:205
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Clean"
 msgstr "정리"
 
-#: debugger/breakpoint/breakpoint.cpp:207
+#: debugger/breakpoint/breakpoint.cpp:238
 #, kde-format
 msgctxt "location (address)"
 msgid "%1 (%2)"
@@ -576,7 +576,7 @@ msgctxt "@title:menu"
 msgid "Analyze Current Project With"
 msgstr "다음으로 현재 프로젝트 분석"
 
-#: interfaces/isourceformatter.cpp:216
+#: interfaces/isourceformatter.cpp:221
 #, kde-format
 msgid ""
 "The executable %1 cannot be found. Please make sure it is installed and can "
@@ -609,12 +609,12 @@ msgstr "이름 바꾸기"
 msgid "Rename file from \"%1\" to \"%2\"."
 msgstr "파일의 이름을 \"%1\"에서 \"%2\"(으)로 바꿉니다."
 
-#: language/backgroundparser/backgroundparser.cpp:309
+#: language/backgroundparser/backgroundparser.cpp:308
 #, kde-format
 msgid "Parsing: %1"
 msgstr "처리 중: %1"
 
-#: language/backgroundparser/backgroundparser.cpp:615
+#: language/backgroundparser/backgroundparser.cpp:614
 #: shell/settings/bgpreferences.cpp:68
 #, kde-format
 msgid "Background Parser"
@@ -1429,102 +1429,102 @@ msgstr "생성된 토큰 스트림 출력"
 msgid "code to parse"
 msgstr "해석할 코드"
 
-#: outputview/outputexecutejob.cpp:194
+#: outputview/outputexecutejob.cpp:196
 #, kde-format
 msgid "No build directory specified for a builder job."
 msgstr "빌더 작업에 빌드 디렉터리를 지정하지 않았습니다."
 
-#: outputview/outputexecutejob.cpp:196
+#: outputview/outputexecutejob.cpp:198
 #, kde-format
 msgid "No working directory specified for a process."
 msgstr "프로세스에 지정한 작업 디렉터리가 없습니다."
 
-#: outputview/outputexecutejob.cpp:208
+#: outputview/outputexecutejob.cpp:210
 #, kde-format
 msgid "Invalid build directory '%1'"
 msgstr "잘못된 빌드 디렉터리 '%1'"
 
-#: outputview/outputexecutejob.cpp:210
+#: outputview/outputexecutejob.cpp:212
 #, kde-format
 msgid "Invalid working directory '%1'"
 msgstr "잘못된 작업 디렉터리 '%1'"
 
-#: outputview/outputexecutejob.cpp:217
+#: outputview/outputexecutejob.cpp:219
 #, kde-format
 msgid "Build directory '%1' is not a local path"
 msgstr "빌드 디렉터리 '%1'이(가) 로컬 경로가 아님"
 
-#: outputview/outputexecutejob.cpp:219
+#: outputview/outputexecutejob.cpp:221
 #, kde-format
 msgid "Working directory '%1' is not a local path"
 msgstr "작업 디렉터리 '%1'이(가) 로컬 경로가 아님"
 
-#: outputview/outputexecutejob.cpp:238
+#: outputview/outputexecutejob.cpp:240
 #, kde-format
 msgid "Build directory '%1' does not exist or is not a directory"
 msgstr "빌드 디렉터리 '%1'이(가) 없거나 디렉터리가 아님"
 
-#: outputview/outputexecutejob.cpp:240
+#: outputview/outputexecutejob.cpp:242
 #, kde-format
 msgid "Working directory '%1' does not exist or is not a directory"
 msgstr "작업 디렉터리 '%1'이(가) 없거나 디렉터리가 아님"
 
-#: outputview/outputexecutejob.cpp:301
+#: outputview/outputexecutejob.cpp:303
 #, kde-format
 msgid "Failed to specify program to start: %1"
 msgstr "시작할 프로그램을 지정할 수 없음: %1"
 
-#: outputview/outputexecutejob.cpp:302
+#: outputview/outputexecutejob.cpp:304
 #, kde-format
 msgid "*** %1 ***"
 msgstr "*** %1 ***"
 
-#: outputview/outputexecutejob.cpp:328
+#: outputview/outputexecutejob.cpp:330
 #, kde-format
 msgid "*** Killed process ***"
 msgstr "*** 프로세스가 죽었음 ***"
 
-#: outputview/outputexecutejob.cpp:332
+#: outputview/outputexecutejob.cpp:334
 #, kde-format
 msgid "*** Warning: could not kill the process ***"
 msgstr "*** 경고: 프로세스를 죽일 수 없음 ***"
 
-#: outputview/outputexecutejob.cpp:354
+#: outputview/outputexecutejob.cpp:356
 #, kde-format
 msgid "%1 has failed to start"
 msgstr "%1을(를) 시작할 수 없음"
 
-#: outputview/outputexecutejob.cpp:358
+#: outputview/outputexecutejob.cpp:360
 #, kde-format
 msgid "%1 has crashed"
 msgstr "%1이(가) 충돌함"
 
-#: outputview/outputexecutejob.cpp:362
+#: outputview/outputexecutejob.cpp:364
 #, kde-format
 msgid "Read error"
 msgstr "읽기 오류"
 
-#: outputview/outputexecutejob.cpp:366
+#: outputview/outputexecutejob.cpp:368
 #, kde-format
 msgid "Write error"
 msgstr "쓰기 오류"
 
-#: outputview/outputexecutejob.cpp:370
+#: outputview/outputexecutejob.cpp:372
 #, kde-format
 msgid "Waiting for the process has timed out"
 msgstr "프로세스 대기 시간이 초과됨"
 
-#: outputview/outputexecutejob.cpp:374
+#: outputview/outputexecutejob.cpp:376
 #, kde-format
 msgid "Exit code %1"
 msgstr "종료 코드 %1"
 
-#: outputview/outputexecutejob.cpp:387
+#: outputview/outputexecutejob.cpp:389
 #, kde-format
 msgid "*** Failure: %1 ***"
 msgstr "*** 실패: %1 ***"
 
-#: outputview/outputexecutejob.cpp:405
+#: outputview/outputexecutejob.cpp:407
 #, kde-format
 msgid "*** Finished ***"
 msgstr "*** 완료됨 ***"
@@ -2330,7 +2330,7 @@ msgctxt "@action"
 msgid "Annotate"
 msgstr "작성자 보기"
 
-#: shell/documentcontroller.cpp:1297
+#: shell/documentcontroller.cpp:1302
 #, kde-format
 msgid ""
 "Could not annotate the document because it is not part of a version-"
@@ -2977,54 +2977,54 @@ msgstr ""
 "개발자별 프로젝트 설정을 저장할 수 없습니다.\n"
 "주의: 변경한 프로젝트 설정이 손실됩니다."
 
-#: shell/projectcontroller.cpp:161
+#: shell/projectcontroller.cpp:158
 #, kde-format
 msgctxt "@title:window"
 msgid "Configure Project %1"
 msgstr "%1 프로젝트 설정"
 
-#: shell/projectcontroller.cpp:304
+#: shell/projectcontroller.cpp:301
 #, kde-format
 msgid "Invalid Location: %1"
 msgstr "잘못된 위치: %1"
 
-#: shell/projectcontroller.cpp:314
+#: shell/projectcontroller.cpp:311
 #, kde-format
 msgid "Already opening %1, not opening again"
 msgstr "%1이(가) 이미 열려 있음, 다시 열지 않음"
 
-#: shell/projectcontroller.cpp:471
+#: shell/projectcontroller.cpp:468
 #, kde-format
 msgctxt "@action:button"
 msgid "Override"
 msgstr "재정의"
 
-#: shell/projectcontroller.cpp:472
+#: shell/projectcontroller.cpp:469
 #, kde-format
 msgctxt "@info:tooltip"
 msgid ""
 "Continue to open the project and use the just provided project configuration"
 msgstr "프로젝트를 계속 열고 방금 지정한 프로젝트 구성 사용"
 
-#: shell/projectcontroller.cpp:473
+#: shell/projectcontroller.cpp:470
 #, kde-format
 msgctxt "@action:button"
 msgid "Open Existing File"
 msgstr "기존 파일 열기"
 
-#: shell/projectcontroller.cpp:474
+#: shell/projectcontroller.cpp:471
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Continue to open the project but use the existing project configuration"
 msgstr "프로젝트를 계속 열고 기존 프로젝트 구성 사용"
 
-#: shell/projectcontroller.cpp:476
+#: shell/projectcontroller.cpp:473
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Cancel and do not open the project"
 msgstr "취소하고 프로젝트를 열지 않기"
 
-#: shell/projectcontroller.cpp:479
+#: shell/projectcontroller.cpp:476
 #, kde-format
 msgid ""
 "There already exists a project configuration file at %1.\n"
@@ -3033,41 +3033,41 @@ msgstr ""
 "%1에 프로젝트 설정 파일이 이미 있습니다.\n"
 "이 파일을 재정의하거나 기존 파일을 여시겠습니까?"
 
-#: shell/projectcontroller.cpp:482
+#: shell/projectcontroller.cpp:479
 #, kde-format
 msgctxt "@title:window"
 msgid "Override Existing Project Configuration"
 msgstr "기존 프로젝트 설정 재정의"
 
-#: shell/projectcontroller.cpp:500
+#: shell/projectcontroller.cpp:497
 #, kde-format
 msgid "Unable to create configuration file %1"
 msgstr "설정 파일 %1을(를) 만들 수 없음"
 
-#: shell/projectcontroller.cpp:514
+#: shell/projectcontroller.cpp:511
 #, kde-format
 msgid "Reopen the current project?"
 msgstr "현재 프로젝트를 다시 여시겠습니까?"
 
-#: shell/projectcontroller.cpp:515
+#: shell/projectcontroller.cpp:512
 #, kde-format
 msgctxt "@action:button"
 msgid "Reopen"
 msgstr "다시 열기"
 
-#: shell/projectcontroller.cpp:556
+#: shell/projectcontroller.cpp:553
 #, kde-format
 msgctxt "@action"
 msgid "Open / Import Project..."
 msgstr "프로젝트 열기/가져오기..."
 
-#: shell/projectcontroller.cpp:557
+#: shell/projectcontroller.cpp:554
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Open or import project"
 msgstr "프로젝트를 열거나 가져오기"
 
-#: shell/projectcontroller.cpp:558
+#: shell/projectcontroller.cpp:555
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -3082,90 +3082,90 @@ msgstr ""
 "수 있습니다. KDevelop 프로젝트 파일이 없는 기존 디렉터리를 열면 파일을 생성합"
 "니다."
 
-#: shell/projectcontroller.cpp:569
+#: shell/projectcontroller.cpp:566
 #, kde-format
 msgctxt "@action"
 msgid "Fetch Project..."
 msgstr "원격 프로젝트 가져오기..."
 
-#: shell/projectcontroller.cpp:571
+#: shell/projectcontroller.cpp:568
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Fetch project"
 msgstr "원격 프로젝트 가져오기"
 
-#: shell/projectcontroller.cpp:572
+#: shell/projectcontroller.cpp:569
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
 "Guides the user through the project fetch and then imports it into KDevelop."
 msgstr "원격에서 프로젝트를 가져온 다음 KDevelop으로 가져옵니다."
 
-#: shell/projectcontroller.cpp:587
+#: shell/projectcontroller.cpp:584
 #, kde-format
 msgctxt "@action"
 msgid "Close Project(s)"
 msgstr "프로젝트 닫기"
 
-#: shell/projectcontroller.cpp:589
+#: shell/projectcontroller.cpp:586
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Closes all currently selected projects"
 msgstr "현재 선택한 모든 프로젝트 닫기"
 
-#: shell/projectcontroller.cpp:595
+#: shell/projectcontroller.cpp:592
 #, kde-format
 msgctxt "@action"
 msgid "Open Configuration..."
 msgstr "설정 열기..."
 
-#: shell/projectcontroller.cpp:601
+#: shell/projectcontroller.cpp:598
 #, kde-format
 msgctxt "@action"
 msgid "Commit Current Project..."
 msgstr "현재 프로젝트 커밋..."
 
-#: shell/projectcontroller.cpp:602
+#: shell/projectcontroller.cpp:599
 #, kde-format
 msgctxt "@action"
 msgid "Commit..."
 msgstr "커밋..."
 
-#: shell/projectcontroller.cpp:613
+#: shell/projectcontroller.cpp:610
 #, kde-format
 msgctxt "@action"
 msgid "Open Recent Project"
 msgstr "최근 프로젝트 열기"
 
-#: shell/projectcontroller.cpp:614
+#: shell/projectcontroller.cpp:611
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid "Opens recently opened project."
 msgstr "최근에 열었던 프로젝트를 엽니다."
 
-#: shell/projectcontroller.cpp:619
+#: shell/projectcontroller.cpp:616
 #, kde-format
 msgctxt "@action"
 msgid "Open Project for Current File"
 msgstr "현재 파일의 프로젝트 열기"
 
-#: shell/projectcontroller.cpp:770
+#: shell/projectcontroller.cpp:767
 #, kde-format
 msgid "Project already open: %1"
 msgstr "프로젝트가 이미 열림: %1"
 
-#: shell/projectcontroller.cpp:774
+#: shell/projectcontroller.cpp:771
 #, kde-format
 msgid "No active document"
 msgstr "활성 문서 없음"
 
-#: shell/projectcontroller.cpp:855
+#: shell/projectcontroller.cpp:852
 #, kde-format
 msgctxt "@title:window"
 msgid "Project Already Open"
 msgstr "프로젝트가 이미 열림"
 
-#: shell/projectcontroller.cpp:858
+#: shell/projectcontroller.cpp:855
 #, kde-format
 msgid ""
 "The project you're trying to open is already open in at least one other "
@@ -3174,24 +3174,24 @@ msgstr ""
 "열려고 하는 프로젝트가 다른 세션에서 이미 열려 있습니다.<br>무엇을 하시겠습니"
 "까?"
 
-#: shell/projectcontroller.cpp:862
+#: shell/projectcontroller.cpp:859
 #, kde-format
 msgctxt "@option:radio"
 msgid "Add project to current session"
 msgstr "현재 세션에 프로젝트 추가"
 
-#: shell/projectcontroller.cpp:866
+#: shell/projectcontroller.cpp:863
 #, kde-format
 msgctxt "@option:radio"
 msgid "Open session %1"
 msgstr "세션 %1 열기"
 
-#: shell/projectcontroller.cpp:927
+#: shell/projectcontroller.cpp:924
 #, kde-format
 msgid "No enabled plugin supports this repository URL: %1"
 msgstr "이 저장소 URL을 지원하는 플러그인이 활성화되지 않았음: %1"
 
-#: shell/projectcontroller.cpp:1231
+#: shell/projectcontroller.cpp:1228
 #, kde-format
 msgctxt "@action"
 msgid "Reparse the Entire Project"
@@ -3690,7 +3690,7 @@ msgstr "필터:"
 msgid "Create New Session"
 msgstr "새 세션 만들기"
 
-#: shell/sessionlock.cpp:154
+#: shell/sessionlock.cpp:159
 #, kde-format
 msgctxt "@info:shell"
 msgid ""
@@ -3700,13 +3700,13 @@ msgstr ""
 "실행 중인 %1 인스턴스(PID: %2)가 감지되어 새 인스턴스를 시작하는 대신 해당 인"
 "스턴스를 활성화함"
 
-#: shell/sessionlock.cpp:159
+#: shell/sessionlock.cpp:164
 #, kde-format
 msgctxt "@info:shell"
 msgid "Running %1 instance (PID: %2) is apparently hung"
 msgstr "실행 중인 %1 인스턴스(PID: %2)의 응답이 없음"
 
-#: shell/sessionlock.cpp:165
+#: shell/sessionlock.cpp:170
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3716,7 +3716,7 @@ msgstr ""
 "지정한 앱이 D-Bus 호출에 응답하지 않았습니다. 앱이 충돌했거나 중단된 것 같습"
 "니다."
 
-#: shell/sessionlock.cpp:170
+#: shell/sessionlock.cpp:175
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3724,13 +3724,13 @@ msgid ""
 msgstr ""
 "세션 <em>%1</em>을(를) 잠글 수 없습니다. %3의 %2(PID %4)이(가) 잠갔습니다."
 
-#: shell/sessionlock.cpp:174
+#: shell/sessionlock.cpp:179
 #, kde-format
 msgctxt "@info"
 msgid "Failed to lock the session <em>%1</em> (lock-file unavailable)."
 msgstr "세션 <em>%1</em>을 잠글 수 없습니다(잠금 파일을 사용할 수 없음)."
 
-#: shell/sessionlock.cpp:178
+#: shell/sessionlock.cpp:183
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -3739,25 +3739,25 @@ msgid ""
 msgstr ""
 "<p>문제가 있는 앱 인스턴스를 닫거나 시작할 다른 세션을 선택하십시오.</p>"
 
-#: shell/sessionlock.cpp:184
+#: shell/sessionlock.cpp:189
 #, kde-format
 msgctxt "@action:button"
 msgid "Retry Startup"
 msgstr "시작 다시 시도"
 
-#: shell/sessionlock.cpp:187
+#: shell/sessionlock.cpp:192
 #, kde-format
 msgctxt "@action:button"
 msgid "Choose Another Session"
 msgstr "다른 세션 선택"
 
-#: shell/sessionlock.cpp:191
+#: shell/sessionlock.cpp:196
 #, kde-format
 msgctxt "@title:window"
 msgid "Failed to Lock Session %1"
 msgstr "세션 %1을(를) 잠글 수 없음"
 
-#: shell/sessionlock.cpp:197
+#: shell/sessionlock.cpp:202
 #, kde-format
 msgctxt "@info"
 msgid "The session %1 is already active in another running instance."
@@ -4829,13 +4829,13 @@ msgctxt "@info:whatsthis"
 msgid "Formatting functionality using the configured source formatter(s)."
 msgstr "설정한 형식 지정 도구를 사용하는 형식 재지정 기능입니다."
 
-#: shell/sourceformattercontroller.cpp:610
+#: shell/sourceformattercontroller.cpp:609
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using <i>%1</i> (<b>%2</b>)"
 msgstr "<i>%1</i>(<b>%2</b>)(으)로 선택 영역이나 파일 형식 재지정"
 
-#: shell/sourceformattercontroller.cpp:613
+#: shell/sourceformattercontroller.cpp:612
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4845,13 +4845,13 @@ msgstr ""
 "<i>%1</i> 도구의 <b>%2</b> 스타일을 사용하여 선택 영역이나 파일 전체(선택이 "
 "없을 때)의 형식을 재지정합니다."
 
-#: shell/sourceformattercontroller.cpp:615
+#: shell/sourceformattercontroller.cpp:614
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat current line using <i>%1</i> (<b>%2</b>)"
 msgstr "<i>%1</i>(<b>%2</b>)을(를) 사용하여 현재 줄 형식 재지정"
 
-#: shell/sourceformattercontroller.cpp:618
+#: shell/sourceformattercontroller.cpp:617
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4861,13 +4861,13 @@ msgstr ""
 "<i>%1</i> 도구의 <b>%2</b> 스타일을 사용하여 커서 아래 소스 코드 줄의 형식을 "
 "재지정합니다."
 
-#: shell/sourceformattercontroller.cpp:622
+#: shell/sourceformattercontroller.cpp:621
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using the configured source formatter"
 msgstr "지정한 형식 지정 도구로 선택 영역이나 파일 형식 재지정"
 
-#: shell/sourceformattercontroller.cpp:624
+#: shell/sourceformattercontroller.cpp:623
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4877,13 +4877,13 @@ msgstr ""
 "설정한 소스 형식 지정 도구를 사용하여 선택 영역이나 파일 전체(선택이 없을 때)"
 "의 형식을 재지정합니다."
 
-#: shell/sourceformattercontroller.cpp:626
+#: shell/sourceformattercontroller.cpp:625
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat current line using the configured source formatter"
 msgstr "지정한 형식 지정 도구로 현재 줄 형식 재지정"
 
-#: shell/sourceformattercontroller.cpp:628
+#: shell/sourceformattercontroller.cpp:627
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -4891,18 +4891,18 @@ msgid ""
 "formatter."
 msgstr "설정한 형식 지정 도구를 사용하는 커서 아래 줄 형식 재지정 기능입니다."
 
-#: shell/sourceformattercontroller.cpp:865
+#: shell/sourceformattercontroller.cpp:864
 #, kde-format
 msgctxt "@title:window"
 msgid "Reformat Files?"
 msgstr "파일 형식을 재지정하시겠습니까?"
 
-#: shell/sourceformattercontroller.cpp:866
+#: shell/sourceformattercontroller.cpp:865
 #, kde-format
 msgid "Reformat all files in the selected folder?"
 msgstr "선택한 폴더의 모든 파일의 형식을 재지정하시겠습니까?"
 
-#: shell/sourceformattercontroller.cpp:870
+#: shell/sourceformattercontroller.cpp:869
 #, kde-format
 msgctxt "@action:button"
 msgid "Reformat"
@@ -5174,25 +5174,25 @@ msgctxt "@info"
 msgid "(Press Ctrl+Tab to switch)"
 msgstr "(Ctrl+Tab을 눌러 전환)"
 
-#: sublime/container.cpp:797
+#: sublime/container.cpp:798
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Copy Filename"
 msgstr "파일 이름 복사"
 
-#: sublime/container.cpp:800
+#: sublime/container.cpp:801
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close"
 msgstr "닫기"
 
-#: sublime/container.cpp:802
+#: sublime/container.cpp:803
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close All Other"
 msgstr "다른 모두 닫기"
 
-#: sublime/container.cpp:804
+#: sublime/container.cpp:805
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Close All"

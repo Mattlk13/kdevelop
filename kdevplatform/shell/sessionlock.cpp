@@ -18,16 +18,19 @@
 #include <QDir>
 
 namespace KDevelop {
+namespace {
 QString lockFileForSession( const QString& id )
 {
     return SessionController::sessionDirectory( id ) + QLatin1String("/lock");
 }
 
-QString dBusServiceNameForSession( const QString& id )
+QString dBusServiceNameForSession(QStringView id)
 {
+    Q_ASSERT(id.startsWith(QLatin1Char{'{'}));
+    Q_ASSERT(id.endsWith(QLatin1Char{'}'}));
     // We remove starting "{" and ending "}" from the string UUID representation
     // as D-Bus apparently doesn't allow them in service names
-    return QLatin1String("org.kdevelop.kdevplatform-lock-") + id.midRef(1, id.size() - 2);
+    return QLatin1String("org.kdevelop.kdevplatform-lock-") + id.mid(1, id.size() - 2);
 }
 
 /// Force-removes the lock-file.
@@ -37,6 +40,8 @@ void forceRemoveLockfile(const QString& lockFilename)
         QFile::remove( lockFilename );
     }
 }
+
+} // unnamed namespace
 
 TryLockSessionResult SessionLock::tryLockSession(const QString& sessionId, bool doLocking)
 {

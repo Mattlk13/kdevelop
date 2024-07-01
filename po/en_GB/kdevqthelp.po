@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: kdevqthelp\n"
 "Report-Msgid-Bugs-To: https://bugs.kde.org\n"
-"POT-Creation-Date: 2023-11-05 12:28+0000\n"
-"PO-Revision-Date: 2024-05-24 19:28+0100\n"
+"POT-Creation-Date: 2024-06-24 01:39+0000\n"
+"PO-Revision-Date: 2024-06-29 11:34+0100\n"
 "Last-Translator: Steve Allewell <steve.allewell@gmail.com>\n"
 "Language-Team: British English\n"
 "Language: en_GB\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Lokalize 24.02.2\n"
+"X-Generator: Lokalize 24.05.0\n"
 
 #: qthelpconfig.cpp:47 qthelpconfig.cpp:49
 #, kde-format
@@ -203,17 +203,17 @@ msgctxt "@info:placeholder"
 msgid "Select a Qt Help file..."
 msgstr "Select a Qt Help file..."
 
-#: qthelpdocumentation.cpp:181
+#: qthelpdocumentation.cpp:211
 #, kde-format
 msgid "Could not find any documentation for '%1'"
 msgstr "Could not find any documentation for '%1'"
 
-#: qthelpdocumentation.cpp:276
+#: qthelpdocumentation.cpp:307
 #, kde-format
-msgid "QtHelp Home Page"
-msgstr "QtHelp Home Page"
+msgid "%1 Home Page"
+msgstr "%1 Home Page"
 
-#: qthelpqtdoc.cpp:142
+#: qthelpqtdoc.cpp:148
 #, kde-format
 msgid "QtHelp"
 msgstr "QtHelp"

@@ -12,7 +12,6 @@
 class IExecutePlugin;
 
 namespace KDevelop {
-class BreakpointModel;
 class TestCore;
 class Variable;
 class VariableCollection;
@@ -33,12 +32,14 @@ private Q_SLOTS:
     void testStdout();
     void testEnvironmentSet();
 
+    void testUnsupportedUrlExpressionBreakpoints();
     void testBreakpoint();
     void testBreakOnStart();
     void testDisableBreakpoint();
     void testChangeLocationBreakpoint();
     void testDeleteBreakpoint();
     void testPendingBreakpoint();
+    void testBreakpointsOnNoOpLines();
     void testUpdateBreakpoint();
     void testIgnoreHitsBreakpoint();
     void testConditionBreakpoint();
@@ -47,6 +48,7 @@ private Q_SLOTS:
     void testBreakOnReadBreakpoint();
     void testBreakOnReadBreakpoint2();
     void testBreakOnAccessBreakpoint();
+    void testBreakpointErrors();
     void testInsertBreakpointWhileRunning();
     void testInsertBreakpointWhileRunningMultiple();
     void testInsertBreakpointFunctionName();
@@ -67,7 +69,6 @@ private Q_SLOTS:
 
     void testStack();
     void testStackFetchMore();
-    void testStackDeactivateAndActive();
     void testStackSwitchThread();
 
     void testAttach();
@@ -102,8 +103,6 @@ private Q_SLOTS:
 
 private:
     // convenient access methods
-    KDevelop::BreakpointModel *breakpoints();
-
     KDevelop::VariableCollection *variableCollection();
     KDevelop::Variable *watchVariableAt(int i);
     QModelIndex localVariableIndexAt(int i, int col = 0);

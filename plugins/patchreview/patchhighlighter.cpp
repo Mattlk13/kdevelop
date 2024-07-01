@@ -326,6 +326,7 @@ void PatchHighlighter::performContentChange( KTextEditor::Document* doc, const Q
 }
 
 void PatchHighlighter::textRemoved( KTextEditor::Document* doc, const KTextEditor::Range& range, const QString& oldText ) {
+    Q_ASSERT(range.isValid());
     if ( m_applying ) { // Do not interfere with patch application
         return;
     }
@@ -341,9 +342,13 @@ void PatchHighlighter::textRemoved( KTextEditor::Document* doc, const KTextEdito
         removedLines << above;
         remainingLines << above;
     }
+
     const QString changed = doc->line(cursor.line()) + QLatin1Char('\n');
-    removedLines << changed.midRef(0, cursor.column()) + oldText + changed.midRef(cursor.column());
+    const QStringView changedView = changed;
+    Q_ASSERT(cursor.column() <= changed.size());
+    removedLines << changedView.left(cursor.column()) + oldText + changedView.mid(cursor.column());
     remainingLines << changed;
+
     if (doc->documentRange().end().line() > cursor.line()) {
         QString below = doc->line(cursor.line() + 1);
         removedLines << below;
@@ -460,6 +465,7 @@ void PatchHighlighter::documentReloaded(KTextEditor::Document* doc)
 }
 
 void PatchHighlighter::textInserted(KTextEditor::Document* doc, const KTextEditor::Cursor& cursor, const QString& text) {
+    Q_ASSERT(cursor.isValid());
     if ( m_applying ) { // Do not interfere with patch application
         return;
     }
@@ -478,9 +484,13 @@ void PatchHighlighter::textInserted(KTextEditor::Document* doc, const KTextEdito
         removedLines << above;
         insertedLines << above;
     }
+
     const QString changed = doc->line(cursor.line()) + QLatin1Char('\n');
-    removedLines << changed.midRef(0, cursor.column()) + changed.midRef(endColumn);
+    const QStringView changedView = changed;
+    Q_ASSERT(endColumn <= changed.size());
+    removedLines << changedView.left(cursor.column()) + changedView.mid(endColumn);
     insertedLines << changed;
+
     if (doc->documentRange().end().line() > cursor.line()) {
         const QString below = doc->line(cursor.line() + 1) + QLatin1Char('\n');
         removedLines << below;

@@ -29,11 +29,14 @@ private Q_SLOTS:
 
     void testStdOut();
     void testEnvironmentSet();
+
+    void testUnsupportedUrlExpressionBreakpoints();
     void testBreakpoint();
     void testDisableBreakpoint();
     void testChangeLocationBreakpoint();
     void testDeleteBreakpoint();
     void testPendingBreakpoint();
+    void testBreakpointsOnNoOpLines();
     void testUpdateBreakpoint();
     void testIgnoreHitsBreakpoint();
     void testConditionBreakpoint();
@@ -42,6 +45,7 @@ private Q_SLOTS:
     void testBreakOnReadBreakpoint();
     void testBreakOnReadBreakpoint2();
     void testBreakOnAccessBreakpoint();
+    void testBreakpointErrors();
     void testInsertBreakpointWhileRunning();
     void testInsertBreakpointWhileRunningMultiple();
     void testInsertBreakpointFunctionName();
@@ -49,7 +53,6 @@ private Q_SLOTS:
     void testShowStepInSource();
     void testStack();
     void testStackFetchMore();
-    void testStackDeactivateAndActive();
     void testStackSwitchThread();
     void testAttach();
     void testManualAttach();

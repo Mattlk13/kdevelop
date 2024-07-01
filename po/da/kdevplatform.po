@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: https://bugs.kde.org\n"
-"POT-Creation-Date: 2024-06-05 02:05+0000\n"
+"POT-Creation-Date: 2024-07-01 01:44+0000\n"
 "PO-Revision-Date: 2014-08-24 21:50+0200\n"
 "Last-Translator: Martin Schlander <mschlander@opensuse.org>\n"
 "Language-Team: Danish <kde-i18n-doc@kde.org>\n"
@@ -28,31 +28,31 @@ msgctxt "EMAIL OF TRANSLATORS"
 msgid "Your emails"
 msgstr "m_abs@mabs.dk,mschlander@opensuse.org"
 
-#: debugger/breakpoint/breakpoint.cpp:164
+#: debugger/breakpoint/breakpoint.cpp:195
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Error"
 msgstr "Fejl"
 
-#: debugger/breakpoint/breakpoint.cpp:170
+#: debugger/breakpoint/breakpoint.cpp:201
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Dirty"
 msgstr "Beskidt"
 
-#: debugger/breakpoint/breakpoint.cpp:172
+#: debugger/breakpoint/breakpoint.cpp:203
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Pending"
 msgstr "Forestående"
 
-#: debugger/breakpoint/breakpoint.cpp:174
+#: debugger/breakpoint/breakpoint.cpp:205
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Clean"
 msgstr "Ren"
 
-#: debugger/breakpoint/breakpoint.cpp:207
+#: debugger/breakpoint/breakpoint.cpp:238
 #, fuzzy, kde-format
 #| msgctxt "project name (branch name)"
 #| msgid "%1 (%2)"
@@ -604,7 +604,7 @@ msgctxt "@title:menu"
 msgid "Analyze Current Project With"
 msgstr "Commit nuværende projekt..."
 
-#: interfaces/isourceformatter.cpp:216
+#: interfaces/isourceformatter.cpp:221
 #, kde-format
 msgid ""
 "The executable %1 cannot be found. Please make sure it is installed and can "
@@ -637,12 +637,12 @@ msgstr "Omdøb"
 msgid "Rename file from \"%1\" to \"%2\"."
 msgstr "Omdøb fil fra \"%1\" til \"%2\"."
 
-#: language/backgroundparser/backgroundparser.cpp:309
+#: language/backgroundparser/backgroundparser.cpp:308
 #, kde-format
 msgid "Parsing: %1"
 msgstr "Fortolkning: %1"
 
-#: language/backgroundparser/backgroundparser.cpp:615
+#: language/backgroundparser/backgroundparser.cpp:614
 #: shell/settings/bgpreferences.cpp:68
 #, kde-format
 msgid "Background Parser"
@@ -1491,104 +1491,104 @@ msgstr "vis genereret token-stream"
 msgid "code to parse"
 msgstr "kode der skal fortolkes"
 
-#: outputview/outputexecutejob.cpp:194
+#: outputview/outputexecutejob.cpp:196
 #, kde-format
 msgid "No build directory specified for a builder job."
 msgstr "Ingen byggemappe angivet til byggejobbet."
 
-#: outputview/outputexecutejob.cpp:196
+#: outputview/outputexecutejob.cpp:198
 #, kde-format
 msgid "No working directory specified for a process."
 msgstr "Ingen arbejdsmappe angivet til en proces."
 
-#: outputview/outputexecutejob.cpp:208
+#: outputview/outputexecutejob.cpp:210
 #, kde-format
 msgid "Invalid build directory '%1'"
 msgstr "Ugyldig byggemappe \"%1\""
 
-#: outputview/outputexecutejob.cpp:210
+#: outputview/outputexecutejob.cpp:212
 #, kde-format
 msgid "Invalid working directory '%1'"
 msgstr "Ugyldig arbejdsmappe \"%1\""
 
-#: outputview/outputexecutejob.cpp:217
+#: outputview/outputexecutejob.cpp:219
 #, kde-format
 msgid "Build directory '%1' is not a local path"
 msgstr "Byggemappen \"%1\" er ikke en lokal sti"
 
-#: outputview/outputexecutejob.cpp:219
+#: outputview/outputexecutejob.cpp:221
 #, kde-format
 msgid "Working directory '%1' is not a local path"
 msgstr "Arbejdsmappen \"%1\" er ikke en lokal sti"
 
-#: outputview/outputexecutejob.cpp:238
+#: outputview/outputexecutejob.cpp:240
 #, kde-format
 msgid "Build directory '%1' does not exist or is not a directory"
 msgstr "Byggemappen \"%1\" findes ikke, eller er ikke en mappe"
 
-#: outputview/outputexecutejob.cpp:240
+#: outputview/outputexecutejob.cpp:242
 #, kde-format
 msgid "Working directory '%1' does not exist or is not a directory"
 msgstr "Arbejdsmappen \"%1\" findes ikke, eller er ikke en mappe"
 
-#: outputview/outputexecutejob.cpp:301
+#: outputview/outputexecutejob.cpp:303
 #, kde-format
 msgid "Failed to specify program to start: %1"
 msgstr ""
 
-#: outputview/outputexecutejob.cpp:302
+#: outputview/outputexecutejob.cpp:304
 #, fuzzy, kde-format
 #| msgid "*** Failure: %1 ***"
 msgid "*** %1 ***"
 msgstr "*** Mislykket: %1 ***"
 
-#: outputview/outputexecutejob.cpp:328
+#: outputview/outputexecutejob.cpp:330
 #, fuzzy, kde-format
 #| msgid "*** Warning: could not kill the process ***"
 msgid "*** Killed process ***"
 msgstr "*** Advarsel: Kunne ikke dræbe processen ***"
 
-#: outputview/outputexecutejob.cpp:332
+#: outputview/outputexecutejob.cpp:334
 #, kde-format
 msgid "*** Warning: could not kill the process ***"
 msgstr "*** Advarsel: Kunne ikke dræbe processen ***"
 
-#: outputview/outputexecutejob.cpp:354
+#: outputview/outputexecutejob.cpp:356
 #, kde-format
 msgid "%1 has failed to start"
 msgstr "%1 kunne ikke starte"
 
-#: outputview/outputexecutejob.cpp:358
+#: outputview/outputexecutejob.cpp:360
 #, kde-format
 msgid "%1 has crashed"
 msgstr "%1 brød sammen"
 
-#: outputview/outputexecutejob.cpp:362
+#: outputview/outputexecutejob.cpp:364
 #, kde-format
 msgid "Read error"
 msgstr "Læsefejl"
 
-#: outputview/outputexecutejob.cpp:366
+#: outputview/outputexecutejob.cpp:368
 #, kde-format
 msgid "Write error"
 msgstr "Skrivefejl"
 
-#: outputview/outputexecutejob.cpp:370
+#: outputview/outputexecutejob.cpp:372
 #, kde-format
 msgid "Waiting for the process has timed out"
 msgstr "Venter på at processen har tidsudløb"
 
-#: outputview/outputexecutejob.cpp:374
+#: outputview/outputexecutejob.cpp:376
 #, kde-format
 msgid "Exit code %1"
 msgstr "Afslutningskode %1"
 
-#: outputview/outputexecutejob.cpp:387
+#: outputview/outputexecutejob.cpp:389
 #, kde-format
 msgid "*** Failure: %1 ***"
 msgstr "*** Mislykket: %1 ***"
 
-#: outputview/outputexecutejob.cpp:405
+#: outputview/outputexecutejob.cpp:407
 #, kde-format
 msgid "*** Finished ***"
 msgstr "*** Færdig ***"
@@ -2505,7 +2505,7 @@ msgctxt "@action"
 msgid "Annotate"
 msgstr "Annotation"
 
-#: shell/documentcontroller.cpp:1297
+#: shell/documentcontroller.cpp:1302
 #, kde-format
 msgid ""
 "Could not annotate the document because it is not part of a version-"
@@ -3213,31 +3213,31 @@ msgstr ""
 "Kunne ikke gemme udviklerspecifikke projektindstillinger.\n"
 "Bemærk: Projektindstillingerne du ændrede vil blive tabt."
 
-#: shell/projectcontroller.cpp:161
+#: shell/projectcontroller.cpp:158
 #, fuzzy, kde-format
 #| msgid "Configure Project %1"
 msgctxt "@title:window"
 msgid "Configure Project %1"
 msgstr "Indstil projekt %1"
 
-#: shell/projectcontroller.cpp:304
+#: shell/projectcontroller.cpp:301
 #, kde-format
 msgid "Invalid Location: %1"
 msgstr "Ugyldig placering: %1"
 
-#: shell/projectcontroller.cpp:314
+#: shell/projectcontroller.cpp:311
 #, kde-format
 msgid "Already opening %1, not opening again"
 msgstr "Åbner allerede %1, åbner ikke igen"
 
-#: shell/projectcontroller.cpp:471
+#: shell/projectcontroller.cpp:468
 #, fuzzy, kde-format
 #| msgid "Override"
 msgctxt "@action:button"
 msgid "Override"
 msgstr "Tilsidesæt"
 
-#: shell/projectcontroller.cpp:472
+#: shell/projectcontroller.cpp:469
 #, fuzzy, kde-format
 #| msgctxt "@info:tooltip"
 #| msgid ""
@@ -3249,14 +3249,14 @@ msgid ""
 msgstr ""
 "Fortsæt med at åbne projekt og brug den netop angivne projektkonfiguration."
 
-#: shell/projectcontroller.cpp:473
+#: shell/projectcontroller.cpp:470
 #, fuzzy, kde-format
 #| msgid "Open Existing File"
 msgctxt "@action:button"
 msgid "Open Existing File"
 msgstr "Åbn eksisterende fil"
 
-#: shell/projectcontroller.cpp:474
+#: shell/projectcontroller.cpp:471
 #, fuzzy, kde-format
 #| msgctxt "@info:tooltip"
 #| msgid ""
@@ -3267,7 +3267,7 @@ msgstr ""
 "Fortsæt med at åbne projektet, men brug den eksisterende "
 "projektkonfiguration."
 
-#: shell/projectcontroller.cpp:476
+#: shell/projectcontroller.cpp:473
 #, fuzzy, kde-format
 #| msgctxt "@info:tooltip"
 #| msgid "Cancel and do not open the project."
@@ -3275,7 +3275,7 @@ msgctxt "@info:tooltip"
 msgid "Cancel and do not open the project"
 msgstr "Annullér og åbn ikke projektet."
 
-#: shell/projectcontroller.cpp:479
+#: shell/projectcontroller.cpp:476
 #, kde-format
 msgid ""
 "There already exists a project configuration file at %1.\n"
@@ -3284,42 +3284,42 @@ msgstr ""
 "Der findes allerede en projektkonfigurationsfil på %1.\n"
 "Vil du tilsidesætte den eller åbne den eksisterende fil?"
 
-#: shell/projectcontroller.cpp:482
+#: shell/projectcontroller.cpp:479
 #, fuzzy, kde-format
 #| msgid "Override existing project configuration"
 msgctxt "@title:window"
 msgid "Override Existing Project Configuration"
 msgstr "Tilsidesæt eksisterende projektkonfigurationsfil"
 
-#: shell/projectcontroller.cpp:500
+#: shell/projectcontroller.cpp:497
 #, kde-format
 msgid "Unable to create configuration file %1"
 msgstr "Kan ikke oprette indstillingsfil %1"
 
-#: shell/projectcontroller.cpp:514
+#: shell/projectcontroller.cpp:511
 #, kde-format
 msgid "Reopen the current project?"
 msgstr "Genåbn det nuværende projekt?"
 
-#: shell/projectcontroller.cpp:515
+#: shell/projectcontroller.cpp:512
 #, kde-format
 msgctxt "@action:button"
 msgid "Reopen"
 msgstr ""
 
-#: shell/projectcontroller.cpp:556
+#: shell/projectcontroller.cpp:553
 #, kde-format
 msgctxt "@action"
 msgid "Open / Import Project..."
 msgstr "Åbn/importér projekt..."
 
-#: shell/projectcontroller.cpp:557
+#: shell/projectcontroller.cpp:554
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Open or import project"
 msgstr "Åbn eller importér projekt"
 
-#: shell/projectcontroller.cpp:558
+#: shell/projectcontroller.cpp:555
 #, fuzzy, kde-format
 #| msgctxt "@info:whatsthis"
 #| msgid ""
@@ -3342,19 +3342,19 @@ msgstr ""
 "mappe åbnes, som endnu ikke har en KDevelop4-projektfil, vil denne blive "
 "oprettet."
 
-#: shell/projectcontroller.cpp:569
+#: shell/projectcontroller.cpp:566
 #, kde-format
 msgctxt "@action"
 msgid "Fetch Project..."
 msgstr "Hent projekt..."
 
-#: shell/projectcontroller.cpp:571
+#: shell/projectcontroller.cpp:568
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Fetch project"
 msgstr "Hent projekt"
 
-#: shell/projectcontroller.cpp:572
+#: shell/projectcontroller.cpp:569
 #, fuzzy, kde-format
 #| msgctxt "@info:whatsthis"
 #| msgid ""
@@ -3367,77 +3367,77 @@ msgstr ""
 "Guider brugeren igennem projekthentningen og importerer det derefter til "
 "KDevelop 4"
 
-#: shell/projectcontroller.cpp:587
+#: shell/projectcontroller.cpp:584
 #, kde-format
 msgctxt "@action"
 msgid "Close Project(s)"
 msgstr "Luk projekt(er)"
 
-#: shell/projectcontroller.cpp:589
+#: shell/projectcontroller.cpp:586
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Closes all currently selected projects"
 msgstr "Lukker alle valgte projekter"
 
-#: shell/projectcontroller.cpp:595
+#: shell/projectcontroller.cpp:592
 #, fuzzy, kde-format
 #| msgid "Open Configuration..."
 msgctxt "@action"
 msgid "Open Configuration..."
 msgstr "Åben indstillinger..."
 
-#: shell/projectcontroller.cpp:601
+#: shell/projectcontroller.cpp:598
 #, fuzzy, kde-format
 #| msgid "Commit Current Project..."
 msgctxt "@action"
 msgid "Commit Current Project..."
 msgstr "Commit nuværende projekt..."
 
-#: shell/projectcontroller.cpp:602
+#: shell/projectcontroller.cpp:599
 #, fuzzy, kde-format
 #| msgid "Commit..."
 msgctxt "@action"
 msgid "Commit..."
 msgstr "Commit..."
 
-#: shell/projectcontroller.cpp:613
+#: shell/projectcontroller.cpp:610
 #, fuzzy, kde-format
 #| msgid "Open Recent Project"
 msgctxt "@action"
 msgid "Open Recent Project"
 msgstr "Åbn nyligt projekt"
 
-#: shell/projectcontroller.cpp:614
+#: shell/projectcontroller.cpp:611
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid "Opens recently opened project."
 msgstr "Åbner nyligt åbnet projekt."
 
-#: shell/projectcontroller.cpp:619
+#: shell/projectcontroller.cpp:616
 #, fuzzy, kde-format
 #| msgid "Open Project for Current File"
 msgctxt "@action"
 msgid "Open Project for Current File"
 msgstr "Åbn projekt for nuværende fil"
 
-#: shell/projectcontroller.cpp:770
+#: shell/projectcontroller.cpp:767
 #, kde-format
 msgid "Project already open: %1"
 msgstr "Projekt allerede åbent: %1"
 
-#: shell/projectcontroller.cpp:774
+#: shell/projectcontroller.cpp:771
 #, kde-format
 msgid "No active document"
 msgstr "Intet aktivt dokument"
 
-#: shell/projectcontroller.cpp:855
+#: shell/projectcontroller.cpp:852
 #, fuzzy, kde-format
 #| msgid "Project Already Open"
 msgctxt "@title:window"
 msgid "Project Already Open"
 msgstr "Projektet er allerede åbent"
 
-#: shell/projectcontroller.cpp:858
+#: shell/projectcontroller.cpp:855
 #, kde-format
 msgid ""
 "The project you're trying to open is already open in at least one other "
@@ -3446,26 +3446,26 @@ msgstr ""
 "Det projekt du er ved at åbne, er allerede åbent i mindst én anden session."
 "<br>Hvad vil du gøre?"
 
-#: shell/projectcontroller.cpp:862
+#: shell/projectcontroller.cpp:859
 #, fuzzy, kde-format
 #| msgid "Add project to current session"
 msgctxt "@option:radio"
 msgid "Add project to current session"
 msgstr "Føj projekt til aktuel session"
 
-#: shell/projectcontroller.cpp:866
+#: shell/projectcontroller.cpp:863
 #, fuzzy, kde-format
 #| msgid "Open session %1"
 msgctxt "@option:radio"
 msgid "Open session %1"
 msgstr "Åbn sessionen %1"
 
-#: shell/projectcontroller.cpp:927
+#: shell/projectcontroller.cpp:924
 #, kde-format
 msgid "No enabled plugin supports this repository URL: %1"
 msgstr ""
 
-#: shell/projectcontroller.cpp:1231
+#: shell/projectcontroller.cpp:1228
 #, fuzzy, kde-format
 #| msgid "Reopen the current project?"
 msgctxt "@action"
@@ -4041,7 +4041,7 @@ msgstr "Filter:"
 msgid "Create New Session"
 msgstr "Opret ny session"
 
-#: shell/sessionlock.cpp:154
+#: shell/sessionlock.cpp:159
 #, kde-format
 msgctxt "@info:shell"
 msgid ""
@@ -4049,7 +4049,7 @@ msgid ""
 "starting a new one"
 msgstr ""
 
-#: shell/sessionlock.cpp:159
+#: shell/sessionlock.cpp:164
 #, fuzzy, kde-format
 #| msgctxt "@info:shell"
 #| msgid "running %1 instance (PID: %2) is apparently hung"
@@ -4057,7 +4057,7 @@ msgctxt "@info:shell"
 msgid "Running %1 instance (PID: %2) is apparently hung"
 msgstr "kørende instans af %1 (PID: %2) hænger tilsyneladende"
 
-#: shell/sessionlock.cpp:165
+#: shell/sessionlock.cpp:170
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -4067,7 +4067,7 @@ msgstr ""
 "Den givne applikation svarede ikke på et DBus-kald. Den kan være brudt "
 "sammen eller hænger."
 
-#: shell/sessionlock.cpp:170
+#: shell/sessionlock.cpp:175
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -4075,13 +4075,13 @@ msgid ""
 msgstr ""
 "Kunne ikke låse sessionen <em>%1</em>, allerede låst af %2 på %3 (PID %4)."
 
-#: shell/sessionlock.cpp:174
+#: shell/sessionlock.cpp:179
 #, kde-format
 msgctxt "@info"
 msgid "Failed to lock the session <em>%1</em> (lock-file unavailable)."
 msgstr "Kunne ikke låse sessionen <em>%1</em> (lock-fil ikke tilgængelig)."
 
-#: shell/sessionlock.cpp:178
+#: shell/sessionlock.cpp:183
 #, kde-format
 msgctxt "@info"
 msgid ""
@@ -4091,7 +4091,7 @@ msgstr ""
 "<p>Luk den problematiske applikationsinstans eller vælg en anden session at "
 "starte.</p>"
 
-#: shell/sessionlock.cpp:184
+#: shell/sessionlock.cpp:189
 #, fuzzy, kde-format
 #| msgctxt "@action:button"
 #| msgid "Retry startup"
@@ -4099,7 +4099,7 @@ msgctxt "@action:button"
 msgid "Retry Startup"
 msgstr "Prøv opstart igen"
 
-#: shell/sessionlock.cpp:187
+#: shell/sessionlock.cpp:192
 #, fuzzy, kde-format
 #| msgctxt "@action:button"
 #| msgid "Choose another session"
@@ -4107,13 +4107,13 @@ msgctxt "@action:button"
 msgid "Choose Another Session"
 msgstr "Vælg en anden session"
 
-#: shell/sessionlock.cpp:191
+#: shell/sessionlock.cpp:196
 #, kde-format
 msgctxt "@title:window"
 msgid "Failed to Lock Session %1"
 msgstr "Kunne ikke låse sessionen %1"
 
-#: shell/sessionlock.cpp:197
+#: shell/sessionlock.cpp:202
 #, kde-format
 msgctxt "@info"
 msgid "The session %1 is already active in another running instance."
@@ -5315,13 +5315,13 @@ msgctxt "@info:whatsthis"
 msgid "Formatting functionality using the configured source formatter(s)."
 msgstr "Formateringsfunktionalitet med <b>astyle</b>-bibioteketet."
 
-#: shell/sourceformattercontroller.cpp:610
+#: shell/sourceformattercontroller.cpp:609
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using <i>%1</i> (<b>%2</b>)"
 msgstr ""
 
-#: shell/sourceformattercontroller.cpp:613
+#: shell/sourceformattercontroller.cpp:612
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -5329,14 +5329,14 @@ msgid ""
 "%1</i> tool with <b>%2</b> style."
 msgstr ""
 
-#: shell/sourceformattercontroller.cpp:615
+#: shell/sourceformattercontroller.cpp:614
 #, fuzzy, kde-format
 #| msgid "Reformat current line using AStyle"
 msgctxt "@info:tooltip"
 msgid "Reformat current line using <i>%1</i> (<b>%2</b>)"
 msgstr "Genformatér aktuel linje med AStyle"
 
-#: shell/sourceformattercontroller.cpp:618
+#: shell/sourceformattercontroller.cpp:617
 #, fuzzy, kde-format
 #| msgid ""
 #| "Source reformatting of line under cursor using <b>astyle</b> library."
@@ -5348,13 +5348,13 @@ msgstr ""
 "Genformatering af kildekoden i linjen under markøren med brug af biblioteket "
 "<b>astyle</b>."
 
-#: shell/sourceformattercontroller.cpp:622
+#: shell/sourceformattercontroller.cpp:621
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Reformat selection or file using the configured source formatter"
 msgstr ""
 
-#: shell/sourceformattercontroller.cpp:624
+#: shell/sourceformattercontroller.cpp:623
 #, kde-format
 msgctxt "@info:whatsthis"
 msgid ""
@@ -5362,14 +5362,14 @@ msgid ""
 "configured source formatter."
 msgstr ""
 
-#: shell/sourceformattercontroller.cpp:626
+#: shell/sourceformattercontroller.cpp:625
 #, fuzzy, kde-format
 #| msgid "Reformat current line using AStyle"
 msgctxt "@info:tooltip"
 msgid "Reformat current line using the configured source formatter"
 msgstr "Genformatér aktuel linje med AStyle"
 
-#: shell/sourceformattercontroller.cpp:628
+#: shell/sourceformattercontroller.cpp:627
 #, fuzzy, kde-format
 #| msgid ""
 #| "Source reformatting of line under cursor using <b>astyle</b> library."
@@ -5381,19 +5381,19 @@ msgstr ""
 "Genformatering af kildekoden i linjen under markøren med brug af biblioteket "
 "<b>astyle</b>."
 
-#: shell/sourceformattercontroller.cpp:865
+#: shell/sourceformattercontroller.cpp:864
 #, fuzzy, kde-format
 #| msgid "Reformat Line"
 msgctxt "@title:window"
 msgid "Reformat Files?"
 msgstr "Genformatér linje"
 
-#: shell/sourceformattercontroller.cpp:866
+#: shell/sourceformattercontroller.cpp:865
 #, kde-format
 msgid "Reformat all files in the selected folder?"
 msgstr ""
 
-#: shell/sourceformattercontroller.cpp:870
+#: shell/sourceformattercontroller.cpp:869
 #, fuzzy, kde-format
 #| msgid "Reformat Line"
 msgctxt "@action:button"
@@ -5689,28 +5689,28 @@ msgctxt "@info"
 msgid "(Press Ctrl+Tab to switch)"
 msgstr ""
 
-#: sublime/container.cpp:797
+#: sublime/container.cpp:798
 #, fuzzy, kde-format
 #| msgid "Filename"
 msgctxt "@action:inmenu"
 msgid "Copy Filename"
 msgstr "Filnavn"
 
-#: sublime/container.cpp:800
+#: sublime/container.cpp:801
 #, fuzzy, kde-format
 #| msgid "Close"
 msgctxt "@action:inmenu"
 msgid "Close"
 msgstr "Luk"
 
-#: sublime/container.cpp:802
+#: sublime/container.cpp:803
 #, fuzzy, kde-format
 #| msgid "Close All Ot&hers"
 msgctxt "@action:inmenu"
 msgid "Close All Other"
 msgstr "Luk alle and&re"
 
-#: sublime/container.cpp:804
+#: sublime/container.cpp:805
 #, fuzzy, kde-format
 #| msgid "Clos&e All"
 msgctxt "@action:inmenu"

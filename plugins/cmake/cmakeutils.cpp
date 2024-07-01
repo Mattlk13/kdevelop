@@ -41,7 +41,7 @@ KConfigGroup baseGroup( KDevelop::IProject* project )
     if (!project)
         return KConfigGroup();
 
-    return project->projectConfiguration()->group( Config::groupName );
+    return project->projectConfiguration()->group(Config::groupName());
 }
 
 KConfigGroup buildDirGroup( KDevelop::IProject* project, int buildDirIndex )
@@ -222,8 +222,10 @@ QHash<KDevelop::Path, QStringList> enumerateTargets(const KDevelop::Path& target
     while (!targetsFileStream.atEnd()) {
         const QString line = targetsFileStream.readLine();
         auto match = rx.match(line);
-        if (!match.isValid())
-            qCDebug(CMAKE) << "invalid match for" << line;
+        if (!match.hasMatch()) {
+            qCDebug(CMAKE) << "CMakeFiles regex: no match for" << line;
+            continue;
+        }
         const QString sourcePath = match.captured(1).replace(buildPath, sourceDir);
         targets[KDevelop::Path(sourcePath)].append(match.captured(2));
     }

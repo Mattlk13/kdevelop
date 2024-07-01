@@ -706,11 +706,13 @@ QString ProjectFileItem::fileName() const
     return baseName();
 }
 
+namespace {
+
 // Maximum length of a string to still consider it as a file extension which we cache
 // This has to be a slow value, so that we don't fill our file extension cache with crap
 static const int maximumCacheExtensionLength = 3;
 
-bool isNumeric(const QStringRef& str)
+bool isNumeric(QStringView str)
 {
     if (str.isEmpty()) {
         return false;
@@ -724,16 +726,16 @@ bool isNumeric(const QStringRef& str)
 class IconNameCache
 {
 public:
-    QString iconNameForPath(const Path& path, const QString& fileName)
+    QString iconNameForPath(const Path& path, QStringView fileName)
     {
         // find icon name based on file extension, if possible
         QString extension;
         int extensionStart = fileName.lastIndexOf(QLatin1Char('.'));
         if( extensionStart != -1 && fileName.length() - extensionStart - 1 <= maximumCacheExtensionLength ) {
-            QStringRef extRef = fileName.midRef(extensionStart + 1);
+            auto extRef = fileName.mid(extensionStart + 1);
             if( isNumeric(extRef) ) {
                 // don't cache numeric extensions
-                extRef.clear();
+                extRef = {};
             }
             if( !extRef.isEmpty() ) {
                 extension = extRef.toString();
@@ -769,6 +771,8 @@ public:
 };
 
 Q_GLOBAL_STATIC(IconNameCache, s_cache)
+
+} // unnamed namespace
 
 QString ProjectFileItem::iconName() const
 {

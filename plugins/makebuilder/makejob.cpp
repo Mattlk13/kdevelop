@@ -47,7 +47,7 @@ IFilterStrategy::Progress MakeJobCompilerFilterStrategy::progressInLine(const QS
     QRegularExpressionMatch match = re.match(line);
     if (match.hasMatch()) {
         bool ok;
-        const int percent = match.capturedRef(1).toInt(&ok);
+        const auto percent = match.capturedView(1).toInt(&ok);
         if (ok) {
             // this is output from make, likely
             const QString action = match.captured(2);
@@ -160,7 +160,7 @@ QStringList MakeJob::privilegedExecutionCommand() const
     if(!it)
         return QStringList();
     KSharedConfigPtr configPtr = it->project()->projectConfiguration();
-    KConfigGroup builderGroup( configPtr, "MakeBuilder" );
+    KConfigGroup builderGroup(configPtr, QStringLiteral("MakeBuilder"));
 
     bool runAsRoot = builderGroup.readEntry( "Install As Root", false );
     if ( runAsRoot && m_command == InstallCommand )
@@ -219,7 +219,7 @@ QStringList MakeJob::commandLine() const
     QStringList cmdline;
 
     KSharedConfigPtr configPtr = it->project()->projectConfiguration();
-    KConfigGroup builderGroup( configPtr, "MakeBuilder" );
+    KConfigGroup builderGroup(configPtr, QStringLiteral("MakeBuilder"));
 
     // TODO: migrate to more generic key term "Make Executable"
     QString makeBin = builderGroup.readEntry("Make Binary", MakeBuilderPreferences::standardMakeExecutable());
@@ -292,7 +292,7 @@ QString MakeJob::environmentProfile() const
     if(!it)
         return QString();
     KSharedConfigPtr configPtr = it->project()->projectConfiguration();
-    KConfigGroup builderGroup( configPtr, "MakeBuilder" );
+    KConfigGroup builderGroup(configPtr, QStringLiteral("MakeBuilder"));
     return builderGroup.readEntry( "Default Make Environment Profile", QString() );
 }
 
