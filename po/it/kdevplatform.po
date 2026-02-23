@@ -1,6 +1,6 @@
 # translation of kdevplatform.po to Italian
 #
-# SPDX-FileCopyrightText: 2007, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 Luigi Toscano <luigi.toscano@tiscali.it>
+# SPDX-FileCopyrightText: 2007, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 Luigi Toscano <luigi.toscano@tiscali.it>
 # Matteo Merli <merlim@libero.it>, 2001.
 # Daniele Medri <madrid@linuxmeeting.net>, 2003.
 # Giovanni Venturi <jumpyj@libero.it>, 2003, 2004.
@@ -13,7 +13,7 @@ msgstr ""
 "Project-Id-Version: kdevplatform\n"
 "Report-Msgid-Bugs-To: https://bugs.kde.org\n"
 "POT-Creation-Date: 2026-02-11 00:43+0000\n"
-"PO-Revision-Date: 2025-09-07 23:51+0200\n"
+"PO-Revision-Date: 2026-02-15 23:34+0100\n"
 "Last-Translator: Luigi Toscano <luigi.toscano@tiscali.it>\n"
 "Language-Team: Italian <kde-i18n-it@kde.org>\n"
 "Language: it\n"
@@ -21,7 +21,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Lokalize 25.04.0\n"
+"X-Generator: Lokalize 25.12.1\n"
 
 #, kde-format
 msgctxt "NAME OF TRANSLATORS"
@@ -500,7 +500,7 @@ msgstr "&Ferma quando cambia"
 #, kde-format
 msgctxt "%1 - the name of a GDB variable, e.g. \"$1\""
 msgid "%1 (last function return value)"
-msgstr ""
+msgstr "%1 (valore di ritorno dell'ultima funzione)"
 
 #. i18n: ectx: property (text), widget (QLabel, label)
 #: documentation/documentationfindwidget.ui:42
@@ -1796,8 +1796,8 @@ msgid ""
 "configuration for a specific use case. From here you can also navigate back "
 "to the default code area."
 msgstr ""
-"Esegue azioni per cambiare l'area.<br />Un'area è una strumento visivo di "
-"configurazione per uno specifico caso d'uso. Da qui puoi anche tornare "
+"Esegue azioni per cambiare l'area.<br />Un'area è una configurazione della "
+"vista strumenti per uno specifico caso d'uso. Da qui puoi anche tornare "
 "all'area di codifica predefinita."
 
 #: shell/areadisplay.cpp:70
@@ -2035,13 +2035,7 @@ msgid "Step out of the current function"
 msgstr "Esci dalla funzione corrente"
 
 #: shell/debugcontroller.cpp:256
-#, fuzzy, kde-format
-#| msgctxt "@whatsthis"
-#| msgid ""
-#| "Executes the application until the currently executing function is "
-#| "completed. The debugger will then display the line after the original "
-#| "call to that function. If program execution is in the outermost frame (i."
-#| "e. in main()) then this operation has no effect."
+#, kde-format
 msgctxt "@whatsthis"
 msgid ""
 "Executes the application until the currently executing function is "
@@ -2054,8 +2048,11 @@ msgid ""
 msgstr ""
 "Esegue l'applicazione fino a che la funzione in esecuzione non termina. Il "
 "debugger mostrerà la riga dopo la chiamata originale per quella funzione. Se "
-"l'esecuzione del programma è nel frame esterno (per esempio in main()), "
-"questa operazione non ha effetto."
+"l'esecuzione del programma è nel frame esterno (per esempio in <code>main()</"
+"code>), questa operazione non ha effetto.<br>Dopo l'uscita da una funzione "
+"non di tipo <code>void</code>, il suo valore e il tipo di ritorno sono "
+"mostrati in una variabile chiamata <code>%1</code> in una sezione <i>%2</i> "
+"della vista strumenti «%3»."
 
 #: shell/debugcontroller.cpp:269
 #, kde-format
@@ -2737,7 +2734,7 @@ msgstr "Crea un file vuoto."
 #, kde-format
 msgctxt "@action"
 msgid "&Add Tool View..."
-msgstr "&Aggiungi vista strumento..."
+msgstr "&Aggiungi vista strumenti..."
 
 #: shell/mainwindow_p.cpp:314
 #, kde-format
@@ -2790,7 +2787,7 @@ msgstr "Ricarica tutto"
 #, kde-format
 msgctxt "@action:inmenu"
 msgid "Add Tool View"
-msgstr "Aggiungi vista strumento"
+msgstr "Aggiungi vista strumenti"
 
 #: shell/mainwindow_p.cpp:433
 #, kde-format
@@ -5347,7 +5344,7 @@ msgstr "Chiudi tutto"
 #, kde-format
 msgctxt "@info:tooltip"
 msgid "Toggle '%1' tool view"
-msgstr "Attiva/disattiva vista strumento «%1»"
+msgstr "Attiva/disattiva vista strumenti «%1»"
 
 #: sublime/idealbuttonbarwidget.cpp:352
 #, kde-format
