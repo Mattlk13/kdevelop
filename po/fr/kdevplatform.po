@@ -2064,9 +2064,9 @@ msgstr ""
 "Le débogueur affichera alors la ligne située après l'appel originel à cette "
 "fonction. Si l'exécution du programme a lieu dans le cadre principal (C'est-"
 "à-dire dans <code>main()</code>), alors cette opération n'a aucun effet. "
-"<br>Après être sorti d’une fonction non-<code>void</code> , sa valeur de "
+"<br>Après être sorti d'une fonction non-<code>void</code> , sa valeur de "
 "retour et son type sont affichés dans une variable nommée <code>%1</code> "
-"dans une section <i>%2</i> de la vue de l’outil « %3 »."
+"dans une section <i>%2</i> de la vue de l'outil « %3 »."
 
 #: shell/debugcontroller.cpp:269
 #, kde-format
@@ -4974,8 +4974,8 @@ msgctxt "@info:tooltip"
 msgid ""
 "Collapse all child items whenever an item in the project tree is collapsed."
 msgstr ""
-"Réduisez tous les éléments enfants chaque fois qu’un élément de "
-"l’arborescence du projet est réduit."
+"Réduisez tous les éléments enfants chaque fois qu'un élément de "
+"l'arborescence du projet est réduit."
 
 #. i18n: ectx: property (text), widget (QCheckBox, kcfg_RecursiveProjectTreeCollapse)
 #: shell/settings/uiconfig.ui:176
